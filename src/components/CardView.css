@@ -1,0 +1,36 @@
+.card-tile {
+  font-size: 1.2em;
+  margin: 0 1% 1%;
+  background-color: greenyellow;
+  width: 300px;
+  display: inline-block;
+  text-align: left;
+}
+.card-tile .card-editable-info {
+  padding: 2%;
+}
+.card-tile .card-static-info {
+  font-size: 0.8em;
+  background-color:lightgray;
+  padding: 2%;
+
+}
+
+.card-tile .card-front-text {
+  width: 100%;
+  background-color: yellow;
+  display: inline-block;
+  font-size: 1.2em;
+}
+.card-tile .card-back-text {
+  width: 100%;
+  background-color: lightblue;
+  display: inline-block;
+  font-size: 1.2em;
+}
+.card-tile input {
+  width: 200px;
+  border-color: lightblue;
+  margin-left: 20px;
+  padding: 5px 15px;
+}
