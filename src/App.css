@@ -9,8 +9,8 @@
   fill: greenyellow;
 }
 
-nav.App-header {
-  background-color: rgb(194, 193, 193);
+nav {
+  background-color: rgb(57, 57, 57);
   color: white;
   height: auto;
   position: fixed;

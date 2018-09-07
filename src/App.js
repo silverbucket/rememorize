@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import logo from './logo.svg';
+import logo from './res/logo.svg';
 import './App.css';
 import CardList from './components/CardList';
 import RemoteStorage from './components/RemoteStorage';
@@ -110,7 +110,7 @@ class App extends Component {
   render() {
     return (
       <div className="App">
-        <nav className="App-header">
+        <nav>
           <img src={logo} className="App-logo" alt="logo" />
           <ErrorBoundary>
             <RemoteStorage />

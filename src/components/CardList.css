@@ -1,5 +1,31 @@
-h3 {
-  margin-top: 0px;
-  padding-top: 20px;
+.group-header {
+  width: 100%;
+  display: table;
+}
 
+.group-row {
+  display: table-row;
+}
+
+.group-title {
+  display: table-cell;
+}
+
+.group-controls {
+  display: table-cell;
+  width: 300px;
+  height: 60px;
+  padding-top: 20px;
+}
+
+.icon-plus {
+  width: 30px;
+}
+
+a.button:hover {
+  cursor: pointer;
+  height: 50px;
+}
+
+h3 {
 }
