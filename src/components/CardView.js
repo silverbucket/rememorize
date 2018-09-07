@@ -34,7 +34,7 @@ export const cardProps = {
 };
 
 CardView.propTypes = {
-  card: PropTypes.objectOf(PropTypes.shape(cardProps))
+  card: PropTypes.shape(cardProps)
 };;
 
 

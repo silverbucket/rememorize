@@ -11,7 +11,10 @@ class CardList extends Component {
         {
           this.props.cardList.map(item => {
             return (
-              <CardView card={item} />
+              <CardView
+                key={item['@id']}
+                card={item}
+              />
             )
           })
         }

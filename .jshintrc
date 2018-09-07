@@ -1,0 +1,15 @@
+{
+  "asi"       : false,
+  "bitwise"   : true,
+  "browser"   : true,
+  "eqeqeq"    : true,
+  "esversion" : 6,
+  "indent"    : 2,
+  "latedef"   : true,
+  "node"      : true,
+  "nomen"     : true,
+  "onevar"    : false,
+  "trailing"  : true,
+  "undef"     : true,
+  "white"     : false
+}

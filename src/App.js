@@ -2,6 +2,8 @@ import React, { Component } from 'react';
 import logo from './logo.svg';
 import './App.css';
 import CardList from './components/CardList';
+import RemoteStorage from './components/RemoteStorage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 class App extends Component {
   componentWillMount() {
@@ -108,12 +110,17 @@ class App extends Component {
   render() {
     return (
       <div className="App">
-        <header className="App-header">
+        <nav className="App-header">
           <img src={logo} className="App-logo" alt="logo" />
-        </header>
-        <div>
-          <CardList groupName="default" cardList={this.getCardList()} />
-        </div>
+          <ErrorBoundary>
+            <RemoteStorage />
+          </ErrorBoundary>
+        </nav>
+        <main className="content">
+          <ErrorBoundary>
+            <CardList groupName="default" cardList={this.getCardList()} />
+          </ErrorBoundary>
+        </main>
       </div>
     );
   }
