@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
+import iconEdit from '../res/icon_edit.svg';
 import './CardView.css';
 
 class CardView extends Component {
@@ -7,6 +8,9 @@ class CardView extends Component {
     return (
       <div className="card-tile" key={this.props.card['@id']}>
         <div className="card-editable-info">
+          <div className="card-edit-controls">
+            <a href=""><img className="icon icon-edit" src={iconEdit} alt="edit" /></a>
+          </div>
           <div className="card-front-text">{this.props.card.frontText}</div>
           <div className="card-back-text">{this.props.card.backText}</div>
           <div className="card-hint card-info">hint: {this.props.card.hint}</div>

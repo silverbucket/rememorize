@@ -33,3 +33,10 @@ nav {
 main.content {
   margin-left: 90px;
 }
+
+.icon {
+  height: 30px;
+}
+a.button:hover {
+  cursor: pointer;
+}

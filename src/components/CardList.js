@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import iconPlus from '../res/icon_plus.svg';
+import iconAdd from '../res/icon_add.svg';
 import PropTypes from 'prop-types';
 import CardView, { cardProps } from './CardView';
 import './CardList.css';
@@ -11,10 +11,10 @@ class CardList extends Component {
         <div className="group-header">
           <div className="group-row">
             <div className="group-title">
-              <h3>Group: {this.props.groupName}</h3>
+              <h3>{this.props.groupName}</h3>
             </div>
             <div className="group-controls">
-              <a className="button" href=""><img src={iconPlus} className="icon icon-plus" /></a>
+              <a className="button" href=""><img src={iconAdd} className="icon icon-add" alt="add" /></a>
             </div>
           </div>
         </div>

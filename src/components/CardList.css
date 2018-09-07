@@ -9,6 +9,7 @@
 
 .group-title {
   display: table-cell;
+  color: #7400B3;
 }
 
 .group-controls {
@@ -18,14 +19,7 @@
   padding-top: 20px;
 }
 
-.icon-plus {
-  width: 30px;
-}
-
-a.button:hover {
-  cursor: pointer;
+a.button {
   height: 50px;
 }
 
-h3 {
-}

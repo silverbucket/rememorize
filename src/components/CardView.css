@@ -6,14 +6,28 @@
   display: inline-block;
   text-align: left;
 }
+
 .card-tile .card-editable-info {
+  overflow: hidden;
   padding: 2%;
 }
+
+.card-editable-info .card-edit-controls {
+  display: none;
+  margin: -10px 0 0 275px;
+  position: absolute;
+  opacity: .8;
+}
+
+.card-tile:hover .card-edit-controls {
+  display: block;
+}
+
+
 .card-tile .card-static-info {
   font-size: 0.8em;
   background-color:lightgray;
   padding: 2%;
-
 }
 
 .card-tile .card-front-text {
