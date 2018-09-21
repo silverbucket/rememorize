@@ -1,41 +1,35 @@
 import React, { Component } from 'react';
-import iconAdd from '../res/icon_add.svg';
 import PropTypes from 'prop-types';
-import CardView, { cardProps } from './CardView';
+import CardTile from './CardTile';
+import Header from './Header';
 import './CardList.css';
 
 class CardList extends Component {
   render() {
+    const groupList = this.props.getCardList(this.props.group);
+    if (! groupList) { return null; }
     return (
       <div>
-        <div className="group-header">
-          <div className="group-row">
-            <div className="group-title">
-              <h3>{this.props.groupName}</h3>
-            </div>
-            <div className="group-controls">
-              <a className="button" href=""><img src={iconAdd} className="icon icon-add" alt="add" /></a>
-            </div>
-          </div>
-        </div>
+        <Header groupControls={true} title={this.props.group}/>
         {
-          this.props.cardList.map(item => {
+          groupList.map(item => {
             return (
-              <CardView
+              <CardTile
                 key={item['@id']}
                 card={item}
               />
-            )
+            );
           })
         }
       </div>
-    )
+    );
   }
 }
 
 CardList.propTypes = {
-  groupName: PropTypes.string.isRequired,
-  cardList: PropTypes.arrayOf(PropTypes.shape(cardProps)).isRequired
+  group: PropTypes.string.isRequired,
+  getCardList: PropTypes.func.isRequired
+  //PropTypes.shape(cardProps)).isRequired
 };
 
 export default CardList;

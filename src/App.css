@@ -4,6 +4,7 @@
 
 .App-logo {
   height: 75px;
+  cursor: pointer;
 }
 .App-logo path {
   fill: greenyellow;

@@ -1,16 +1,4 @@
-.group-header {
-  width: 100%;
-  display: table;
-}
 
-.group-row {
-  display: table-row;
-}
-
-.group-title {
-  display: table-cell;
-  color: #7400B3;
-}
 
 .group-controls {
   display: table-cell;

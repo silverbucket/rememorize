@@ -1,17 +1,29 @@
 import React, { Component } from 'react';
 import logo from './res/logo.svg';
 import './App.css';
+import { Switch, Route } from 'react-router-dom';
 import CardList from './components/CardList';
+import CardEdit from './components/CardEdit';
+import { Link } from 'react-router-dom';
 import RemoteStorage from './components/RemoteStorage';
 import ErrorBoundary from './components/ErrorBoundary';
 
 class App extends Component {
-  componentWillMount() {
-    console.log("TODO: fetch from remotestorage...");
+
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      cards: [],
+      loaded: false
+    }
   }
 
-  getCardList() {
-    return [
+  // TODO: investigate componentDidUpdate
+
+  componentDidMount() {
+    console.log('TODO: fetch from remotestorage...');
+    this.setState({ cards: [
       {
         '@id': '20180283020323',
         '@type': 'flashcard',
@@ -19,7 +31,7 @@ class App extends Component {
         'backText': 'beer',
         'hint': 'magical drink',
         'familiarity': 3,
-        'group': 'default',
+        'group': 'food',
         'reviewedCount': 4,
         'reviewedAt': '2018293920121',
         'updatedAt': '2018293920122',
@@ -32,7 +44,7 @@ class App extends Component {
         'backText': 'flouder (fish)',
         'hint': '',
         'familiarity': 2,
-        'group': 'default',
+        'group': 'food',
         'reviewedCount': 8,
         'reviewedAt': '2018293920181',
         'updatedAt': '2018293920182',
@@ -58,7 +70,7 @@ class App extends Component {
         'backText': 'to take',
         'hint': '',
         'familiarity': 2,
-        'group': 'default',
+        'group': 'verbs',
         'reviewedCount': 8,
         'reviewedAt': '2018293920181',
         'updatedAt': '2018293920182',
@@ -71,7 +83,7 @@ class App extends Component {
         'backText': 'pickled cheese',
         'hint': '',
         'familiarity': 2,
-        'group': 'default',
+        'group': 'food',
         'reviewedCount': 8,
         'reviewedAt': '2018293920181',
         'updatedAt': '2018293920182',
@@ -102,24 +114,64 @@ class App extends Component {
         'reviewedAt': '2018293920151',
         'updatedAt': '2018293920152',
         'createdAt': '2018293920153'
-
       }
-    ];
+    ]});
+    this.setState({loaded: true})
   }
 
   render() {
+    const renderMergedProps = (component, ...rest) => {
+      const finalProps = Object.assign({}, ...rest);
+      return (
+        React.createElement(component, finalProps)
+      );
+    };
+
+    const PropsRoute = ({ component, ...rest }) => {
+      return (
+        <Route {...rest} render={routeProps => {
+          return renderMergedProps(component, routeProps, rest);
+        }}/>
+      );
+    };
+
+    const getCard = (id) => {
+      console.log(`getCard(${id})`);
+      for (let card of this.state.cards) {
+        if (card['@id'] === id) { return card; }
+      }
+      return null;
+    };
+
+    const getCardList = (group) => {
+      let list = [];
+      for (let card of this.state.cards) {
+        if (card['group'] === group) {
+          list.push(card);
+        } else {
+        }
+      }
+      console.log(`result: `, list);
+      return list;
+    };
+
     return (
       <div className="App">
         <nav>
-          <img src={logo} className="App-logo" alt="logo" />
+          <Link to='/'><img src={logo} className="App-logo" alt="logo" /></Link>
           <ErrorBoundary>
             <RemoteStorage />
           </ErrorBoundary>
         </nav>
         <main className="content">
-          <ErrorBoundary>
-            <CardList groupName="default" cardList={this.getCardList()} />
-          </ErrorBoundary>
+          <Switch>
+            <PropsRoute exact path='/' component={CardList} group="default"
+                   getCardList={getCardList}/>
+            <PropsRoute exact path='/group/:group' component={CardList}
+                   getCardList={getCardList}/>
+            <PropsRoute exact path='/edit/:id' component={CardEdit}
+                        getCard={getCard}/>
+          </Switch>
         </main>
       </div>
     );

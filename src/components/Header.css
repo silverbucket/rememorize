@@ -1,0 +1,14 @@
+
+.header {
+    width: 100%;
+    display: table;
+}
+
+.header-row {
+    display: table-row;
+}
+
+.header-title {
+    display: table-cell;
+    color: black;
+}
