@@ -135,6 +135,27 @@ class App extends Component {
       );
     };
 
+    const saveCard = (card) => {
+      if (! card['@id']) {
+        // create new card
+        console.log(`saveCard(...new...)`, card);
+      } else {
+        let cards = this.state.cards;
+        // update card
+        console.log(`saveCard(${card['@id']})`, card);
+        for (let [i, v] of cards.entries()) {
+          if (v['@id'] === card['@id']) {
+            cards[i].frontText = card.frontText;
+            cards[i].backText = card.backText;
+            cards[i].hint = card.hint;
+            cards[i].group = card.group;
+            this.setState({cards: cards});
+          }
+        }
+      }
+      return undefined;
+    };
+
     const getCard = (id) => {
       console.log(`getCard(${id})`);
       for (let card of this.state.cards) {
@@ -170,7 +191,7 @@ class App extends Component {
             <PropsRoute exact path='/group/:group' component={CardList}
                    getCardList={getCardList}/>
             <PropsRoute exact path='/edit/:id' component={CardEdit}
-                        getCard={getCard}/>
+                        getCard={getCard} saveCard={saveCard} />
           </Switch>
         </main>
       </div>

@@ -1,0 +1,9 @@
+.card-static-info {
+  display: inline-block;
+  font-size: 0.8em;
+  padding: 2%;
+}
+.card-static-info span {
+  font-variant: small-caps;
+  color: gray;
+}
