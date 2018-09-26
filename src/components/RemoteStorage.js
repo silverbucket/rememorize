@@ -8,11 +8,11 @@ class RemoteStorage extends Component {
   constructor() {
     super();
     this.state = {
-      "rs": undefined,
-      "flashcards": undefined,
-      "widget": undefined,
-      "connected": false,
-      "connecting": false
+      'rs': undefined,
+      'flashcards': undefined,
+      'widget': undefined,
+      'connected': false,
+      'connecting': false
     };
 
     let remoteStorage = new RS({
@@ -78,7 +78,7 @@ class RemoteStorage extends Component {
   render() {
     return (
       <div id="rs-widget-container"></div>
-    )
+    );
   }
 }
 
