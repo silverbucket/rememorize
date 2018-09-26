@@ -6,17 +6,17 @@ import './CardList.css';
 
 class CardList extends Component {
   render() {
-    const groupList = this.props.getCardList(this.props.group);
-    if (! groupList) { return null; }
+    const cards =  this.props.getCards(this.props.group);
+    if (! cards) { return null; }
     return (
       <div>
         <Header groupControls={true} title={this.props.group}/>
         {
-          groupList.map(item => {
+          Object.keys(cards).map(id => {
             return (
               <CardTile
-                key={item['@id']}
-                card={item}
+                key={id}
+                card={cards[id]}
               />
             );
           })
@@ -28,8 +28,7 @@ class CardList extends Component {
 
 CardList.propTypes = {
   group: PropTypes.string.isRequired,
-  getCardList: PropTypes.func.isRequired
-  //PropTypes.shape(cardProps)).isRequired
+  getCards: PropTypes.func.isRequired
 };
 
 export default CardList;

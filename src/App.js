@@ -5,8 +5,11 @@ import { Switch, Route } from 'react-router-dom';
 import CardList from './components/CardList';
 import CardEdit from './components/CardEdit';
 import { Link } from 'react-router-dom';
-import RemoteStorage from './components/RemoteStorage';
 import ErrorBoundary from './components/ErrorBoundary';
+import RS from 'remotestoragejs';
+import RSWidget from 'remotestorage-widget';
+import Flashcards from 'remotestorage-module-flashcards';
+import './components/RemoteStorage.css';
 
 class App extends Component {
 
@@ -14,109 +17,193 @@ class App extends Component {
     super(props);
 
     this.state = {
-      cards: [],
-      loaded: false
-    }
+      rs:  undefined,
+      flashcards: undefined,
+      widget: undefined,
+      connected: false,
+      connecting: false,
+      cards: {},
+      loaded: false,
+    };
+
+    let remoteStorage = new RS({
+      cache: true,
+      requestTimeout: 90000,
+      modules: [ Flashcards ]
+    });
+
+    remoteStorage.access.claim('flashcards', 'rw');
+
+    remoteStorage.on('ready', () => {
+
+    });
+
+    this.state.rs = remoteStorage;
+    this.state.widget = new RSWidget(remoteStorage, { autoCloseAfter: 1000 });
+    this.state.flashcards = remoteStorage.flashcards;
   }
 
   // TODO: investigate componentDidUpdate
 
   componentDidMount() {
-    console.log('TODO: fetch from remotestorage...');
-    this.setState({ cards: [
-      {
-        '@id': '20180283020323',
-        '@type': 'flashcard',
-        'frontText': 'pivo',
-        'backText': 'beer',
-        'hint': 'magical drink',
-        'familiarity': 3,
-        'group': 'food',
-        'reviewedCount': 4,
-        'reviewedAt': '2018293920121',
-        'updatedAt': '2018293920122',
-        'createdAt': '2018293920123'
-      },
-      {
-        '@id': '201702150639399',
-        '@type': 'flashcard',
-        'frontText': 'platys',
-        'backText': 'flouder (fish)',
-        'hint': '',
-        'familiarity': 2,
-        'group': 'food',
-        'reviewedCount': 8,
-        'reviewedAt': '2018293920181',
-        'updatedAt': '2018293920182',
-        'createdAt': '2018293920183'
-      },
-      {
-        '@id': '20170215034119',
-        '@type': 'flashcard',
-        'frontText': 'nasel jsem to',
-        'backText': 'i found it',
-        'hint': '',
-        'familiarity': 2,
-        'group': 'default',
-        'reviewedCount': 8,
-        'reviewedAt': '2018293920181',
-        'updatedAt': '2018293920182',
-        'createdAt': '2018293920183'
-      },
-      {
-        '@id': '20170215896759',
-        '@type': 'flashcard',
-        'frontText': 'beres',
-        'backText': 'to take',
-        'hint': '',
-        'familiarity': 2,
-        'group': 'verbs',
-        'reviewedCount': 8,
-        'reviewedAt': '2018293920181',
-        'updatedAt': '2018293920182',
-        'createdAt': '2018293920183'
-      },
-      {
-        '@id': '20170245673479',
-        '@type': 'flashcard',
-        'frontText': 'nakladany hermelin',
-        'backText': 'pickled cheese',
-        'hint': '',
-        'familiarity': 2,
-        'group': 'food',
-        'reviewedCount': 8,
-        'reviewedAt': '2018293920181',
-        'updatedAt': '2018293920182',
-        'createdAt': '2018293920183'
-      },
-      {
-        '@id': '20170dsf3431',
-        '@type': 'flashcard',
-        'frontText': 'pripominam me to',
-        'backText': 'that reminds me',
-        'hint': '',
-        'familiarity': 2,
-        'group': 'default',
-        'reviewedCount': 8,
-        'reviewedAt': '2018293920181',
-        'updatedAt': '2018293920182',
-        'createdAt': '2018293920183'
-      },
-      {
-        '@id': '201725529',
-        '@type': 'flashcard',
-        'frontText': 'obvlaste',
-        'backText': 'especially',
-        'hint': '',
-        'familiarity': 0,
-        'group': 'default',
-        'reviewedCount': 2,
-        'reviewedAt': '2018293920151',
-        'updatedAt': '2018293920152',
-        'createdAt': '2018293920153'
-      }
-    ]});
-    this.setState({loaded: true})
+    this.state.flashcards.on('change', (p1, p2) => {
+      console.log('flashcard.on(change) event fired: ');
+      console.log(p1);
+      console.log(p2);
+    });
+
+    // this.state.rs.on('change', (p1, p2) => {
+    //   console.log('rs.on(change) event fired: ');
+    //   console.log(p1);
+    //   console.log(p2);
+    // });
+
+    this.state.rs.on('not-connected', () => {
+      console.log('RS not-connected');
+      this.setState({
+        connecting: false,
+        connected: false
+      });
+      this.state.flashcards.getAllByGroup().then((cards) => {
+        console.log('setting flashcards: ', cards);
+        this.setState({cards: cards, loaded: true});
+      });
+    });
+
+    this.state.rs.on('connected', () => {
+      console.log('RS connected');
+      this.setState({
+        connecting: false,
+        connected: true
+      });
+      this.state.flashcards.getAllByGroup().then((cards) => {
+        console.log('setting flashcards: ', cards);
+        this.setState({cards: cards, loaded: true});
+      });
+    });
+
+    this.state.rs.on('disconnected', () => {
+      console.log('RS disconnected');
+      this.setState({
+        rs: {
+          connecting: false,
+          connected: false
+        }
+      });
+    });
+
+    this.state.rs.on('connecting', () => {
+      console.log('RS connecting');
+      this.setState({
+        connecting: true,
+        connected: false
+      });
+    });
+
+    this.state.rs.on('authing', () => {
+      console.log('RS authing');
+      this.setState({
+        connecting: true,
+        connected: false
+      });
+    });
+
+    this.state.widget.attach('rs-widget-container');
+
+    // this.setState({ cards: [
+    //   {
+    //     '@id': '20180283020323',
+    //     '@type': 'flashcard',
+    //     'frontText': 'pivo',
+    //     'backText': 'beer',
+    //     'hint': 'magical drink',
+    //     'familiarity': 3,
+    //     'group': 'food',
+    //     'reviewedCount': 4,
+    //     'reviewedAt': '2018293920121',
+    //     'updatedAt': '2018293920122',
+    //     'createdAt': '2018293920123'
+    //   },
+    //   {
+    //     '@id': '201702150639399',
+    //     '@type': 'flashcard',
+    //     'frontText': 'platys',
+    //     'backText': 'flouder (fish)',
+    //     'hint': '',
+    //     'familiarity': 2,
+    //     'group': 'food',
+    //     'reviewedCount': 8,
+    //     'reviewedAt': '2018293920181',
+    //     'updatedAt': '2018293920182',
+    //     'createdAt': '2018293920183'
+    //   },
+    //   {
+    //     '@id': '20170215034119',
+    //     '@type': 'flashcard',
+    //     'frontText': 'nasel jsem to',
+    //     'backText': 'i found it',
+    //     'hint': '',
+    //     'familiarity': 2,
+    //     'group': 'default',
+    //     'reviewedCount': 8,
+    //     'reviewedAt': '2018293920181',
+    //     'updatedAt': '2018293920182',
+    //     'createdAt': '2018293920183'
+    //   },
+    //   {
+    //     '@id': '20170215896759',
+    //     '@type': 'flashcard',
+    //     'frontText': 'beres',
+    //     'backText': 'to take',
+    //     'hint': '',
+    //     'familiarity': 2,
+    //     'group': 'verbs',
+    //     'reviewedCount': 8,
+    //     'reviewedAt': '2018293920181',
+    //     'updatedAt': '2018293920182',
+    //     'createdAt': '2018293920183'
+    //   },
+    //   {
+    //     '@id': '20170245673479',
+    //     '@type': 'flashcard',
+    //     'frontText': 'nakladany hermelin',
+    //     'backText': 'pickled cheese',
+    //     'hint': '',
+    //     'familiarity': 2,
+    //     'group': 'food',
+    //     'reviewedCount': 8,
+    //     'reviewedAt': '2018293920181',
+    //     'updatedAt': '2018293920182',
+    //     'createdAt': '2018293920183'
+    //   },
+    //   {
+    //     '@id': '20170dsf3431',
+    //     '@type': 'flashcard',
+    //     'frontText': 'pripominam me to',
+    //     'backText': 'that reminds me',
+    //     'hint': '',
+    //     'familiarity': 2,
+    //     'group': 'default',
+    //     'reviewedCount': 8,
+    //     'reviewedAt': '2018293920181',
+    //     'updatedAt': '2018293920182',
+    //     'createdAt': '2018293920183'
+    //   },
+    //   {
+    //     '@id': '201725529',
+    //     '@type': 'flashcard',
+    //     'frontText': 'obvlaste',
+    //     'backText': 'especially',
+    //     'hint': '',
+    //     'familiarity': 0,
+    //     'group': 'default',
+    //     'reviewedCount': 2,
+    //     'reviewedAt': '2018293920151',
+    //     'updatedAt': '2018293920152',
+    //     'createdAt': '2018293920153'
+    //   }
+    // ]});
+    //
   }
 
   render() {
@@ -127,7 +214,7 @@ class App extends Component {
       );
     };
 
-    const PropsRoute = ({ component, ...rest }) => {
+    const PropsRoute = ({component, ...rest}) => {
       return (
         <Route {...rest} render={routeProps => {
           return renderMergedProps(component, routeProps, rest);
@@ -136,45 +223,22 @@ class App extends Component {
     };
 
     const saveCard = (card) => {
-      if (! card['@id']) {
-        // create new card
-        console.log(`saveCard(...new...)`, card);
-        card['@id'] = 'dummy';
-        this.setState({cards: this.state.cards.concat([card]) });
-      } else {
+      this.state.flashcards.store(card).then((card) => {
+        console.log('card saved ', card);
         let cards = this.state.cards;
-        // update card
-        console.log(`saveCard(${card['@id']})`, card);
-        for (let [i, v] of cards.entries()) {
-          if (v['@id'] === card['@id']) {
-            cards[i].frontText = card.frontText;
-            cards[i].backText = card.backText;
-            cards[i].hint = card.hint;
-            cards[i].group = card.group;
-            this.setState({cards: cards});
-          }
-        }
-      }
+        cards[card['@id']] = card;
+        this.setState({cards: cards})
+      }).catch((err) => {
+        throw new Error(err);
+      });
     };
 
     const getCard = (id) => {
-      console.log(`getCard(${id})`);
-      for (let card of this.state.cards) {
-        if (card['@id'] === id) { return card; }
-      }
-      return null;
+      return this.state.cards[id];
     };
 
-    const getCardList = (group) => {
-      let list = [];
-      for (let card of this.state.cards) {
-        if (card['group'] === group) {
-          list.push(card);
-        } else {
-        }
-      }
-      console.log(`result: `, list);
-      return list;
+    const getCards = (group) => {
+      return this.state.cards;
     };
 
     return (
@@ -182,18 +246,19 @@ class App extends Component {
         <nav>
           <Link to='/'><img src={logo} className="App-logo" alt="logo" /></Link>
           <ErrorBoundary>
-            <RemoteStorage />
+            <div id="rs-widget-container"></div>
           </ErrorBoundary>
         </nav>
         <main className="content">
-          <Switch>
-            <PropsRoute exact path='/' component={CardList} group="default"
-                   getCardList={getCardList}/>
-            <PropsRoute exact path='/group/:group' component={CardList}
-                   getCardList={getCardList}/>
-            <PropsRoute exact path='/edit/:id' component={CardEdit}
-                        getCard={getCard} saveCard={saveCard} />
-          </Switch>
+          {! this.state.loaded ? <div>Loading...</div> :
+            <Switch>
+              <PropsRoute exact
+                path='/' component={CardList} group="default" getCards={getCards}/>
+              <PropsRoute exact path='/group/:group' component={CardList} getCards={getCards}/>
+              <PropsRoute exact
+                path='/edit/:id' component={CardEdit}getCard={getCard} saveCard={saveCard} />
+            </Switch>
+          }
         </main>
       </div>
     );
