@@ -1,13 +1,13 @@
 {
     "parserOptions": {
-        "ecmaVersion": 6,
+        "ecmaVersion": 7,
         "sourceType": "module",
         "ecmaFeatures": {
             "jsx": true
         }
     },
     "env": {
-      "browser": true
+        "browser": true
     },
     "rules": {
         "comma-spacing": [2, { "before": false, "after": true }],

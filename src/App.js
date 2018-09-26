@@ -139,6 +139,8 @@ class App extends Component {
       if (! card['@id']) {
         // create new card
         console.log(`saveCard(...new...)`, card);
+        card['@id'] = 'dummy';
+        this.setState({cards: this.state.cards.concat([card]) });
       } else {
         let cards = this.state.cards;
         // update card
@@ -153,7 +155,6 @@ class App extends Component {
           }
         }
       }
-      return undefined;
     };
 
     const getCard = (id) => {

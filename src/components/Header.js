@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import iconAdd from '../res/icon_add.svg';
 import PropTypes from 'prop-types';
+import { Link } from 'react-router-dom';
 import './Header.css';
 
 class Header extends Component {
@@ -8,9 +9,9 @@ class Header extends Component {
     let groupControls;
     if (this.props.groupControls) {
       groupControls = (<div className="group-controls">
-        <a className="button" href="">
+        <Link to={{ pathname: '/edit/new' }}>
           <img src={iconAdd} className="icon icon-add" alt="add"/>
-        </a>
+        </Link>
       </div>);
     }
 
