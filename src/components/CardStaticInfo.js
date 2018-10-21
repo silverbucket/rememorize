@@ -1,36 +1,64 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import cardProps from './CardTile';
-import './CardStaticInfo.css';
-
-class CardStaticInfo extends Component {
-  render() {
-    return (
-      <div className="card-static-info">
-        <div className="card-familiarity">
-          <span>familiarity:</span> {this.props.card.familiarity}
-        </div>
-        <div className="card-familiarity">
-          <span>times reviewed:</span> {this.props.card.reviewedCount}
-        </div>
-        <div className="card-reviewed-at">
-          <span>last reviewed:</span> {this.props.card.reviewedAt}
-        </div>
-        <div className="card-updated-at">
-          <span>updated:</span> {this.props.card.updatedAt}
-        </div>
-        <div className="card-created-at">
-          <span>created:</span> {this.props.card.createdAt}
-        </div>
-        <div className="card-id">
-          <span>id</span>: {this.props.card['@id']}
-        </div>
-      </div>
-    );
-  }
-}
-
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    }
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var react_1 = require("react");
+var prop_types_1 = require("prop-types");
+var CardTile_1 = require("./CardTile");
+require("./CardStaticInfo.css");
+var CardStaticInfo = /** @class */ (function (_super) {
+    __extends(CardStaticInfo, _super);
+    function CardStaticInfo() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    CardStaticInfo.prototype.render = function () {
+        return className = "card-static-info" >
+            className;
+        "card-familiarity" >
+            familiarity;
+        /span> {this.props.card.familiarity}
+            < /div>
+            < div;
+        className = "card-familiarity" >
+            times;
+        reviewed: /span> {this.props.card.reviewedCount}
+            < /div>
+            < div;
+        className = "card-reviewed-at" >
+            last;
+        reviewed: /span> {this.props.card.reviewedAt}
+            < /div>
+            < div;
+        className = "card-updated-at" >
+            updated;
+        /span> {this.props.card.updatedAt}
+            < /div>
+            < div;
+        className = "card-created-at" >
+            created;
+        /span> {this.props.card.createdAt}
+            < /div>
+            < div;
+        className = "card-id" >
+            id < /span>: {this.props.card['@id']}
+            < /div>
+            < /div>;
+        ;
+    };
+    return CardStaticInfo;
+}(react_1.Component));
 CardStaticInfo.propTypes = {
-  card: PropTypes.shape(cardProps)
+    card: prop_types_1.default.shape(CardTile_1.default)
 };
-export default CardStaticInfo;
+exports.default = CardStaticInfo;

@@ -1,12 +1,12 @@
-import React, { Component } from 'react';
+import * as React from 'react';
 import RS from 'remotestoragejs';
 import './RemoteStorage.css';
 import RSWidget from 'remotestorage-widget';
 import Flashcards from 'remotestorage-module-flashcards';
 
-class RemoteStorage extends Component {
-  constructor() {
-    super();
+class RemoteStorage extends React.Component<any, any> {
+  constructor(props: any) {
+    super(props);
     this.state = {
       'rs': undefined,
       'flashcards': undefined,
@@ -77,7 +77,7 @@ class RemoteStorage extends Component {
 
   render() {
     return (
-      <div id="rs-widget-container"></div>
+      <div id="rs-widget-container" />
     );
   }
 }
