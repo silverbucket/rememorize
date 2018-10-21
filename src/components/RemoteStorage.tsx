@@ -1,7 +1,10 @@
 import * as React from 'react';
-import RS from 'remotestoragejs';
 import './RemoteStorage.css';
+// @ts-ignore
+import RS from 'remotestoragejs';
+// @ts-ignore
 import RSWidget from 'remotestorage-widget';
+// @ts-ignore
 import Flashcards from 'remotestorage-module-flashcards';
 
 class RemoteStorage extends React.Component<any, any> {
@@ -27,8 +30,12 @@ class RemoteStorage extends React.Component<any, any> {
       console.log('RS ready');
     });
 
-    this.state.rs = remoteStorage;
-    this.state.widget = new RSWidget(remoteStorage, { autoCloseAfter: 1000 });
+      // @ts-ignore
+      this.state.rs = remoteStorage;
+      // @ts-ignore
+      this.state.widget = new RSWidget(remoteStorage, { autoCloseAfter: 1000 });
+      // @ts-ignore
+      this.state.flashcards = remoteStorage.flashcards;
   }
 
   componentDidMount() {
