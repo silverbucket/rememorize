@@ -15,7 +15,8 @@
     "removeComments": true,
     "suppressImplicitAnyIndexErrors": true,
     "lib": [ "es6", "dom" ],
-    "types" : ["node", "mocha"]
+    "types" : ["node", "mocha"],
+    "indent-size": [true, 2]
   },
   "include": [
     "src/**/*"
