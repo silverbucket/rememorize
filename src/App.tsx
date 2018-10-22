@@ -2,9 +2,10 @@ import * as React from 'react';
 import logo from './res/logo.svg';
 import './App.css';
 import { Switch, Route } from 'react-router-dom';
-import CardList from './components/CardList';
-import CardEdit from './components/CardEdit';
-import { CardProps } from "./components/CardTile";
+import CardList from './components/cards/CardList';
+import GroupList from './components/groups/GroupList';
+import CardEdit from './components/cards/CardEdit';
+import { CardProps } from "./components/cards/CardTile";
 import { Link } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import './components/RemoteStorage.css';
@@ -30,6 +31,7 @@ class App extends React.Component<any, any> {
       connected: false,
       connecting: false,
       cards: {},
+      groups: [],
       loaded: false,
     };
 
@@ -75,9 +77,17 @@ class App extends React.Component<any, any> {
         connecting: false,
         connected: false
       });
+
       this.state.flashcards.getAllByGroup().then((cards: Object) => {
         console.log('setting flashcards: ', cards);
         this.setState({cards: cards, loaded: true});
+      });
+
+      this.state.flashcards.listGroups().then((groups: Array<string> | object) => {
+        console.log('got groups: ', groups);
+        if (! Array.isArray(groups)) { groups = ['default']; }
+        console.log('setting group list: ', groups);
+        this.setState({groups: groups});
       });
     });
 
@@ -87,6 +97,7 @@ class App extends React.Component<any, any> {
         connecting: false,
         connected: true
       });
+
       this.state.flashcards.getAllByGroup().then((cards: Object) => {
         console.log('setting flashcards: ', cards);
         this.setState({cards: cards, loaded: true});
@@ -218,14 +229,14 @@ class App extends React.Component<any, any> {
   }
 
   render() {
-    const renderMergedProps = (component: any, ...rest: Array<any>) => {
+    const renderMergedProps = (component: any, ...rest: Array<any>): any => {
       const finalProps = Object.assign({}, ...rest);
       return (
         React.createElement(component, finalProps)
       );
     };
 
-    const PropsRoute = ({component, ...rest}: any) => {
+    const PropsRoute = ({component, ...rest}: any): any => {
       return (
         <Route {...rest} render={routeProps => {
           return renderMergedProps(component, routeProps, rest);
@@ -233,7 +244,7 @@ class App extends React.Component<any, any> {
       );
     };
 
-    const saveCard = (card: CardProps) => {
+    const saveCard = (card: CardProps): void => {
       console.log("saving: ", card);
       this.state.flashcards.store(card).then((card: CardProps) => {
         console.log('card saved ', card);
@@ -245,12 +256,16 @@ class App extends React.Component<any, any> {
       });
     };
 
-    const getCard = (id: string) => {
+    const getCard = (id: string): CardProps => {
       return this.state.cards[id];
     };
 
-    const getCards = (group: string) => {
+    const getCards = (group: string): Object => {
       return this.state.cards;
+    };
+
+    const getGroups = (): Array<string> => {
+        return this.state.groups;
     };
 
     return (
@@ -266,6 +281,8 @@ class App extends React.Component<any, any> {
             <Switch>
               <PropsRoute exact
                 path='/' component={CardList} group="default" getCards={getCards}/>
+              <PropsRoute exact
+                path='/groups' component={GroupList} getGroups={getGroups}/>
               <PropsRoute exact path='/group/:group' component={CardList} getCards={getCards}/>
               <PropsRoute exact
                 path='/edit/:id' component={CardEdit} getCard={getCard} saveCard={saveCard} />

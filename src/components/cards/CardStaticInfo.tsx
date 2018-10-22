@@ -33,5 +33,4 @@ class CardStaticInfo extends React.Component<CardStaticInfoProps, {}> {
   }
 }
 
-
 export default CardStaticInfo;
