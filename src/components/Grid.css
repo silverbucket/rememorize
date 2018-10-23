@@ -1,0 +1,14 @@
+.content-wrapper {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-gap: 1em;
+    margin-left: 1em;
+    margin-right: 1em;
+}
+
+.tile-wrapper {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-gap: 1em;
+
+}

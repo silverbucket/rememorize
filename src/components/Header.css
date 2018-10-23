@@ -1,14 +1,12 @@
 
-.header {
-    width: 100%;
-    display: table;
+.header-wrapper {
+    display: grid;
+    grid-template-columns: 3fr 1fr;
+    grid-gap: 1em;
 }
 
-.header-row {
-    display: table-row;
+.group-controls {
+    padding-top: 20px;
 }
 
-.header-title {
-    display: table-cell;
-    color: black;
-}
+
