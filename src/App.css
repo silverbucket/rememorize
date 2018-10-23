@@ -1,43 +1,52 @@
-.App {
-  text-align: center;
+.logo {
+    height: 75px;
+    cursor: pointer;
+}
+.review {
+    height: 85px;
+    cursor: pointer;
 }
 
-.App-logo {
-  height: 75px;
-  cursor: pointer;
-}
-.App-logo path {
-  fill: greenyellow;
-}
-
-nav {
-  background-color: rgb(57, 57, 57);
-  color: white;
-  height: auto;
-  position: fixed;
-  width: 90px;
-  left: 0px;
-  top: 0;
-  bottom: 0;
-  padding-top: 10px;
-  z-index: 1000;
-}
-
-.App-title {
-  font-size: 1.5em;
-}
-
-.App-intro {
-  font-size: large;
-}
-
-main.content {
-  margin-left: 90px;
+.title {
+    font-size: 1.5em;
 }
 
 .icon {
-  height: 30px;
+    height: 30px;
 }
 a.button:hover {
-  cursor: pointer;
+    cursor: pointer;
+}
+
+nav {
+    background-color: rgb(57, 57, 57);
+    color: white;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-gap: 1em;
+    text-align: center;
+}
+
+/* Media Queries */
+@media(min-width: 700px) {
+    nav {
+        background-color: rgb(57, 57, 57);
+        color: white;
+        height: auto;
+        position: fixed;
+        width: 85px;
+        left: 0px;
+        top: 0;
+        bottom: 0;
+        padding-top: 10px;
+        z-index: 1000;
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-gap: 1em;
+        grid-auto-rows: 70px;
+    }
+    main.content {
+        margin-left: 90px;
+    }
+
 }

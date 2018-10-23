@@ -1,5 +1,6 @@
 import * as React from 'react';
 import logo from './res/logo.svg';
+import eye from './res/eye.svg';
 import './App.css';
 import { Switch, Route } from 'react-router-dom';
 import Grid, { GridType } from './components/Grid';
@@ -175,7 +176,8 @@ class App extends React.Component<any, any> {
         return (
             <div className="App">
                 <nav>
-                    <Link to='/'><img src={logo} className="App-logo" alt="logo"/></Link>
+                    <div><Link to='/'><img src={logo} className="logo" alt="logo"/></Link></div>
+                    <div><Link to='/'><img src={eye} className="review" alt="review"/></Link></div>
                     <ErrorBoundary>
                         <div id="rs-widget-container"/>
                     </ErrorBoundary>

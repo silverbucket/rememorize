@@ -15,15 +15,12 @@
 }
 
 .tile .tile-name {
-    width: 100%;
     display: inline-block;
     font-size: 1.2em;
     margin: 2px 0 2px 0;
 }
 
 .tile input {
-    width: 200px;
-    margin-left: 20px;
     padding: 5px 15px;
 }
 
