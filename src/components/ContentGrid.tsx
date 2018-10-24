@@ -2,7 +2,7 @@ import * as React from 'react';
 import CardTile, {CardProps} from './cards/CardTile';
 import Header from './Header';
 import GroupTile from "./GroupTile";
-import './Grid.css';
+import './ContentGrid.css';
 
 
 export enum GridType {
@@ -22,7 +22,7 @@ type GridProps = {
     }
 };
 
-class Grid extends React.Component<GridProps, {}> {
+class ContentGrid extends React.Component<GridProps, {}> {
     render() {
         let identifier: string;
         let cards: { string: CardProps };
@@ -69,4 +69,4 @@ class Grid extends React.Component<GridProps, {}> {
     }
 }
 
-export default Grid;
+export default ContentGrid;

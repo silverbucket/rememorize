@@ -1,14 +1,12 @@
 import * as React from 'react';
-import logo from './res/logo.svg';
-import eye from './res/eye.svg';
+import iconLogo from './res/logo.svg';
 import './App.css';
 import { Switch, Route } from 'react-router-dom';
-import Grid, { GridType } from './components/Grid';
+import ContentGrid, { GridType } from './components/ContentGrid';
 import CardEdit from './components/cards/CardEdit';
 import { CardProps } from "./components/cards/CardTile";
 import { Link } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
-import './components/RemoteStorage.css';
 // @ts-ignore
 import * as Redux from 'redux';
 // @ts-ignore
@@ -176,8 +174,7 @@ class App extends React.Component<any, any> {
         return (
             <div className="App">
                 <nav>
-                    <div><Link to='/'><img src={logo} className="logo" alt="logo"/></Link></div>
-                    <div><Link to='/'><img src={eye} className="review" alt="review"/></Link></div>
+                    <div><Link to='/'><img src={iconLogo} className="logo" alt="logo"/></Link></div>
                     <ErrorBoundary>
                         <div id="rs-widget-container"/>
                     </ErrorBoundary>
@@ -185,11 +182,11 @@ class App extends React.Component<any, any> {
                 <main className="content">
                 {!this.state.loaded ? <div>Loading...</div> :
                     <Switch>
-                        <PropsRoute exact path='/' component={Grid} type={GridType.cards} group="default"
+                        <PropsRoute exact path='/' component={ContentGrid} type={GridType.cards} group="default"
                                     getCards={getCards}/>
-                        <PropsRoute exact path='/groups' component={Grid} type={GridType.groups}
+                        <PropsRoute exact path='/groups' component={ContentGrid} type={GridType.groups}
                                     getGroups={getGroups}/>
-                        <PropsRoute exact path='/group/:group' type={GridType.cards} component={Grid}
+                        <PropsRoute exact path='/group/:group' type={GridType.cards} component={ContentGrid}
                                     getCards={getCards}/>
                         <PropsRoute exact path='/edit/:id' component={CardEdit} getCard={getCard}
                                     saveCard={saveCard}/>

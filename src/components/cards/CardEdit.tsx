@@ -4,6 +4,7 @@ import Header from '../Header';
 import './CardEdit.css';
 import CardStaticInfo from './CardStaticInfo';
 import { CardProps } from './CardTile';
+import iconSave from './../../res/icon_save.svg';
 
 
 export type CardEditProps = {
@@ -63,26 +64,26 @@ class CardEdit extends React.Component<CardEditProps, {}> {
                 <div className="card-edit" key={card['@id']}>
                     <form onSubmit={onFormSubmit}>
                         <div className="card-info card-editable-info">
-                            <div>
-                                <label htmlFor="frontText">front</label>
-                                <input type="text" name="frontText" className="card-front" defaultValue={card.frontText} />
+                            <div className="card-editable-entry-wrapper">
+                                <div className="label"><label htmlFor="frontText">front</label></div>
+                                <div><input type="text" name="frontText" className="card-front" defaultValue={card.frontText} /></div>
                             </div>
-                            <div>
-                                <label htmlFor="backText">back</label>
-                                <input type="text" name="backText" className="card-back" defaultValue={card.backText} />
+                            <div className="card-editable-entry-wrapper">
+                                <div className="label"><label htmlFor="backText">back</label></div>
+                                <div><input type="text" name="backText" className="card-back" defaultValue={card.backText} /></div>
                             </div>
-                            <div>
-                                <label htmlFor="hint">hint</label>
-                                <input type="text" name="hint" className="card-hint" defaultValue={card.hint} />
+                            <div className="card-editable-entry-wrapper">
+                                <div className="label"><label htmlFor="hint">hint</label></div>
+                                <div><input type="text" name="hint" className="card-hint" defaultValue={card.hint} /></div>
                             </div>
-                            <div>
-                                <label htmlFor="group">group</label>
-                                <input type="text" name="group" className="card-group" defaultValue={card.group} />
+                            <div className="card-editable-entry-wrapper">
+                                <div className="label"><label htmlFor="group">group</label></div>
+                                <div><input type="text" name="group" className="card-group" defaultValue={card.group} /></div>
                             </div>
                             </div>
                             <CardStaticInfo card={card} />
                             <div className="controls">
-                                <button name="submit" value="save">Save</button>
+                                <button name="submit" value="save"><img src={iconSave} className="icon icon-save" alt="add"/></button>
                             </div>
                     </form>
                 </div>
