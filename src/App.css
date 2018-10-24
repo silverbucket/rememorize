@@ -26,10 +26,10 @@ a.button:hover {
 }
 
 .icon-border {
-    margin: 10px auto;
+    margin: 20px auto;
     border-radius: 10px;
     background-color: #444444;
-    width: 90px;
+    width: 75px;
 }
 
 .icon-border:hover {

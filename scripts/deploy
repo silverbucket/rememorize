@@ -3,7 +3,7 @@ set -ex
 
 git up
 git checkout production
-git merge master
+git merge --no-edit master 
 npm run build:dist
 git add -f dist/
 git commit -m "Update static build - `date -u`" dist/

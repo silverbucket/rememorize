@@ -36,7 +36,7 @@ class ContentGrid extends React.Component<GridProps, {}> {
 
         return (
             <div className="content-wrapper">
-                <Header groupControls={true} title={identifier || this.props.type}/>
+                <Header groupControls={this.props.type == GridType.cards} title={identifier || this.props.type}/>
                 <div className="tile-wrapper">
                     {!keys.length ? <div>Nothing here yet...</div> :
                         keys.map(id => {
