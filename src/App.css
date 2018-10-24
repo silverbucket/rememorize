@@ -1,43 +1,80 @@
-.App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 75px;
-  cursor: pointer;
-}
-.App-logo path {
-  fill: greenyellow;
+.logo {
+    height: 75px;
+    cursor: pointer;
 }
 
 nav {
-  background-color: rgb(57, 57, 57);
-  color: white;
-  height: auto;
-  position: fixed;
-  width: 90px;
-  left: 0px;
-  top: 0;
-  bottom: 0;
-  padding-top: 10px;
-  z-index: 1000;
+    background-color: rgb(57, 57, 57);
+    color: white;
+    display: grid;
+    grid-template-columns: 2fr 5fr;
+    grid-gap: 1em;
+    text-align: center;
+    height: 75px;
 }
 
-.App-title {
-  font-size: 1.5em;
+a {
+    text-decoration: none;
 }
 
-.App-intro {
-  font-size: large;
-}
-
-main.content {
-  margin-left: 90px;
+a.button:hover {
+    cursor: pointer;
 }
 
 .icon {
-  height: 30px;
+    height: 50px;
 }
-a.button:hover {
-  cursor: pointer;
+
+.icon-border {
+    margin: 10px auto;
+    border-radius: 10px;
+    background-color: #444444;
+    width: 90px;
+}
+
+.icon-border:hover {
+    background-color: #aaaaaa;
+}
+
+button {
+    padding: 10px;
+    margin: 0 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    background-color: #444444;
+    color: black;
+}
+
+button:hover {
+    background-color: #aaaaaa;
+}
+
+/* Media Queries */
+@media(min-width: 700px) {
+    nav {
+        background-color: rgb(57, 57, 57);
+        color: white;
+        height: auto;
+        position: fixed;
+        width: 85px;
+        left: 0px;
+        top: 0;
+        bottom: 0;
+        padding-top: 10px;
+        z-index: 1000;
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-gap: 1em;
+        grid-auto-rows: 70px;
+    }
+    main.content {
+        margin-left: 90px;
+    }
+    #rs-widget-container {
+        position: fixed;
+        display: inline-block;
+        bottom: 0;
+        left: 5px;
+        z-index: 23;
+    }
 }

@@ -1,14 +1,22 @@
 
-.header {
-    width: 100%;
-    display: table;
+.header-wrapper {
+    display: grid;
+    grid-template-columns: 2fr 3fr;
+    grid-gap: 1em;
+    text-align: center;
+    padding: 0;
 }
 
-.header-row {
-    display: table-row;
+.title {
+    font-size: 1.5em;
 }
 
-.header-title {
-    display: table-cell;
-    color: black;
+.group-controls {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    grid-gap: 1em;
+    margin-left: 1em;
+    margin-right: 1em;
+    padding: 0;
 }
+

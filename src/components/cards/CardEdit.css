@@ -1,0 +1,50 @@
+
+.card-edit {
+    display: grid;
+}
+
+.card-editable-info {
+    padding: 1em;
+    font-size: 1.2em;
+    margin-bottom: 20px;
+}
+
+.card-editable-entry-wrapper {
+    display: grid;
+    grid-template-columns: 1fr;
+    margin-top: 1em;
+}
+
+.card-editable-entry-wrapper .label {
+    text-align: left;
+    margin-right: 1em;
+}
+
+.card-editable-info label {
+    display: inline-block;
+    width: 50px;
+    text-align: right;
+}
+
+.card-editable-info input {
+    margin: 4px 0 4px 0;
+    padding: 2px;
+    width: 100%;
+    font-size: 1.2em;
+}
+
+.controls {
+    float: right;
+    margin-right: 2em;
+}
+
+/* Media Queries */
+@media(min-width: 700px) {
+    .card-editable-entry-wrapper {
+        display: grid;
+        grid-template-columns: 1fr 10fr;
+    }
+    .card-editable-entry-wrapper .label {
+        text-align: right;
+    }
+}

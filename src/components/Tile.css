@@ -1,0 +1,29 @@
+.tile {
+    text-align: left;
+    cursor: pointer;
+    border: 1px solid black;
+    border-radius: 10px;
+}
+
+.tile:hover {
+    background-color: #eafbea;
+}
+
+.tile .tile-editable-info {
+    overflow: hidden;
+    padding: 2%;
+}
+
+.tile .tile-name {
+    display: inline-block;
+    font-size: 1.2em;
+    margin: 2px 0 2px 0;
+}
+
+.tile input {
+    padding: 5px 15px;
+}
+
+.tile .grouping {
+    margin-bottom: 10px;
+}

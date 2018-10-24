@@ -1,9 +1,12 @@
-import React, { Component } from 'react';
-import PropTypes from 'prop-types';
-import cardProps from './CardTile';
+import * as React from 'react';
+import { CardProps } from './CardTile';
 import './CardStaticInfo.css';
 
-class CardStaticInfo extends Component {
+type CardStaticInfoProps = {
+    card: CardProps;
+};
+
+class CardStaticInfo extends React.Component<CardStaticInfoProps, {}> {
   render() {
     return (
       <div className="card-static-info">
@@ -30,7 +33,4 @@ class CardStaticInfo extends Component {
   }
 }
 
-CardStaticInfo.propTypes = {
-  card: PropTypes.shape(cardProps)
-};
 export default CardStaticInfo;

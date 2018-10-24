@@ -1,14 +1,8 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import { HashRouter } from 'react-router-dom';
-import './index.css';
-import App from './App';
-import registerServiceWorker from './registerServiceWorker';
-
-ReactDOM.render((
-  <HashRouter>
-    <App />
-  </HashRouter>
-), document.getElementById('root'));
-
-registerServiceWorker();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var react_dom_1 = require("react-dom");
+require("./index.css");
+var registerServiceWorker_1 = require("./registerServiceWorker");
+react_dom_1.default.render((/>
+    < /HashRouter>), document.getElementById('root'));
+registerServiceWorker_1.default();
