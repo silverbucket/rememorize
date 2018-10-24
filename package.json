@@ -20,7 +20,9 @@
   },
   "scripts": {
     "dev": "parcel dev public/index.html",
-    "build": "parcel build public/index.html"
+    "build:dist": "parcel build public/index.html && bash scripts/update-versionfile",
+    "deploy": "bash scripts/deploy",
+    "clean:dist": "rm -rf dist/"
   },
   "devDependencies": {
     "awesome-typescript-loader": "^5.2.1",
