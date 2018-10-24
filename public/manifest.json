@@ -1,5 +1,5 @@
 {
- "name": "rememory",
+ "name": "Rememorize",
  "name": "simple flashcard app using remotestorage.js",
  "start_url": "./index.html",
  "display": "standalone",
