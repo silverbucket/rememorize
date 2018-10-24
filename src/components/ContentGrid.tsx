@@ -13,8 +13,7 @@ export enum GridType {
 type GridProps = {
     group?: string;
     type: GridType;
-    getCards(id: string): { string: CardProps };
-    getGroups(): Array<string>;
+    getEntries(id: string): { string: CardProps } | { string: boolean };
     match: {
         params: {
             group: string
@@ -24,48 +23,38 @@ type GridProps = {
 
 class ContentGrid extends React.Component<GridProps, {}> {
     render() {
-        let identifier: string;
-        let cards: { string: CardProps };
-        let groups: Array<string>;
+        let identifier: string = "";
+        let entries: { string: CardProps } | { string: boolean };
+        let keys: Array<string>;
 
         if (this.props.type == GridType.cards) {
             identifier = this.props.group || this.props.match.params.group || 'default';
-            cards = this.props.getCards(identifier);
-        } else {
-            groups = this.props.getGroups();
         }
 
-        if (groups) {
-            return (
-                <div>
-                    <Header groupControls={true} title="groups"/>
-                    {
-                        groups.map(id => {
-                            return (
-                                <GroupTile key={id} name={id} />
-                            );
+        entries = this.props.getEntries(identifier);
+        keys = Object.keys(entries);
+
+        return (
+            <div className="content-wrapper">
+                <Header groupControls={true} title={identifier || this.props.type}/>
+                <div className="tile-wrapper">
+                    {!keys.length ? <div>Nothing here yet...</div> :
+                        keys.map(id => {
+                            if (this.props.type === GridType.groups) {
+                                return (
+                                    <GroupTile key={id} name={id} />
+                                );
+                            } else {
+                                return (
+                                    <CardTile key={id} card={entries[id]}/>
+                                );
+                            }
+
                         })
                     }
                 </div>
-            );
-        } else if (cards) {
-            return (
-                <div className="content-wrapper">
-                    <Header groupControls={true} title={identifier || this.props.type}/>
-                    <div className="tile-wrapper">
-                        {
-                            Object.keys(cards).map(id => {
-                                return (
-                                    <CardTile key={id} card={cards[id]}/>
-                                );
-                            })
-                        }
-                    </div>
-                </div>
-            );
-        } else {
-            return null;
-        }
+            </div>
+        );
     }
 }
 
