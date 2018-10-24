@@ -53,7 +53,6 @@ class App extends React.Component<any, any> {
             let grouped: any = {};
             let cards: any = {};
 
-            console.log("** before");
             Object.keys(groupListing).map((groupPath) => {
                 return groupPath.replace(/\/$/, "");
             }).forEach((groupName) => {
@@ -102,15 +101,18 @@ class App extends React.Component<any, any> {
             return this.state.cards[id];
         };
 
-        const getCards = (group: string): { string: CardProps } => {
-            return this.state.cards;
+        const getCards = (group: string): { string: CardProps } | {} => {
+            let result = this.state.groups[group];
+            if (! result) {
+                return {};
+            }
+            return result;
         };
 
         const getGroups = (): { string: boolean } => {
             return this.state.groups;
         };
 
-        console.log('rendering with this.state.cards: ', this.state.cards);
         return (
             <div className="App">
                 <nav>
