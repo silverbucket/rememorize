@@ -27,7 +27,7 @@ class CardEdit extends React.Component<CardEditProps, {}> {
             '@id': '',
             frontText: '',
             backText: '',
-            group: 'default'
+            group: ''
         };
 
         console.log("this.props: ", this.props);

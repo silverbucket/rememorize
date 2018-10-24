@@ -6,129 +6,68 @@ import ContentGrid, { GridType } from './components/ContentGrid';
 import CardEdit from './components/cards/CardEdit';
 import { CardProps } from "./components/cards/CardTile";
 import { Link } from 'react-router-dom';
-import ErrorBoundary from './components/ErrorBoundary';
-// @ts-ignore
-import * as Redux from 'redux';
-// @ts-ignore
-import RS from 'remotestoragejs';
-// @ts-ignore
+import RemoteStorage from 'remotestoragejs';
 import RSWidget from 'remotestorage-widget';
-// @ts-ignore
 import Flashcards from 'remotestorage-module-flashcards';
 
+const remoteStorage = new RemoteStorage({
+    cache: true,
+    requestTimeout: 90000,
+    modules: [ Flashcards ]
+});
 
 class App extends React.Component<any, any> {
 
     constructor(props: any) {
         super(props);
 
-        this.state = {
-            rs:  undefined,
-            flashcards: undefined,
-            widget: undefined,
-            connected: false,
-            connecting: false,
-            cards: {},
-            groups: [],
-            loaded: false,
-        };
-
-        let remoteStorage = new RS({
-            cache: true,
-            requestTimeout: 90000,
-            modules: [ Flashcards ]
-        });
-
         remoteStorage.access.claim('flashcards', 'rw');
 
-        remoteStorage.on('ready', () => {
-            console.log('rs ready');
-        });
+        this.state = {
+            rs: remoteStorage,
+            flashcards: remoteStorage.flashcards,
+            widget: new RSWidget(remoteStorage, { autoCloseAfter: 1000 }),
+            connected: remoteStorage.connected,
+            cards: {},
+            groups: {}
+        };
 
-        // @ts-ignore
-        this.state.rs = remoteStorage;
-        // @ts-ignore
-        this.state.widget = new RSWidget(remoteStorage, { autoCloseAfter: 1000 });
-        // @ts-ignore
-        this.state.flashcards = remoteStorage.flashcards;
+        this.state.widget.attach('rs-widget-container');
     }
 
     // TODO: investigate componentDidUpdate
-
     componentDidMount() {
-        console.log('this.state: ', this.state);
-        // this.state.flashcards.on('change', (p1: any, p2: any) => {
-        //   console.log('flashcard.on(change) event fired: ');
-        //   console.log(p1);
-        //   console.log(p2);
-        // });
+        console.debug('componentDidMount()');
 
-        // this.state.rs.on('change', (p1, p2) => {
-        //   console.log('rs.on(change) event fired: ');
-        //   console.log(p1);
-        //   console.log(p2);
-        // });
-
-        this.state.rs.on('not-connected', () => {
-            console.log('RS not-connected');
+        const connectionState = () => {
             this.setState({
-                connecting: false,
-                connected: false
+                connected: remoteStorage.connected
             });
+        };
 
-            this.state.flashcards.getAllByGroup().then((cards: Object) => {
-                console.log('setting flashcards: ', cards);
-                this.setState({cards: cards, loaded: true});
-            });
+        this.state.rs.on('connected', connectionState);
+        this.state.rs.on('disconnected', connectionState);
 
-            this.state.flashcards.listGroups().then((groups: Array<string> | object) => {
-                console.log('got groups: ', groups);
-                if (! Array.isArray(groups)) { groups = ['default']; }
-                console.log('setting group list: ', groups);
-                this.setState({groups: groups});
+        this.state.flashcards.listGroups().then((groupListing: Object) => {
+            if (Object.keys(groupListing).length == 0 ) { return; }
+            let grouped: any = {};
+            let cards: any = {};
+
+            console.log("** before");
+            Object.keys(groupListing).map((groupPath) => {
+                return groupPath.replace(/\/$/, "");
+            }).forEach((groupName) => {
+                this.state.flashcards.getAllByGroup(groupName).then((groupedCards: Object) => {
+                    console.log(`flashcards for ${groupName}: `, groupedCards);
+                    grouped[groupName] = groupedCards;
+                    cards = {...cards, ...groupedCards };
+                    this.setState({
+                        groups: grouped,
+                        cards: cards
+                    });
+                });
             });
         });
-
-        this.state.rs.on('connected', () => {
-            console.log('RS connected');
-            this.setState({
-                connecting: false,
-                connected: true
-            });
-
-            this.state.flashcards.getAllByGroup().then((cards: Object) => {
-                console.log('setting flashcards: ', cards);
-                this.setState({cards: cards, loaded: true});
-            });
-        });
-
-        this.state.rs.on('disconnected', () => {
-            console.log('RS disconnected');
-            this.setState({
-                rs: {
-                    connecting: false,
-                    connected: false
-                }
-            });
-        });
-
-        this.state.rs.on('connecting', () => {
-            console.log('RS connecting');
-            this.setState({
-                connecting: true,
-                connected: false
-            });
-        });
-
-        this.state.rs.on('authing', () => {
-            console.log('RS authing');
-            this.setState({
-                connecting: true,
-                connected: false
-            });
-        });
-
-        this.state.widget.attach('rs-widget-container');
     }
 
     render() {
@@ -167,31 +106,27 @@ class App extends React.Component<any, any> {
             return this.state.cards;
         };
 
-        const getGroups = (): Array<string> => {
+        const getGroups = (): { string: boolean } => {
             return this.state.groups;
         };
 
+        console.log('rendering with this.state.cards: ', this.state.cards);
         return (
             <div className="App">
                 <nav>
                     <div><Link to='/'><img src={iconLogo} className="logo" alt="logo"/></Link></div>
-                    <ErrorBoundary>
-                        <div id="rs-widget-container"/>
-                    </ErrorBoundary>
                 </nav>
                 <main className="content">
-                {!this.state.loaded ? <div>Loading...</div> :
                     <Switch>
-                        <PropsRoute exact path='/' component={ContentGrid} type={GridType.cards} group="default"
-                                    getCards={getCards}/>
+                        <PropsRoute exact path='/' component={ContentGrid} type={GridType.groups}
+                                    getEntries={getGroups}/>
                         <PropsRoute exact path='/groups' component={ContentGrid} type={GridType.groups}
-                                    getGroups={getGroups}/>
+                                    getEntries={getGroups}/>
                         <PropsRoute exact path='/group/:group' type={GridType.cards} component={ContentGrid}
-                                    getCards={getCards}/>
+                                    getEntries={getCards}/>
                         <PropsRoute exact path='/edit/:id' component={CardEdit} getCard={getCard}
                                     saveCard={saveCard}/>
                     </Switch>
-                }
                 </main>
             </div>
         );
