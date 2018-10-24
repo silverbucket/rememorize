@@ -2,7 +2,6 @@
 set -ex
 
 git up
-npm run build
 git checkout production
 cp -rf dist/* .
 git add --all
