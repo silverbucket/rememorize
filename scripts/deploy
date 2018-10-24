@@ -8,6 +8,6 @@ git add --all
 git commit -m "Update static build - `date -u`"
 # Setting up the remote:
 # `git remote add 5apps git@5apps.com:silverbucket_sharesome.git`
-git subtree push -f --prefix dist/ 5apps master
+git push -f 5apps master
 git push origin production
 git checkout master
