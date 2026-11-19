@@ -7,6 +7,7 @@
 <div class="page-head">
     <h1>Your cards</h1>
     <div class="actions">
+        <a class="btn ghost" href={href.import()}>Import</a>
         <a class="btn" href={href.newCard()}>New card</a>
         {#if library.dueCount > 0}
             <a class="btn primary" href={href.review()}>Review {library.dueCount} due</a>

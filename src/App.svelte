@@ -6,6 +6,7 @@ import { onMount } from "svelte";
     import CardEditor from "./components/CardEditor.svelte";
     import GroupView from "./components/GroupView.svelte";
     import Home from "./components/Home.svelte";
+    import Import from "./components/Import.svelte";
     import Review from "./components/Review.svelte";
     import StatusPill from "./components/StatusPill.svelte";
     import { href, router } from "./lib/router.svelte";
@@ -58,6 +59,8 @@ import { onMount } from "svelte";
         {/key}
     {:else if route.name === "account"}
         <Account />
+    {:else if route.name === "import"}
+        <Import />
     {/if}
 </main>
 

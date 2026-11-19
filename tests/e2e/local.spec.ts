@@ -205,3 +205,75 @@ test("daily limit on new cards", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("link", { name: "Review 1 due" })).toBeVisible();
 });
+
+test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
+    const csv = 'front,back,hint\npes,dog,barks\nkočka,cat,\n"voda, studená",cold water,\n,missing front,\n';
+    const file = { name: "Czech animals.csv", mimeType: "text/csv", buffer: Buffer.from(csv) };
+
+    await page.goto("/");
+    await page.getByRole("link", { name: "Import" }).click();
+    await page.getByLabel("File").setInputFiles(file);
+    // The group defaults to the file name.
+    await expect(page.getByLabel("Group for cards without one")).toHaveValue("Czech animals");
+    await expect(page.getByText("3 new cards in Czech animals")).toBeVisible();
+    await expect(page.getByText("1 line couldn't be used: line 5 (front or back is empty)")).toBeVisible();
+    await page.getByRole("button", { name: "Import 3 cards" }).click();
+
+    await expect(page.getByRole("heading", { name: "Czech animals" })).toBeVisible();
+    await expect(page.getByText("voda, studená")).toBeVisible();
+
+    // Importing the same file again adds nothing.
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles(file);
+    await expect(page.getByText("3 cards already here (skipped)")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Nothing to import" })).toBeDisabled();
+
+    // CSV export round-trips the content.
+    await page.goto("/#/account");
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export CSV" }).click();
+    const exported = await (await download).path();
+    const { readFileSync } = await import("node:fs");
+    const text = readFileSync(exported, "utf8");
+    expect(text).toContain("pes,dog,barks,Czech animals");
+    expect(text).toContain('"voda, studená",cold water,,Czech animals');
+});
+
+test("a JSON backup restores cards with their review progress", async ({ page, browser }) => {
+    await addCard(page, { front: "pivo", back: "beer", group: "Drinks" });
+    await page.goto("/#/review");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByText("Done for now")).toBeVisible();
+
+    await page.goto("/#/account");
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export backup (JSON)" }).click();
+    const backup = await (await download).path();
+
+    // A fresh browser (no cards) restores the backup.
+    const fresh = await (await browser.newContext()).newPage();
+    await fresh.goto("/#/import");
+    await fresh.getByLabel("File").setInputFiles(backup);
+    await expect(fresh.getByText("1 new card in Drinks")).toBeVisible();
+    await expect(fresh.getByLabel("Group for cards without one")).toHaveCount(0);
+    await fresh.getByRole("button", { name: "Import 1 card" }).click();
+    await expect(fresh.getByRole("heading", { name: "Drinks" })).toBeVisible();
+    // Still scheduled for later, not due again.
+    await expect(fresh.locator(".when")).toHaveText(/^in /);
+    await fresh.goto("/");
+    await expect(fresh.getByRole("link", { name: /Review \d+ due/ })).toHaveCount(0);
+
+    // Restoring it again changes nothing.
+    await fresh.goto("/#/import");
+    await fresh.getByLabel("File").setInputFiles(backup);
+    await expect(fresh.getByText("1 card already here (skipped)")).toBeVisible();
+});
+
+test("invalid import files show an error", async ({ page }) => {
+    await page.goto("/#/import");
+    await page
+        .getByLabel("File")
+        .setInputFiles({ name: "x.json", mimeType: "application/json", buffer: Buffer.from("{oops") });
+    await expect(page.getByRole("alert")).toContainText("isn't valid JSON");
+});
