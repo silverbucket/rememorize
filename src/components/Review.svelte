@@ -16,14 +16,18 @@
     let queue: Flashcard[] = $state([]);
     let started = $state(false);
     let revealed = $state(false);
+    let revealedAt = $state(new Date());
     let showHint = $state(false);
     let busy = $state(false);
     let error = $state("");
     let reviewed = $state(0);
     let tally = $state<Record<Grade, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
 
-    const current = $derived(queue[0]);
-    const intervals = $derived(current && revealed ? previewIntervals(current, library.now) : undefined);
+    // Read queued cards from the library so sync edits apply and deleted or
+    // moved cards drop out instead of being written back.
+    const live = $derived(queue.map((c) => library.find(c.group, c["@id"])).filter((c) => c !== undefined));
+    const current = $derived(live[0]);
+    const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt) : undefined);
     const back = $derived(group ? href.group(group) : href.home());
 
     // Snapshot the due queue once cards have loaded, so sync updates during a
@@ -38,6 +42,7 @@
     });
 
     function reveal() {
+        revealedAt = new Date();
         revealed = true;
     }
 
@@ -47,12 +52,12 @@
         error = "";
         const card = current;
         try {
-            // Same clock as the previewed intervals, so the rating matches its label.
-            const now = library.now;
+            // Same time as the previewed intervals, so the rating matches its label.
+            const now = revealedAt;
             const updated = await library.review(card, g, now);
             reviewed += 1;
             tally[g] += 1;
-            const rest = queue.slice(1);
+            const rest = live.slice(1);
             const dueSoon =
                 updated.review && new Date(updated.review.due).getTime() - now.getTime() <= REQUEUE_WITHIN_MS;
             queue = dueSoon ? [...rest, updated] : rest;
@@ -90,7 +95,7 @@
 <div class="page-head">
     <h1>Review{group ? `: ${group}` : ""}</h1>
     {#if current}
-        <span class="muted">{plural(queue.length, "card")} left</span>
+        <span class="muted">{plural(live.length, "card")} left</span>
     {/if}
 </div>
 
