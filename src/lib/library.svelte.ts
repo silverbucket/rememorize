@@ -184,7 +184,7 @@ export class Library {
     async setNewPerDay(value: number): Promise<void> {
         const previous = this.newPerDay;
         // Applied before the write finishes, so it holds even if the page is left straight away.
-        this.#applySettings({ newCardsPerDay: parseNewPerDay(value) });
+        this.#applySettings({ newCardsPerDay: value });
         try {
             await this.#rs.flashcards.setSettings({ newCardsPerDay: this.newPerDay });
         } catch (e) {
