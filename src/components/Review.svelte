@@ -47,7 +47,8 @@
         error = "";
         const card = current;
         try {
-            const now = new Date();
+            // Same clock as the previewed intervals, so the rating matches its label.
+            const now = library.now;
             const updated = await library.review(card, g, now);
             reviewed += 1;
             tally[g] += 1;

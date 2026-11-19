@@ -31,7 +31,7 @@
     function disconnect() {
         if (
             !confirm(
-                "Disconnect this browser? The local copy of your cards is removed; everything stays on your storage server.",
+                "Disconnect this browser? The local copy of your cards is removed. Synced cards stay on your storage server, but changes not yet synced are lost.",
             )
         ) {
             return;

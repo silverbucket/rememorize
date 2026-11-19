@@ -39,5 +39,3 @@ rs.authorize = (options) => {
 rs.access.claim("flashcards", "rw");
 // Caching strategies aren't persisted; this has to run on every load.
 rs.caching.enable("/flashcards/");
-
-export const flashcards = rs.flashcards;
