@@ -55,6 +55,27 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     await expect(b.getByText("Verbs")).toBeVisible({ timeout: SYNC_TIMEOUT });
 });
 
+test("settings are shared between devices", async ({ browser }) => {
+    test.setTimeout(120_000);
+    const user = await createUser();
+    const a = await (await browser.newContext()).newPage();
+    const b = await (await browser.newContext()).newPage();
+    await connect(a, user);
+    await connect(b, user);
+    await expect(b.getByLabel("New cards per day")).toHaveValue("20");
+
+    await a.getByLabel("New cards per day").fill("7");
+    await a.getByLabel("New cards per day").blur();
+    // B is sitting on the settings page and sees the change without reloading.
+    await expect(b.getByLabel("New cards per day")).toHaveValue("7", { timeout: SYNC_TIMEOUT });
+
+    await b.getByLabel("New cards per day").fill("3");
+    await b.getByLabel("New cards per day").blur();
+    await expect(a.getByLabel("New cards per day")).toHaveValue("3", { timeout: SYNC_TIMEOUT });
+    await a.reload();
+    await expect(a.getByLabel("New cards per day")).toHaveValue("3");
+});
+
 test("the connection survives a reload", async ({ page }) => {
     const user = await createUser();
     await connect(page, user);

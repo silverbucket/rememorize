@@ -1,4 +1,7 @@
-/** Per-browser preferences, kept in localStorage. */
+/**
+ * The daily new-card limit. It is stored with the cards (see Library), so it
+ * syncs; localStorage only remembers the last value this browser used.
+ */
 
 export const DEFAULT_NEW_PER_DAY = 20;
 export const MAX_NEW_PER_DAY = 9999;
