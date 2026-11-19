@@ -232,7 +232,8 @@ test("statistics follow reviews", async ({ page }) => {
     await page.goto("/#/review");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Again/ }).click();
-    await expect(page.getByText("1 card left")).toBeVisible();
+    // Saved once the card comes round again, question side up (the count stays at 1).
+    await expect(page.getByRole("button", { name: /Show answer/ })).toBeVisible();
 
     // Recorded, and still there after a reload.
     await page.goto("/#/stats");
