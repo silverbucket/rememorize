@@ -19,3 +19,31 @@ jobs:
       - run: bun run check
       - run: bun run test
       - run: bun run build
+
+  e2e:
+    name: E2E (Playwright + armadietto)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - name: Start armadietto
+        run: bun run armadietto:up
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+      - name: armadietto logs on failure
+        if: failure()
+        run: docker compose logs armadietto

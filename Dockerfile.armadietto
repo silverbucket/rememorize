@@ -1,0 +1,7 @@
+# Local remoteStorage server for the e2e suite. Versions are pinned so the
+# backend the tests run against doesn't change underneath them.
+FROM node:22-alpine
+RUN npm install -g armadietto@0.6.6
+COPY armadietto.conf.json /etc/armadietto/config.json
+EXPOSE 8000
+CMD ["armadietto", "-c", "/etc/armadietto/config.json"]

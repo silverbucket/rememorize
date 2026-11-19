@@ -6,3 +6,5 @@ coverage/
 .env*.local
 .idea/
 *.log
+playwright-report/
+test-results/
