@@ -1,0 +1,158 @@
+<script lang="ts">
+    import type { Flashcard } from "remotestorage-module-flashcards";
+    import { untrack } from "svelte";
+    import { formatDateTime, fromNow } from "../lib/format";
+    import { href, router } from "../lib/router.svelte";
+    import { library } from "../lib/state";
+
+    let { card, initialGroup }: { card?: Flashcard; initialGroup?: string } = $props();
+
+    // The form edits a snapshot; later sync updates to the card don't clobber
+    // what the user is typing.
+    const initial = untrack(() => card);
+    let frontText = $state(initial?.frontText ?? "");
+    let backText = $state(initial?.backText ?? "");
+    let hint = $state(initial?.hint ?? "");
+    let group = $state(initial?.group ?? untrack(() => initialGroup) ?? "");
+    let saving = $state(false);
+    let error = $state("");
+
+    const groupError = $derived(group.includes("/") ? 'Group names can\'t contain "/".' : "");
+    const canSave = $derived(frontText.trim() !== "" && backText.trim() !== "" && !groupError && !saving);
+
+    async function save(event: SubmitEvent) {
+        event.preventDefault();
+        if (!canSave) return;
+        saving = true;
+        error = "";
+        const addAnother = (event.submitter as HTMLButtonElement | null)?.value === "another";
+        try {
+            const input = {
+                ...(initial ?? {}),
+                frontText: frontText.trim(),
+                backText: backText.trim(),
+                hint: hint.trim() || undefined,
+                group: group.trim(),
+            };
+            // Keep the existing review state; only content changed.
+            const saved = await library.save(input, initial?.group);
+            if (addAnother) {
+                frontText = "";
+                backText = "";
+                hint = "";
+                saving = false;
+                document.getElementById("front")?.focus();
+            } else {
+                router.go(href.group(saved.group));
+            }
+        } catch (e) {
+            error = e instanceof Error ? e.message : String(e);
+            saving = false;
+        }
+    }
+
+    async function remove() {
+        if (!initial || !confirm("Delete this card?")) return;
+        saving = true;
+        try {
+            await library.remove(initial);
+            router.go(href.group(initial.group));
+        } catch (e) {
+            error = e instanceof Error ? e.message : String(e);
+            saving = false;
+        }
+    }
+</script>
+
+<form class="panel form" onsubmit={save}>
+    <label>
+        <span>Front</span>
+        <textarea id="front" class="field" bind:value={frontText} required rows="2"></textarea>
+    </label>
+    <label>
+        <span>Back</span>
+        <textarea class="field" bind:value={backText} required rows="2"></textarea>
+    </label>
+    <label>
+        <span>Hint <span class="muted">(optional)</span></span>
+        <input class="field" bind:value={hint} />
+    </label>
+    <label>
+        <span>Group</span>
+        <input class="field" bind:value={group} list="group-names" placeholder="default" />
+        <datalist id="group-names">
+            {#each library.groupNames() as name (name)}
+                <option value={name}></option>
+            {/each}
+        </datalist>
+        {#if groupError}<small class="error">{groupError}</small>{/if}
+    </label>
+
+    {#if error}
+        <p class="error" role="alert">{error}</p>
+    {/if}
+
+    <div class="buttons">
+        {#if initial}
+            <button class="btn danger" type="button" onclick={remove} disabled={saving}>Delete</button>
+        {/if}
+        <span class="spacer"></span>
+        {#if !initial}
+            <button class="btn" type="submit" value="another" disabled={!canSave}>Save &amp; add another</button>
+        {/if}
+        <button class="btn primary" type="submit" value="save" disabled={!canSave}>
+            {saving ? "Saving…" : "Save"}
+        </button>
+    </div>
+</form>
+
+{#if initial}
+    <dl class="stats">
+        <div><dt>Next review</dt><dd>{initial.review ? fromNow(initial.review.due, library.now) : "not reviewed yet"}</dd></div>
+        <div><dt>Reviews</dt><dd>{initial.review?.reps ?? 0}</dd></div>
+        <div><dt>Lapses</dt><dd>{initial.review?.lapses ?? 0}</dd></div>
+        <div><dt>Last reviewed</dt><dd>{formatDateTime(initial.review?.lastReview ?? initial.reviewedAt)}</dd></div>
+        <div><dt>Created</dt><dd>{formatDateTime(initial.createdAt)}</dd></div>
+        <div><dt>Updated</dt><dd>{formatDateTime(initial.updatedAt)}</dd></div>
+    </dl>
+{/if}
+
+<style>
+    .form {
+        display: grid;
+        gap: 1rem;
+    }
+
+    label {
+        display: grid;
+        gap: 0.35rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .spacer {
+        flex: 1;
+    }
+
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+        gap: 0.75rem;
+        margin: 1.25rem 0 0;
+        font-size: 0.85rem;
+    }
+
+    dt {
+        color: var(--text-muted);
+    }
+
+    dd {
+        margin: 0;
+    }
+</style>

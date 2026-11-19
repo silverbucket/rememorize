@@ -1,14 +1,32 @@
 #!/bin/sh
-set -ex
+# Build and publish the static app to 5apps.
+#
+# Serves at https://rememorize.5apps.com. Commits the build to the
+# `production` branch, then pushes just the dist/ subtree to 5apps.
+# One-time setup:
+#   git remote add 5apps git@5apps.com:silverbucket_rememorize.git
+set -eu
 
-git up
+if ! git remote get-url 5apps >/dev/null 2>&1; then
+    echo "No '5apps' git remote. Add it with: git remote add 5apps git@5apps.com:silverbucket_rememorize.git" >&2
+    exit 1
+fi
+if [ -n "$(git status --porcelain)" ]; then
+    echo "Working tree is not clean; commit or stash first." >&2
+    exit 1
+fi
+
+set -x
+git checkout master
+git pull --ff-only origin master
+bun install --frozen-lockfile
+bun run check
+bun run test
 git checkout production
-git merge --no-edit master 
-npm run build:dist
+git merge --no-edit master
+bun run build
 git add -f dist/
-git commit -m "Update static build - `date -u`" dist/
-# Setting up the remote:
-# `git remote add 5apps git@5apps.com:silverbucket_sharesome.git`
-git push 5apps `git subtree split --prefix dist/ production`:master --force
-git push upstream production
+git commit -m "Update static build - $(date -u)" dist/
+git push 5apps "$(git subtree split --prefix dist/ production)":master --force
+git push origin production
 git checkout master
