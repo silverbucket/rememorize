@@ -84,6 +84,50 @@ test("review session schedules cards", async ({ page }) => {
     await expect(page.locator(".when").first()).toHaveText(/^in /);
 });
 
+test("undo the last rating", async ({ page, isMobile }) => {
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
+    await page.goto("/#/review");
+    await expect(page.getByRole("button", { name: /Undo/ })).toHaveCount(0);
+
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByText("1 card left")).toBeVisible();
+
+    // Undo puts the card back at the front, question side up.
+    await page.getByRole("button", { name: /Undo/ }).click();
+    await expect(page.getByText("2 cards left")).toBeVisible();
+    await expect(page.locator(".side.front")).toHaveText("pes");
+    await expect(page.locator(".side.back")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Undo/ })).toHaveCount(0);
+
+    // The undone rating isn't stored: both cards are still due.
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Review 2 due" })).toBeVisible();
+
+    if (!isMobile) {
+        await page.goto("/#/review");
+        await page.keyboard.press("Space");
+        await page.keyboard.press("3");
+        await expect(page.getByText("1 card left")).toBeVisible();
+
+        // Enter on a focused Undo button undoes instead of revealing the next answer.
+        await page.getByRole("button", { name: /Undo/ }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page.getByText("2 cards left")).toBeVisible();
+        await expect(page.locator(".side.back")).toHaveCount(0);
+        await page.keyboard.press("Space");
+        await page.keyboard.press("3");
+        await expect(page.getByText("1 card left")).toBeVisible();
+        await page.keyboard.press("Space");
+        await page.keyboard.press("3");
+        await expect(page.getByText("Done for now")).toBeVisible();
+        await page.keyboard.press("u");
+        await expect(page.getByText("1 card left")).toBeVisible();
+        await expect(page.locator(".side.front")).toHaveText("kočka");
+    }
+});
+
 test("keyboard review", async ({ page, isMobile }) => {
     test.skip(isMobile, "keyboard shortcuts are a desktop feature");
     await addCard(page, { front: "voda", back: "water", group: "Drinks" });

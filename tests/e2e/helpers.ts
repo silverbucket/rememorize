@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
+const APP_PORT = process.env.E2E_PORT || "4317";
 export const RS_HOST = `localhost:${process.env.RS_PORT || "8100"}`;
 const RS_BASE = `http://${RS_HOST}`;
 
@@ -34,7 +35,7 @@ export async function connect(page: Page, user: TestUser): Promise<void> {
     await page.locator('input[name="password"]').fill(user.password);
     await page.locator("form[action='/oauth'] [type=submit]").first().click();
     // Back on the app (the OAuth page URL only mentions the app in an encoded query param).
-    await page.waitForURL((url) => url.port === "4317");
+    await page.waitForURL((url) => url.port === APP_PORT);
     await expect(page.getByText(`Connected as ${user.address}`)).toBeVisible({ timeout: 20_000 });
 }
 

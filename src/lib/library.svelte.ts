@@ -187,6 +187,24 @@ export class Library {
         return this.save(rate(card, grade, now), card.group);
     }
 
+    /**
+     * Undo a review: put the card's scheduling back to how it was in
+     * `before`, keeping any other edits made since (e.g. synced from another
+     * device). Looks the card up by id, so it still works if it was moved.
+     */
+    async undoReview(before: Flashcard): Promise<Flashcard> {
+        const current = this.cards.find((c) => c["@id"] === before["@id"]);
+        if (!current) throw new Error("This card was deleted, so its rating can't be undone.");
+        const { review: _review, reviewedCount: _count, reviewedAt: _at, ...rest } = current;
+        const restored: Flashcard = { ...rest };
+        if (before.review) restored.review = before.review;
+        if (before.reviewedCount !== undefined) restored.reviewedCount = before.reviewedCount;
+        if (before.reviewedAt) restored.reviewedAt = before.reviewedAt;
+        // rate() drops the legacy v1 field; put it back too.
+        if (before.familiarity !== undefined) restored.familiarity = before.familiarity;
+        return this.save(restored, current.group);
+    }
+
     connect(userAddress: string): void {
         this.error = "";
         this.status = "connecting";
