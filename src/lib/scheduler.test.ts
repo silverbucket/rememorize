@@ -90,6 +90,14 @@ describe("previewIntervals", () => {
         expect(Object.keys(labels)).toEqual(["1", "2", "3", "4"]);
         for (const label of Object.values(labels)) expect(label).toMatch(/^(<1m|\d+(\.\d)?(m|h|d|mo|y))$/);
     });
+    it("matches the interval the rating actually schedules", () => {
+        for (let i = 0; i < 20; i++) {
+            const c = card({ "@id": `c${i}` });
+            const shown = previewIntervals(c, NOW)[3];
+            const due = new Date(rate(c, 3, NOW).review?.due ?? 0).getTime();
+            expect(shown).toBe(formatInterval(due - NOW.getTime()));
+        }
+    });
 });
 
 describe("formatInterval", () => {

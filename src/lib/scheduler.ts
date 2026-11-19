@@ -22,7 +22,8 @@ const scheduler = await DefaultScheduler({ version: "FSRS-7", enableFuzz: true, 
 type SchedulerCard = ReturnType<typeof scheduler.newCard>;
 
 function toSchedulerCard(card: Flashcard, now: Date): SchedulerCard {
-    const fresh = scheduler.newCard({ now });
+    // cardId seeds the fuzz, so the previewed interval is the one rate() gives.
+    const fresh = scheduler.newCard({ now, cardId: card["@id"] });
     const review = card.review;
     // State from another algorithm can't seed FSRS-7 memory; start over.
     if (!review || (review.algorithm && review.algorithm !== ALGORITHM)) return fresh;
