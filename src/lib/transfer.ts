@@ -120,7 +120,9 @@ function parseDelimitedImport(text: string, defaultGroup: string, extension?: st
     const lines = text.split(/\r?\n/);
     let separator: string | undefined;
     let start = 0;
-    while (start < lines.length && ANKI_HEADER.test(lines[start])) {
+    // Anki's export always starts with #separator:, so require it before stripping anything.
+    const anki = /^#separator:/i.test(lines[0] ?? "");
+    while (anki && start < lines.length && ANKI_HEADER.test(lines[start])) {
         const match = /^#separator:(.+)$/i.exec(lines[start].trim());
         if (match) separator = { tab: "\t", comma: ",", semicolon: ";", pipe: "|" }[match[1].toLowerCase()] ?? match[1];
         start += 1;
