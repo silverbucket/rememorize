@@ -57,8 +57,26 @@ describe("parseImport (CSV/TSV)", () => {
     });
 
     it("reads named columns in any order", () => {
-        const parsed = parseImport("Deck;Answer;Question\nfood;beer;pivo\n", "x.csv", "Imported");
+        const parsed = parseImport("Group,Hint,Back,Front\nfood,,beer,pivo\n", "x.csv", "Imported");
         expect(parsed.rows.map((r) => r.card)).toEqual([{ frontText: "pivo", backText: "beer", group: "food" }]);
+    });
+
+    it("uses the file extension to pick the format", () => {
+        // A tab inside quotes doesn't make a .csv tab-separated.
+        expect(parseImport('"a\tb",c\n', "x.csv", "I").rows.map((r) => r.card.frontText)).toEqual(["a\tb"]);
+        // A .csv starting with "[" isn't JSON.
+        expect(parseImport("[term],definition\n", "x.csv", "I").rows.map((r) => r.card.frontText)).toEqual(["[term]"]);
+        expect(parseImport("a\tb\n", "x.tsv", "I").rows.map((r) => r.card.backText)).toEqual(["b"]);
+    });
+
+    it("keeps a first row that starts with # but isn't an Anki header", () => {
+        expect(parseImport("#hashtag,a symbol\n", "x.csv", "I").rows.map((r) => r.card.frontText)).toEqual([
+            "#hashtag",
+        ]);
+    });
+
+    it("rejects a file with an unclosed quote", () => {
+        expect(() => parseImport('pes,"dog\nkočka,cat\n', "x.csv", "I")).toThrow(/never closed/);
     });
 
     it("reads Anki plain-text exports", () => {

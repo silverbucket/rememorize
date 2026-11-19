@@ -57,10 +57,11 @@ function csvField(value: string): string {
 /** Parse an import file. `defaultGroup` is used for CSV rows without a group. */
 export function parseImport(text: string, fileName: string, defaultGroup: string): ParsedImport {
     const trimmed = text.replace(/^﻿/, "").trimStart();
-    if (fileName.toLowerCase().endsWith(".json") || trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        return parseJsonImport(trimmed);
-    }
-    return parseDelimitedImport(trimmed, defaultGroup);
+    const extension = /\.([^.]+)$/.exec(fileName.toLowerCase())?.[1];
+    // The extension decides the format; only guess from content when it doesn't say.
+    const isJson = extension === "json" || (extension !== "csv" && extension !== "tsv" && /^[[{]/.test(trimmed));
+    if (isJson) return parseJsonImport(trimmed);
+    return parseDelimitedImport(trimmed, defaultGroup, extension);
 }
 
 function parseJsonImport(text: string): ParsedImport {
@@ -110,12 +111,12 @@ interface Columns {
     group?: number;
 }
 
-function parseDelimitedImport(text: string, defaultGroup: string): ParsedImport {
+function parseDelimitedImport(text: string, defaultGroup: string, extension?: string): ParsedImport {
     // Anki puts settings in `#key:value` lines at the top.
     const lines = text.split(/\r?\n/);
     let separator: string | undefined;
     let start = 0;
-    while (start < lines.length && lines[start].startsWith("#")) {
+    while (start < lines.length && /^#[a-z ]+:/i.test(lines[start])) {
         const match = /^#separator:(.+)$/i.exec(lines[start].trim());
         if (match) separator = { tab: "\t", comma: ",", semicolon: ";", pipe: "|" }[match[1].toLowerCase()] ?? match[1];
         start += 1;
@@ -123,8 +124,7 @@ function parseDelimitedImport(text: string, defaultGroup: string): ParsedImport 
     const body = lines.slice(start).join("\n");
     const firstLine = lines[start] ?? "";
     const delimiter =
-        separator ??
-        (firstLine.includes("\t") ? "\t" : firstLine.includes(";") && !firstLine.includes(",") ? ";" : ",");
+        separator ?? (extension === "tsv" ? "\t" : extension === "csv" ? "," : firstLine.includes("\t") ? "\t" : ",");
     const records = parseDelimited(body, delimiter);
 
     let columns: Columns = { front: 0, back: 1, hint: 2, group: 3 };
@@ -195,6 +195,7 @@ export function parseDelimited(text: string, delimiter: string): string[][] {
             field += ch;
         }
     }
+    if (quoted) throw new Error("A quoted field is never closed, so the file can't be read reliably.");
     if (field !== "" || record.length > 0) {
         record.push(field);
         records.push(record);
