@@ -1,6 +1,6 @@
 import type { Flashcard } from "remotestorage-module-flashcards";
 import { describe, expect, it } from "vitest";
-import { dueCards, formatInterval, isDue, nextDue, previewIntervals, rate } from "./scheduler";
+import { dueCards, formatInterval, isDue, nextDue, previewIntervals, rate, startedOn } from "./scheduler";
 
 const NOW = new Date("2026-03-01T12:00:00.000Z");
 
@@ -111,5 +111,35 @@ describe("formatInterval", () => {
         [548 * 86_400_000, "1.5y"],
     ])("%i ms → %s", (ms, label) => {
         expect(formatInterval(ms)).toBe(label);
+    });
+});
+
+describe("new-card limit", () => {
+    it("records when a card was first reviewed, and keeps it", () => {
+        const first = rate(card(), 3, NOW);
+        expect(first.review?.firstReview).toBe(NOW.toISOString());
+        const later = new Date(first.review?.due ?? 0);
+        expect(rate(first, 3, later).review?.firstReview).toBe(NOW.toISOString());
+    });
+
+    it("doesn't invent a first review for cards reviewed before it was recorded", () => {
+        const old = rate(card(), 3, new Date("2025-01-01T00:00:00.000Z"));
+        delete old.review?.firstReview;
+        expect(rate(old, 3, NOW).review?.firstReview).toBeUndefined();
+    });
+
+    it("caps new cards but not reviews", () => {
+        const review = rate(card({ "@id": "r" }), 3, new Date("2026-01-01T00:00:00.000Z"));
+        const fresh = ["a", "b", "c"].map((id, i) => card({ "@id": id, createdAt: `2026-01-0${i + 1}T00:00:00.000Z` }));
+        const cards = [review, ...fresh];
+        expect(dueCards(cards, NOW, 2).map((c) => c["@id"])).toEqual(["r", "a", "b"]);
+        expect(dueCards(cards, NOW, 0).map((c) => c["@id"])).toEqual(["r"]);
+        expect(dueCards(cards, NOW).map((c) => c["@id"])).toEqual(["r", "a", "b", "c"]);
+    });
+
+    it("counts cards started today", () => {
+        const today = rate(card({ "@id": "t" }), 3, NOW);
+        const yesterday = rate(card({ "@id": "y" }), 3, new Date(NOW.getTime() - 86_400_000));
+        expect(startedOn([today, yesterday, card()], NOW)).toBe(1);
     });
 });

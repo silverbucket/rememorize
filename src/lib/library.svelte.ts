@@ -8,7 +8,8 @@
  */
 import { type Flashcard, type FlashcardInput, normalizeFlashcard } from "remotestorage-module-flashcards";
 import type { RSWithModules } from "./rs";
-import { dueCards, type Grade, rate } from "./scheduler";
+import { dueCards, type Grade, isDue, isNew, rate, startedOn } from "./scheduler";
+import { DEFAULT_NEW_PER_DAY } from "./settings";
 
 export type ConnectionStatus = "local" | "connecting" | "connected" | "unauthorized";
 
@@ -36,25 +37,40 @@ export class Library {
     /** Ticks every minute so due counts stay current. */
     now = $state(new Date());
 
+    /** Most new cards to start per day, across all groups. */
+    newPerDay = $state(DEFAULT_NEW_PER_DAY);
+
     cards = $derived(Object.values(this.#cards));
 
+    /** New cards started today (first reviewed today). */
+    startedToday = $derived(startedOn(this.cards, this.now));
+
+    /** How many more new cards can be started today. */
+    newRemaining = $derived(Math.max(0, this.newPerDay - this.startedToday));
+
     groups: GroupSummary[] = $derived.by(() => {
-        const byName = new Map<string, GroupSummary>();
-        const now = this.now;
-        const due = new Set(dueCards(this.cards, now));
+        const byName = new Map<string, Flashcard[]>();
         for (const card of this.cards) {
-            const summary = byName.get(card.group) ?? { name: card.group, total: 0, due: 0 };
-            summary.total += 1;
-            if (due.has(card)) summary.due += 1;
-            byName.set(card.group, summary);
+            const list = byName.get(card.group) ?? [];
+            list.push(card);
+            byName.set(card.group, list);
         }
-        return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+        return [...byName.entries()]
+            .map(([name, cards]) => ({ name, total: cards.length, due: this.dueIn(cards).length }))
+            .sort((a, b) => a.name.localeCompare(b.name));
     });
 
-    dueCount = $derived(this.groups.reduce((sum, g) => sum + g.due, 0));
+    /** Cards that a review of everything would show now (new cards capped). */
+    dueCount = $derived(this.dueIn(this.cards).length);
 
-    constructor(rs: RSWithModules) {
+    /** New cards held back today by the daily limit. */
+    newWaiting = $derived(
+        Math.max(0, this.cards.filter((c) => isNew(c) && isDue(c, this.now)).length - this.newRemaining),
+    );
+
+    constructor(rs: RSWithModules, options: { newPerDay?: number } = {}) {
         this.#rs = rs;
+        if (options.newPerDay !== undefined) this.newPerDay = options.newPerDay;
         rs.on("ready", () => void this.load());
         rs.on("connecting", () => {
             this.status = "connecting";
@@ -119,6 +135,13 @@ export class Library {
         } finally {
             if (generation === this.#loadGeneration) this.loaded = true;
         }
+    }
+
+    /** The review queue for some cards: due reviews, then new cards up to today's limit. */
+    dueIn(cards: Flashcard[], now = this.now): Flashcard[] {
+        // Today's allowance at `now`, not at the last clock tick (matters just after midnight).
+        const remaining = Math.max(0, this.newPerDay - startedOn(this.cards, now));
+        return dueCards(cards, now, remaining);
     }
 
     find(group: string, id: string): Flashcard | undefined {

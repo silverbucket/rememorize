@@ -122,3 +122,42 @@ test("storage address that can't be discovered shows an error", async ({ page })
     await expect(page.getByRole("alert")).toContainText("Could not find a storage server", { timeout: 20_000 });
     await expect(page.getByRole("button", { name: "Connect" })).toBeEnabled();
 });
+
+test("daily limit on new cards", async ({ page }) => {
+    for (const [front, back] of [
+        ["jedna", "one"],
+        ["dva", "two"],
+        ["tři", "three"],
+    ]) {
+        await addCard(page, { front, back, group: "Numbers" });
+    }
+    await page.goto("/#/account");
+    await expect(page.getByLabel("New cards per day")).toHaveValue("20");
+    await page.getByLabel("New cards per day").fill("2");
+    await page.getByLabel("New cards per day").press("Enter");
+    await page.getByLabel("New cards per day").blur();
+
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Review 2 due" })).toBeVisible();
+    await page.getByRole("link", { name: "Review 2 due" }).click();
+    for (let i = 0; i < 2; i++) {
+        await page.getByRole("button", { name: /Show answer/ }).click();
+        await page.getByRole("button", { name: /Easy/ }).click();
+    }
+    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("1 more new card waiting: you've started 2 of 2 new cards for today.")).toBeVisible();
+    // Don't claim the next card is months away while a new one is waiting.
+    await expect(page.getByText(/Next card is due/)).toHaveCount(0);
+
+    // The setting is remembered, and today's count shows.
+    await page.reload();
+    await page.goto("/#/account");
+    await expect(page.getByLabel("New cards per day")).toHaveValue("2");
+    await expect(page.getByText("Started today: 2")).toBeVisible();
+
+    // Raising the limit makes the waiting card available straight away.
+    await page.getByLabel("New cards per day").fill("5");
+    await page.getByLabel("New cards per day").blur();
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Review 1 due" })).toBeVisible();
+});

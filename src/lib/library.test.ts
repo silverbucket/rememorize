@@ -51,6 +51,37 @@ describe("Library", () => {
         expect(library.find("default", card["@id"])?.review?.reps).toBe(1);
     });
 
+    it("limits new cards per day across groups", async () => {
+        library.newPerDay = 2;
+        const a = await library.save({ frontText: "a", backText: "a", group: "one" });
+        await library.save({ frontText: "b", backText: "b", group: "one" });
+        await library.save({ frontText: "c", backText: "c", group: "two" });
+        expect(library.dueCount).toBe(2);
+        expect(library.newWaiting).toBe(1);
+        // Each group can still show up to the remaining limit.
+        expect(library.groups).toEqual([
+            { name: "one", total: 2, due: 2 },
+            { name: "two", total: 1, due: 1 },
+        ]);
+        await library.review(a, 4);
+        expect(library.startedToday).toBe(1);
+        expect(library.newRemaining).toBe(1);
+        expect(library.dueCount).toBe(1);
+    });
+
+    it("uses the allowance for the time it's asked about", async () => {
+        library.newPerDay = 1;
+        const day1 = new Date(2026, 4, 1, 23, 59, 30);
+        const day2 = new Date(2026, 4, 2, 0, 0, 30);
+        library.now = day1;
+        const a = await library.save({ frontText: "a", backText: "a" });
+        await library.save({ frontText: "b", backText: "b" });
+        await library.review(a, 4, day1);
+        expect(library.dueIn(library.cards, day1)).toHaveLength(0);
+        // The clock hasn't ticked past midnight yet, but a new day has started.
+        expect(library.dueIn(library.cards, day2)).toHaveLength(1);
+    });
+
     it("removes cards and groups", async () => {
         const a = await library.save({ frontText: "a", backText: "a", group: "one" });
         await library.save({ frontText: "b", backText: "b", group: "one" });
