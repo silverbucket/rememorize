@@ -146,6 +146,8 @@ test("daily limit on new cards", async ({ page }) => {
     }
     await expect(page.getByText("Done for now")).toBeVisible();
     await expect(page.getByText("1 more new card waiting: you've started 2 of 2 new cards for today.")).toBeVisible();
+    // Don't claim the next card is months away while a new one is waiting.
+    await expect(page.getByText(/Next card is due/)).toHaveCount(0);
 
     // The setting is remembered, and today's count shows.
     await page.reload();

@@ -163,7 +163,7 @@
                 <a href={href.account()}>Change the daily limit</a>.
             </p>
         {/if}
-        {#if nextDue(scope)}
+        {#if nextDue(scope) && library.newWaiting === 0}
             <p class="muted">Next card is due {fromNow(nextDue(scope)?.toISOString(), library.now)}.</p>
         {/if}
         <a class="btn" href={back}>Back</a>
