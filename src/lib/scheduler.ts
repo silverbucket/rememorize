@@ -154,12 +154,14 @@ function dueTime(item: ReviewItem): number {
 }
 
 /** When the next card becomes due, if none are due now. */
-export function nextDue(cards: Flashcard[]): Date | undefined {
+export function nextDue(cards: Flashcard[], now = new Date()): Date | undefined {
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
     let next: number | undefined;
     for (const item of cards.flatMap(itemsOf)) {
         const review = stateOf(item.card, item.reverse);
         if (!review) continue;
-        const t = new Date(review.due).getTime();
+        // A direction held back today can't come up before tomorrow, even if it is due this evening.
+        const t = Math.max(new Date(review.due).getTime(), isBuried(item, now) ? tomorrow : 0);
         if (next === undefined || t < next) next = t;
     }
     return next === undefined ? undefined : new Date(next);

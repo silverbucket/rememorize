@@ -227,8 +227,8 @@
                 {plural(held, "card")} held until tomorrow: the other direction of a card you studied today.
             </p>
         {/if}
-        {#if nextDue(scope) && library.newWaiting === 0 && held === 0}
-            <p class="muted">Next card is due {fromNow(nextDue(scope)?.toISOString(), library.now)}.</p>
+        {#if nextDue(scope, library.now) && library.newWaiting === 0 && held === 0}
+            <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
         {/if}
         <a class="btn" href={back}>Back</a>
     </div>

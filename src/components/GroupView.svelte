@@ -23,7 +23,7 @@ import { fromNow, plural } from "../lib/format";
         if (open.some((i) => !stateOf(card, i.reverse))) return { text: "new", due: true };
         if (open.length > 0) return { text: "due", due: true };
         if (due.length > 0) return { text: "tomorrow", due: false };
-        return { text: fromNow(nextDue([card])?.toISOString(), library.now), due: false };
+        return { text: fromNow(nextDue([card], library.now)?.toISOString(), library.now), due: false };
     }
     let deleting = $state(false);
     let error = $state("");

@@ -185,6 +185,15 @@ describe("reversed cards", () => {
         expect(label(dueItems([done], tomorrow))).toEqual(["c1 reverse"]);
     });
 
+    it("doesn't promise a held-back direction before tomorrow", () => {
+        // Back → front is due this evening, but front → back was studied at noon.
+        const evening = new Date(NOW.getTime() + 5 * 3_600_000);
+        const reverseReview = { ...rate(card(), 3, NOW).review, due: evening.toISOString() } as Flashcard["review"];
+        delete reverseReview?.lastReview;
+        const studied = rate(card({ direction: "both", reverseReview }), 4, NOW);
+        expect(nextDue([studied], NOW)?.toDateString()).toBe(new Date(NOW.getTime() + 86_400_000).toDateString());
+    });
+
     it("counts each direction against the new-card limit", () => {
         const both = card({ direction: "both" });
         const forward = rate(both, 3, NOW);
