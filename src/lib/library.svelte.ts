@@ -139,7 +139,9 @@ export class Library {
 
     /** The review queue for some cards: due reviews, then new cards up to today's limit. */
     dueIn(cards: Flashcard[], now = this.now): Flashcard[] {
-        return dueCards(cards, now, this.newRemaining);
+        // Today's allowance at `now`, not at the last clock tick (matters just after midnight).
+        const remaining = Math.max(0, this.newPerDay - startedOn(this.cards, now));
+        return dueCards(cards, now, remaining);
     }
 
     find(group: string, id: string): Flashcard | undefined {

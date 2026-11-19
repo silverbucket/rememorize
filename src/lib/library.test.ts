@@ -69,6 +69,19 @@ describe("Library", () => {
         expect(library.dueCount).toBe(1);
     });
 
+    it("uses the allowance for the time it's asked about", async () => {
+        library.newPerDay = 1;
+        const day1 = new Date(2026, 4, 1, 23, 59, 30);
+        const day2 = new Date(2026, 4, 2, 0, 0, 30);
+        library.now = day1;
+        const a = await library.save({ frontText: "a", backText: "a" });
+        await library.save({ frontText: "b", backText: "b" });
+        await library.review(a, 4, day1);
+        expect(library.dueIn(library.cards, day1)).toHaveLength(0);
+        // The clock hasn't ticked past midnight yet, but a new day has started.
+        expect(library.dueIn(library.cards, day2)).toHaveLength(1);
+    });
+
     it("removes cards and groups", async () => {
         const a = await library.save({ frontText: "a", backText: "a", group: "one" });
         await library.save({ frontText: "b", backText: "b", group: "one" });

@@ -145,7 +145,7 @@ test("daily limit on new cards", async ({ page }) => {
         await page.getByRole("button", { name: /Easy/ }).click();
     }
     await expect(page.getByText("Done for now")).toBeVisible();
-    await expect(page.getByText("1 more new card will come up tomorrow")).toBeVisible();
+    await expect(page.getByText("1 more new card waiting: you've started 2 of 2 new cards for today.")).toBeVisible();
 
     // The setting is remembered, and today's count shows.
     await page.reload();

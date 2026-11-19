@@ -158,8 +158,8 @@
         {/if}
         {#if library.newWaiting > 0}
             <p class="muted">
-                {plural(library.newWaiting, "more new card")} will come up tomorrow: you've started
-                {library.startedToday} of {library.newPerDay} today.
+                {plural(library.newWaiting, "more new card")} waiting: you've started {library.startedToday} of
+                {library.newPerDay} new cards for today.
                 <a href={href.account()}>Change the daily limit</a>.
             </p>
         {/if}
