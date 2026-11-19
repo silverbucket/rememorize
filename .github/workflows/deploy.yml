@@ -1,0 +1,53 @@
+name: Deploy
+
+# Publish master to https://rememorize.5apps.com.
+#
+# Needs the FIVEAPPS_DEPLOY_KEY secret: the private half of an SSH key that
+# is authorized on the 5apps account (the same key the other apps use).
+# The build output is pushed as the root of the 5apps repo, matching how the
+# app was deployed before (dist/ subtree).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Only ever publish master.
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run check
+      - run: bun run test
+      - run: bun run build
+
+      - name: Setup SSH for 5apps
+        env:
+          FIVEAPPS_DEPLOY_KEY: ${{ secrets.FIVEAPPS_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$FIVEAPPS_DEPLOY_KEY" > ~/.ssh/5apps_key
+          chmod 600 ~/.ssh/5apps_key
+          ssh-keyscan -H 5apps.com >> ~/.ssh/known_hosts
+          printf 'Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+
+      - name: Deploy to 5apps
+        run: |
+          cd dist
+          git init -q -b master
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "deploy ${GITHUB_SHA::7}"
+          git push --force git@5apps.com:silverbucket_rememorize.git master
