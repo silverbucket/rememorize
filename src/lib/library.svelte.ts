@@ -238,6 +238,8 @@ export class Library {
             rating: grade,
             state: card.review?.state ?? 0,
         };
+        // Whatever happens next, the review before this one can no longer be undone.
+        this.#lastLogged = undefined;
         try {
             await this.#rs.flashcards.logReview(entry);
             this.#log = { ...this.#log, [logDay(entry)]: [...(this.#log[logDay(entry)] ?? []), entry] };

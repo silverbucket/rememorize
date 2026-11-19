@@ -40,7 +40,9 @@
     const dayText = (day: DayStats) =>
         `${dayName.format(day.date)}: ${plural(day.reviews, "review")}${day.started ? `, ${plural(day.started, "new card")} started` : ""}`;
 
-    let picked: DayStats | undefined = $state();
+    // Kept as a key, so the reading follows the day's numbers when sync changes them.
+    let pickedKey: string | undefined = $state();
+    const picked = $derived(weeks.flat().find((d) => d.key === pickedKey));
     const reading = $derived(
         picked ? dayText(picked) : `${plural(weeks.flat().reduce((sum, d) => sum + d.reviews, 0), "review")} in the last year`,
     );
@@ -116,7 +118,7 @@
     <section class="panel">
         <h2>Reviews per day</h2>
         <div class="scroller" bind:this={scroller}>
-            <div class="calendar" aria-hidden="true" onpointerleave={(e) => e.pointerType === "mouse" && (picked = undefined)}>
+            <div class="calendar" aria-hidden="true" onpointerleave={(e) => e.pointerType === "mouse" && (pickedKey = undefined)}>
                 <div class="months">
                     {#each weeks as week, i (i)}
                         <div class="month">
@@ -134,9 +136,9 @@
                                     class="day l{level(day)}"
                                     role="presentation"
                                     class:today={day.key === today}
-                                    class:picked={day.key === picked?.key}
-                                    onpointerenter={() => (picked = day)}
-                                    onpointerdown={() => (picked = day)}
+                                    class:picked={day.key === pickedKey}
+                                    onpointerenter={() => (pickedKey = day.key)}
+                                    onpointerdown={() => (pickedKey = day.key)}
                                 ></div>
                             {/each}
                         </div>
