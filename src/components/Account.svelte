@@ -3,6 +3,7 @@
     import { href } from "../lib/router.svelte";
     import { MAX_NEW_PER_DAY, parseNewPerDay, saveNewPerDay } from "../lib/settings";
     import { library } from "../lib/state";
+    import { exportCsv, exportJson } from "../lib/transfer";
 
     const ADDRESS_KEY = "rememorize:userAddress";
 
@@ -35,6 +36,15 @@
         input.value = String(value);
         library.newPerDay = value;
         saveNewPerDay(value);
+    }
+
+    function download(contents: string, type: string, extension: string) {
+        const url = URL.createObjectURL(new Blob([contents], { type }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `rememorize-${new Date().toISOString().slice(0, 10)}.${extension}`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     function disconnect() {
@@ -127,6 +137,29 @@
     </div>
 </div>
 
+<div class="panel data">
+    <h2>Your cards</h2>
+    <p class="muted">
+        Export a full backup (JSON, including review progress), or a spreadsheet of fronts, backs, hints and groups (CSV).
+        Import accepts either, and Anki's “Notes in Plain Text” export.
+    </p>
+    <div class="buttons">
+        <button
+            class="btn"
+            type="button"
+            disabled={library.cards.length === 0}
+            onclick={() => download(exportJson(library.cards), "application/json", "json")}>Export backup (JSON)</button
+        >
+        <button
+            class="btn"
+            type="button"
+            disabled={library.cards.length === 0}
+            onclick={() => download(exportCsv(library.cards), "text/csv", "csv")}>Export CSV</button
+        >
+        <a class="btn" href={href.import()}>Import…</a>
+    </div>
+</div>
+
 <p class="muted version">Rememorize {__APP_VERSION__}</p>
 
 <style>
@@ -138,6 +171,18 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
+    }
+
+    .data {
+        margin-top: 1rem;
+    }
+
+    .data h2 {
+        font-size: 1.1rem;
+    }
+
+    .data p {
+        margin: 0.25rem 0 0.75rem;
     }
 
     .review-settings {

@@ -9,6 +9,7 @@
  *   #/new?group=:group     new card
  *   #/review[/:group]      review due cards
  *   #/account              storage connection
+ *   #/import               import cards from a file
  */
 export type Route =
     | { name: "home" }
@@ -16,7 +17,8 @@ export type Route =
     | { name: "edit"; group: string; id: string }
     | { name: "new"; group?: string }
     | { name: "review"; group?: string }
-    | { name: "account" };
+    | { name: "account" }
+    | { name: "import" };
 
 export function parseHash(hash: string): Route {
     const raw = hash.replace(/^#\/?/, "");
@@ -42,6 +44,8 @@ export function parseHash(hash: string): Route {
             return a ? { name: "review", group: a } : { name: "review" };
         case "account":
             return { name: "account" };
+        case "import":
+            return { name: "import" };
         default:
             return { name: "home" };
     }
@@ -56,6 +60,7 @@ export const href = {
     newCard: (group?: string) => (group ? `#/new?group=${enc(group)}` : "#/new"),
     review: (group?: string) => (group ? `#/review/${enc(group)}` : "#/review"),
     account: () => "#/account",
+    import: () => "#/import",
 };
 
 class Router {
