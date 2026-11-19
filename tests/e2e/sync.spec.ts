@@ -33,6 +33,12 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     await b.getByRole("button", { name: /Easy/ }).click();
     await expect(b.getByText("Done for now")).toBeVisible();
     await expect(a.locator(".when")).toHaveText(/^in /, { timeout: SYNC_TIMEOUT });
+    // The review itself is in A's statistics too.
+    await a.goto("/#/stats");
+    await expect(a.locator(".tile").filter({ hasText: "Reviews today" }).locator("dd")).toHaveText("1", {
+        timeout: SYNC_TIMEOUT,
+    });
+    await a.goto("/#/group/Verbs");
 
     // A deletes the group; B (sitting on the home page) sees it disappear.
     await b.goto("/");

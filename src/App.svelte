@@ -8,6 +8,7 @@ import { onMount } from "svelte";
     import Home from "./components/Home.svelte";
     import Import from "./components/Import.svelte";
     import Review from "./components/Review.svelte";
+    import Stats from "./components/Stats.svelte";
     import StatusPill from "./components/StatusPill.svelte";
     import { href, router } from "./lib/router.svelte";
     import { library } from "./lib/state";
@@ -61,6 +62,8 @@ import { onMount } from "svelte";
         <Account />
     {:else if route.name === "import"}
         <Import />
+    {:else if route.name === "stats"}
+        <Stats />
     {/if}
 </main>
 

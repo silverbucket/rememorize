@@ -9,8 +9,11 @@
 import {
     type Flashcard,
     type FlashcardInput,
+    LOG_FOLDER,
     normalizeFlashcard,
+    normalizeReviewLog,
     normalizeSettings,
+    type ReviewLogEntry,
     SETTINGS_PATH,
     type Settings,
 } from "remotestorage-module-flashcards";
@@ -33,6 +36,10 @@ const keyOf = (group: string, id: string) => `${group}/${id}`;
 export class Library {
     #rs: RSWithModules;
     #cards: Record<string, Flashcard> = $state({});
+    /** The review log as stored: one list of reviews per UTC day. */
+    #log: Record<string, ReviewLogEntry[]> = $state({});
+    /** The log entry of the latest review made here, for undo. */
+    #lastLogged: ReviewLogEntry | undefined;
     #loadGeneration = 0;
 
     loaded = $state(false);
@@ -51,6 +58,13 @@ export class Library {
     newPerDay = $state(DEFAULT_NEW_PER_DAY);
 
     cards = $derived(Object.values(this.#cards));
+
+    /** Every recorded review, oldest first. */
+    log = $derived(
+        Object.values(this.#log)
+            .flat()
+            .sort((a, b) => a.at.localeCompare(b.at)),
+    );
 
     /** New cards started today (first reviewed today). */
     startedToday = $derived(startedOn(this.cards, this.now));
@@ -105,6 +119,7 @@ export class Library {
             // re-enabled for the next session.
             rs.caching.enable("/flashcards/");
             this.#cards = {};
+            this.#log = {};
             void this.load();
         });
         rs.on("network-offline", () => {
@@ -135,12 +150,16 @@ export class Library {
     async load(): Promise<void> {
         const generation = ++this.#loadGeneration;
         try {
-            const [cards, settings] = await Promise.all([
+            const [cards, settings, log] = await Promise.all([
                 this.#rs.flashcards.getAll(false),
                 this.#rs.flashcards.getSettings(false),
+                this.#rs.flashcards.getReviewLog(false),
             ]);
             if (generation !== this.#loadGeneration) return;
             this.#applySettings(settings);
+            const days: Record<string, ReviewLogEntry[]> = {};
+            for (const entry of log) days[logDay(entry)] = [...(days[logDay(entry)] ?? []), entry];
+            this.#log = days;
             const next: Record<string, Flashcard> = {};
             for (const card of cards) next[keyOf(card.group, card["@id"])] = card;
             this.#cards = next;
@@ -211,7 +230,24 @@ export class Library {
 
     /** Record a review and store the rescheduled card. */
     async review(card: Flashcard, grade: Grade, now = new Date()): Promise<Flashcard> {
-        return this.save(rate(card, grade, now), card.group);
+        const saved = await this.save(rate(card, grade, now), card.group);
+        const entry: ReviewLogEntry = {
+            at: now.toISOString(),
+            cardId: card["@id"],
+            group: card.group,
+            rating: grade,
+            state: card.review?.state ?? 0,
+        };
+        // Whatever happens next, the review before this one can no longer be undone.
+        this.#lastLogged = undefined;
+        try {
+            await this.#rs.flashcards.logReview(entry);
+            this.#log = { ...this.#log, [logDay(entry)]: [...(this.#log[logDay(entry)] ?? []), entry] };
+            this.#lastLogged = entry;
+        } catch {
+            // The log only feeds statistics; the review itself is saved.
+        }
+        return saved;
     }
 
     /**
@@ -229,7 +265,22 @@ export class Library {
         if (before.reviewedAt) restored.reviewedAt = before.reviewedAt;
         // rate() drops the legacy v1 field; put it back too.
         if (before.familiarity !== undefined) restored.familiarity = before.familiarity;
-        return this.save(restored, current.group);
+        const saved = await this.save(restored, current.group);
+        // Only the review made here is taken out of the log, not a later one synced from elsewhere.
+        const undone = this.#lastLogged;
+        if (undone?.cardId === before["@id"]) {
+            this.#lastLogged = undefined;
+            try {
+                await this.#rs.flashcards.unlogReview(undone);
+                const day = (this.#log[logDay(undone)] ?? []).filter(
+                    (e) => e.at !== undone.at || e.cardId !== undone.cardId,
+                );
+                this.#log = { ...this.#log, [logDay(undone)]: day };
+            } catch {
+                // As in review(): statistics only.
+            }
+        }
+        return saved;
     }
 
     connect(userAddress: string): void {
@@ -264,6 +315,10 @@ export class Library {
         const path = event.relativePath ?? "";
         if (path === SETTINGS_PATH) {
             this.#applySettings(normalizeSettings(event.newValue));
+            return;
+        }
+        if (path.startsWith(`${LOG_FOLDER}/`)) {
+            this.#log = { ...this.#log, [path.slice(LOG_FOLDER.length + 1)]: normalizeReviewLog(event.newValue) };
             return;
         }
         const slash = path.indexOf("/");
@@ -301,6 +356,9 @@ export class Library {
         this.error = messageOf(e);
     }
 }
+
+/** The log document an entry is stored in: its UTC day. */
+const logDay = (entry: ReviewLogEntry) => entry.at.slice(0, 10);
 
 function messageOf(e: unknown): string {
     return e instanceof Error ? e.message : String(e);
