@@ -162,6 +162,19 @@ describe("Library", () => {
         expect(library.log.map((e) => e.rating)).toEqual([3]);
     });
 
+    it("undo leaves a later review from another device in the log", async () => {
+        const card = await library.save({ frontText: "pivo", backText: "beer" });
+        const reviewed = await library.review(card, 3, new Date("2026-01-01T10:00:00.000Z"));
+        // Another device rates the card afterwards; its log entry and card arrive by sync.
+        const other = new Library(rs);
+        await other.load();
+        await other.review(reviewed, 4, new Date("2026-01-01T10:05:00.000Z"));
+        await library.load();
+
+        await library.undoReview(card);
+        expect(library.log.map((e) => e.rating)).toEqual([4]);
+    });
+
     it("saves the daily limit with the cards", async () => {
         await library.setNewPerDay(7);
         expect(library.newPerDay).toBe(7);

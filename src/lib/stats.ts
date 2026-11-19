@@ -102,7 +102,9 @@ export function retentionByGroup(log: ReviewLogEntry[]): { group: string; retent
     const groups = new Map<string, ReviewLogEntry[]>();
     for (const entry of log) {
         const name = entry.group ?? "default";
-        groups.set(name, [...(groups.get(name) ?? []), entry]);
+        const entries = groups.get(name);
+        if (entries) entries.push(entry);
+        else groups.set(name, [entry]);
     }
     return [...groups.entries()]
         .map(([group, entries]) => ({ group, retention: retention(entries) }))

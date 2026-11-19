@@ -38,6 +38,8 @@ export class Library {
     #cards: Record<string, Flashcard> = $state({});
     /** The review log as stored: one list of reviews per UTC day. */
     #log: Record<string, ReviewLogEntry[]> = $state({});
+    /** The log entry of the latest review made here, for undo. */
+    #lastLogged: ReviewLogEntry | undefined;
     #loadGeneration = 0;
 
     loaded = $state(false);
@@ -239,6 +241,7 @@ export class Library {
         try {
             await this.#rs.flashcards.logReview(entry);
             this.#log = { ...this.#log, [logDay(entry)]: [...(this.#log[logDay(entry)] ?? []), entry] };
+            this.#lastLogged = entry;
         } catch {
             // The log only feeds statistics; the review itself is saved.
         }
@@ -261,13 +264,16 @@ export class Library {
         // rate() drops the legacy v1 field; put it back too.
         if (before.familiarity !== undefined) restored.familiarity = before.familiarity;
         const saved = await this.save(restored, current.group);
-        // The undone review was logged at the time the card says it was last reviewed.
-        const at = current.review?.lastReview;
-        const undone = at && this.#log[at.slice(0, 10)]?.find((e) => e.at === at && e.cardId === current["@id"]);
-        if (undone) {
+        // Only the review made here is taken out of the log, not a later one synced from elsewhere.
+        const undone = this.#lastLogged;
+        if (undone?.cardId === before["@id"]) {
+            this.#lastLogged = undefined;
             try {
                 await this.#rs.flashcards.unlogReview(undone);
-                this.#log = { ...this.#log, [logDay(undone)]: this.#log[logDay(undone)].filter((e) => e !== undone) };
+                const day = (this.#log[logDay(undone)] ?? []).filter(
+                    (e) => e.at !== undone.at || e.cardId !== undone.cardId,
+                );
+                this.#log = { ...this.#log, [logDay(undone)]: day };
             } catch {
                 // As in review(): statistics only.
             }

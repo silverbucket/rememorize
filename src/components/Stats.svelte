@@ -116,7 +116,7 @@
     <section class="panel">
         <h2>Reviews per day</h2>
         <div class="scroller" bind:this={scroller}>
-            <div class="calendar" aria-hidden="true" onpointerleave={() => (picked = undefined)}>
+            <div class="calendar" aria-hidden="true" onpointerleave={(e) => e.pointerType === "mouse" && (picked = undefined)}>
                 <div class="months">
                     {#each weeks as week, i (i)}
                         <div class="month">

@@ -16,7 +16,8 @@
 
 <div class="chart">
     <!-- Pointing at (or tapping) a day shows its numbers below; screen readers get the list. -->
-    <div class="plot" aria-hidden="true" onpointerleave={() => (active = undefined)}>
+    <!-- A tapped day stays selected: lifting a finger also fires pointerleave. -->
+    <div class="plot" aria-hidden="true" onpointerleave={(e) => e.pointerType === "mouse" && (active = undefined)}>
         <span class="max">{max}</span>
         {#each bars as bar (bar.key)}
             <div
