@@ -206,6 +206,47 @@ test("daily limit on new cards", async ({ page }) => {
     await expect(page.getByRole("link", { name: "Review 1 due" })).toBeVisible();
 });
 
+test("statistics follow reviews", async ({ page }) => {
+    const tile = (label: string) => page.locator(".tile").filter({ hasText: label }).locator("dd");
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
+    await page.goto("/");
+    await page.getByRole("link", { name: "Stats" }).click();
+    await expect(page.getByText("No reviews recorded yet.")).toBeVisible();
+    await expect(tile("Reviews today")).toHaveText("0");
+
+    await page.goto("/#/review");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Good/ }).click();
+    await expect(page.getByText("Done for now")).toBeVisible();
+
+    // An undone rating isn't counted.
+    await page.getByRole("button", { name: /Undo/ }).click();
+    await expect(page.getByText("1 card left")).toBeVisible();
+    await page.goto("/#/stats");
+    await expect(tile("Reviews today")).toHaveText("1");
+    await expect(tile("Retention")).toHaveText("100%");
+
+    await page.goto("/#/review");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Again/ }).click();
+    await expect(page.getByText("1 card left")).toBeVisible();
+
+    // Recorded, and still there after a reload.
+    await page.goto("/#/stats");
+    await page.reload();
+    await expect(tile("Reviews today")).toHaveText("2");
+    await expect(tile("Day streak")).toHaveText("1");
+    await expect(tile("Retention")).toHaveText("50%");
+    await expect(page.locator(".day.today.l4")).toBeVisible();
+    await expect(page.getByRole("row", { name: /Animals/ })).toContainText("50%");
+    await expect(page.getByText("2 new cards started in the last 30 days")).toBeVisible();
+    // The card rated Easy is scheduled for a later day.
+    await expect(page.getByText(/^\d+ cards? due today, 1 in the next 7 days$/)).toBeVisible();
+});
+
 test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
     const csv = 'front,back,hint\npes,dog,barks\nkočka,cat,\n"voda, studená",cold water,\n,missing front,\n';
     const file = { name: "Czech animals.csv", mimeType: "text/csv", buffer: Buffer.from(csv) };

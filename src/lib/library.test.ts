@@ -144,6 +144,24 @@ describe("Library", () => {
         expect(library.groupNames()).toEqual(["two"]);
     });
 
+    it("logs each review, and takes it back out on undo", async () => {
+        const card = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
+        const at = new Date("2026-01-01T10:00:00.000Z");
+        const once = await library.review(card, 3, at);
+        const later = new Date(once.review?.due ?? 0);
+        await library.review(once, 1, later);
+        expect(library.log).toEqual([
+            { at: at.toISOString(), cardId: card["@id"], group: "food", rating: 3, state: 0 },
+            { at: later.toISOString(), cardId: card["@id"], group: "food", rating: 1, state: once.review?.state },
+        ]);
+
+        await library.undoReview(once);
+        expect(library.log).toHaveLength(1);
+        // And in storage, after a fresh load.
+        await library.load();
+        expect(library.log.map((e) => e.rating)).toEqual([3]);
+    });
+
     it("saves the daily limit with the cards", async () => {
         await library.setNewPerDay(7);
         expect(library.newPerDay).toBe(7);
@@ -182,6 +200,15 @@ describe("Library", () => {
         // Settings changed on another device.
         handlers[0]({ origin: "remote", relativePath: ".settings", newValue: { newCardsPerDay: 4 } });
         expect(lib.newPerDay).toBe(4);
+        expect(lib.cards).toEqual([]);
+        // Reviews logged on another device.
+        const entry = { at: "2026-01-01T10:00:00.000Z", cardId: "r1", rating: 3, state: 0 };
+        handlers[0]({
+            origin: "remote",
+            relativePath: ".log/2026-01-01",
+            newValue: { date: "2026-01-01", entries: [entry] },
+        });
+        expect(lib.log).toEqual([entry]);
         expect(lib.cards).toEqual([]);
     });
 

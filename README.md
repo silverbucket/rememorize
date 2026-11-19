@@ -17,6 +17,8 @@ so other apps can use the same cards.
 - **Review**: shows due cards one at a time. Reveal the answer (Space), then
   rate how well you remembered it: Again, Hard, Good or Easy (keys 1–4). Each
   button shows when you'd see the card next.
+- **Stats**: a calendar of reviews per day, your streak, retention (overall
+  and per group) and how many cards are coming due.
 - **Storage**: tap the status pill in the header to connect a remoteStorage
   account (`user@host`). Disconnecting removes the local copy; your server
   keeps everything.
@@ -56,10 +58,11 @@ remoteStorage.js logging.
 ```
 src/
   App.svelte              shell, routing, update prompt
-  components/             pages (Home, GroupView, CardEditor, Review, Account)
+  components/             pages (Home, GroupView, CardEditor, Review, Stats, Account)
   lib/rs.ts               remoteStorage instance + OAuth state check
   lib/library.svelte.ts   app state: cards, groups, connection status
   lib/scheduler.ts        FSRS wrapper (ratings, due queue, intervals)
+  lib/stats.ts            statistics from the review log (streak, retention, forecast)
   lib/router.svelte.ts    hash routes
 ```
 

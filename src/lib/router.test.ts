@@ -15,6 +15,7 @@ describe("parseHash", () => {
         ["#/review/food", { name: "review", group: "food" }],
         ["#/account", { name: "account" }],
         ["#/import", { name: "import" }],
+        ["#/stats", { name: "stats" }],
         ["#/group/%E0%A4%A", { name: "home" }],
         // remoteStorage OAuth callback fragments fall back to home.
         ["#access_token=abc&state=", { name: "home" }],
