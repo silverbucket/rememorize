@@ -8,6 +8,8 @@
 
     let { group }: { group?: string } = $props();
 
+    const keyOf = (card: Flashcard) => `${card.group}/${card["@id"]}`;
+
     /** Cards rated "Again" (or still in learning steps) come back this session. */
     const REQUEUE_WITHIN_MS = 20 * 60 * 1000;
 
@@ -15,9 +17,10 @@
 
     let queue: Flashcard[] = $state([]);
     let started = $state(false);
-    let revealed = $state(false);
+    // Reveal and hint state belong to one card, so they reset if sync swaps it.
+    let revealedFor = $state("");
+    let hintFor = $state("");
     let revealedAt = $state(new Date());
-    let showHint = $state(false);
     let busy = $state(false);
     let error = $state("");
     let reviewed = $state(0);
@@ -27,6 +30,9 @@
     // moved cards drop out instead of being written back.
     const live = $derived(queue.map((c) => library.find(c.group, c["@id"])).filter((c) => c !== undefined));
     const current = $derived(live[0]);
+    const currentKey = $derived(current ? keyOf(current) : "");
+    const revealed = $derived(currentKey !== "" && revealedFor === currentKey);
+    const showHint = $derived(currentKey !== "" && hintFor === currentKey);
     const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt) : undefined);
     const back = $derived(group ? href.group(group) : href.home());
 
@@ -43,11 +49,11 @@
 
     function reveal() {
         revealedAt = new Date();
-        revealed = true;
+        revealedFor = currentKey;
     }
 
     async function grade(g: Grade) {
-        if (!current || busy) return;
+        if (!current || busy || !revealed) return;
         busy = true;
         error = "";
         const card = current;
@@ -57,12 +63,12 @@
             const updated = await library.review(card, g, now);
             reviewed += 1;
             tally[g] += 1;
-            const rest = live.slice(1);
+            const rest = live.filter((c) => keyOf(c) !== keyOf(card));
             const dueSoon =
                 updated.review && new Date(updated.review.due).getTime() - now.getTime() <= REQUEUE_WITHIN_MS;
             queue = dueSoon ? [...rest, updated] : rest;
-            revealed = false;
-            showHint = false;
+            revealedFor = "";
+            hintFor = "";
         } catch (e) {
             error = `Could not save your answer: ${e instanceof Error ? e.message : String(e)}`;
         } finally {
@@ -112,7 +118,7 @@
             {#if showHint}
                 <p class="hint muted">{current.hint}</p>
             {:else}
-                <button class="btn ghost hint-btn" type="button" onclick={() => (showHint = true)}>Show hint</button>
+                <button class="btn ghost hint-btn" type="button" onclick={() => (hintFor = currentKey)}>Show hint</button>
             {/if}
         {/if}
         {#if revealed}
