@@ -144,6 +144,21 @@ describe("Library", () => {
         expect(library.groupNames()).toEqual(["two"]);
     });
 
+    it("saves the daily limit with the cards", async () => {
+        await library.setNewPerDay(7);
+        expect(library.newPerDay).toBe(7);
+        // A second device (or a reload) reads it from storage.
+        const other = new Library(rs, { newPerDay: 3 });
+        await other.load();
+        expect(other.newPerDay).toBe(7);
+    });
+
+    it("keeps this browser's limit until one has been saved to storage", async () => {
+        const other = new Library(rs, { newPerDay: 3 });
+        await other.load();
+        expect(other.newPerDay).toBe(3);
+    });
+
     it("applies change events from sync", async () => {
         const handlers: ((e: unknown) => void)[] = [];
         const fake = {
@@ -164,6 +179,10 @@ describe("Library", () => {
         expect(lib.find("synced", "r1")?.createdAt).toBe("2018-10-25T14:30:05.000Z");
         handlers[0]({ origin: "remote", relativePath: "synced/r1", oldValue: remote, newValue: undefined });
         expect(lib.find("synced", "r1")).toBeUndefined();
+        // Settings changed on another device.
+        handlers[0]({ origin: "remote", relativePath: ".settings", newValue: { newCardsPerDay: 4 } });
+        expect(lib.newPerDay).toBe(4);
+        expect(lib.cards).toEqual([]);
     });
 
     it("reports discovery errors and leaves connecting state", () => {

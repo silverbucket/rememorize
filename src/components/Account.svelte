@@ -1,7 +1,7 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { href } from "../lib/router.svelte";
-    import { MAX_NEW_PER_DAY, parseNewPerDay, saveNewPerDay } from "../lib/settings";
+    import { MAX_NEW_PER_DAY, parseNewPerDay } from "../lib/settings";
     import { library } from "../lib/state";
     import { exportCsv, exportJson } from "../lib/transfer";
 
@@ -30,12 +30,19 @@
         library.connect(value);
     }
 
-    function setNewPerDay(event: Event) {
+    let settingsError = $state("");
+
+    async function setNewPerDay(event: Event) {
         const input = event.currentTarget as HTMLInputElement;
         const value = parseNewPerDay(input.value);
         input.value = String(value);
-        library.newPerDay = value;
-        saveNewPerDay(value);
+        settingsError = "";
+        try {
+            await library.setNewPerDay(value);
+        } catch (e) {
+            settingsError = `Could not save the setting: ${e instanceof Error ? e.message : String(e)}`;
+            input.value = String(library.newPerDay);
+        }
     }
 
     function download(contents: string, type: string, extension: string) {
@@ -120,7 +127,7 @@
     <label for="new-per-day">New cards per day</label>
     <p class="muted">
         How many unseen cards to introduce each day, across all groups. Reviews of cards you've already started aren't
-        limited. Saved in this browser.
+        limited. This setting is saved with your cards, so it's the same on every device you connect.
     </p>
     <div class="row">
         <input
@@ -135,6 +142,7 @@
         />
         <span class="muted">Started today: {library.startedToday}</span>
     </div>
+    {#if settingsError}<p class="error" role="alert">{settingsError}</p>{/if}
 </div>
 
 <div class="panel data">

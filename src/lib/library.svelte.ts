@@ -6,10 +6,17 @@
  * - Applies `change` events that arrive from sync (remote/conflict origin).
  * - Writes go through the flashcards module and are applied here directly.
  */
-import { type Flashcard, type FlashcardInput, normalizeFlashcard } from "remotestorage-module-flashcards";
+import {
+    type Flashcard,
+    type FlashcardInput,
+    normalizeFlashcard,
+    normalizeSettings,
+    SETTINGS_PATH,
+    type Settings,
+} from "remotestorage-module-flashcards";
 import type { RSWithModules } from "./rs";
 import { dueCards, type Grade, isDue, isNew, rate, startedOn } from "./scheduler";
-import { DEFAULT_NEW_PER_DAY } from "./settings";
+import { DEFAULT_NEW_PER_DAY, parseNewPerDay, saveNewPerDay } from "./settings";
 
 export type ConnectionStatus = "local" | "connecting" | "connected" | "unauthorized";
 
@@ -37,7 +44,10 @@ export class Library {
     /** Ticks every minute so due counts stay current. */
     now = $state(new Date());
 
-    /** Most new cards to start per day, across all groups. */
+    /**
+     * Most new cards to start per day, across all groups. Stored with the
+     * cards, so it syncs; change it with `setNewPerDay()`.
+     */
     newPerDay = $state(DEFAULT_NEW_PER_DAY);
 
     cards = $derived(Object.values(this.#cards));
@@ -121,12 +131,16 @@ export class Library {
         return () => clearInterval(id);
     }
 
-    /** Reload every card from the local cache. */
+    /** Reload every card, and the settings, from the local cache. */
     async load(): Promise<void> {
         const generation = ++this.#loadGeneration;
         try {
-            const cards = await this.#rs.flashcards.getAll(false);
+            const [cards, settings] = await Promise.all([
+                this.#rs.flashcards.getAll(false),
+                this.#rs.flashcards.getSettings(false),
+            ]);
             if (generation !== this.#loadGeneration) return;
+            this.#applySettings(settings);
             const next: Record<string, Flashcard> = {};
             for (const card of cards) next[keyOf(card.group, card["@id"])] = card;
             this.#cards = next;
@@ -164,6 +178,19 @@ export class Library {
         next[keyOf(card.group, card["@id"])] = card;
         this.#cards = next;
         return card;
+    }
+
+    /** Change the daily new-card limit on every device. */
+    async setNewPerDay(value: number): Promise<void> {
+        const previous = this.newPerDay;
+        // Applied before the write finishes, so it holds even if the page is left straight away.
+        this.#applySettings({ newCardsPerDay: parseNewPerDay(value) });
+        try {
+            await this.#rs.flashcards.setSettings({ newCardsPerDay: this.newPerDay });
+        } catch (e) {
+            this.#applySettings({ newCardsPerDay: previous });
+            throw e;
+        }
     }
 
     async remove(card: Flashcard): Promise<void> {
@@ -225,8 +252,20 @@ export class Library {
         this.#rs.reconnect();
     }
 
+    /** Until settings have been saved to storage, the value this browser last used stays. */
+    #applySettings(settings: Settings): void {
+        if (settings.newCardsPerDay === undefined) return;
+        this.newPerDay = parseNewPerDay(settings.newCardsPerDay);
+        // Remembered per browser so the limit is right before storage has loaded.
+        saveNewPerDay(this.newPerDay);
+    }
+
     #applyChange(event: ChangeEvent): void {
         const path = event.relativePath ?? "";
+        if (path === SETTINGS_PATH) {
+            this.#applySettings(normalizeSettings(event.newValue));
+            return;
+        }
         const slash = path.indexOf("/");
         if (slash <= 0 || path.endsWith("/")) return;
         const group = path.slice(0, slash);
