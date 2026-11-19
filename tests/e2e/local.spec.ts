@@ -110,6 +110,15 @@ test("undo the last rating", async ({ page, isMobile }) => {
         await page.keyboard.press("Space");
         await page.keyboard.press("3");
         await expect(page.getByText("1 card left")).toBeVisible();
+
+        // Enter on a focused Undo button undoes instead of revealing the next answer.
+        await page.getByRole("button", { name: /Undo/ }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page.getByText("2 cards left")).toBeVisible();
+        await expect(page.locator(".side.back")).toHaveCount(0);
+        await page.keyboard.press("Space");
+        await page.keyboard.press("3");
+        await expect(page.getByText("1 card left")).toBeVisible();
         await page.keyboard.press("Space");
         await page.keyboard.press("3");
         await expect(page.getByText("Done for now")).toBeVisible();

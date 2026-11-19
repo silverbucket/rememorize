@@ -111,7 +111,9 @@
             }
             if (e.metaKey || e.ctrlKey || e.altKey) return;
             if (!current) return;
-            if (!revealed && (e.key === " " || e.key === "Enter")) {
+            // Let a focused button or link handle its own Space/Enter (e.g. Undo).
+            const onControl = e.target instanceof HTMLButtonElement || e.target instanceof HTMLAnchorElement;
+            if (!revealed && !onControl && (e.key === " " || e.key === "Enter")) {
                 e.preventDefault();
                 reveal();
             } else if (revealed) {
