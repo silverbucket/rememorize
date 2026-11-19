@@ -73,6 +73,9 @@ describe("parseImport (CSV/TSV)", () => {
         expect(parseImport("#hashtag,a symbol\n", "x.csv", "I").rows.map((r) => r.card.frontText)).toEqual([
             "#hashtag",
         ]);
+        expect(parseImport("#topic: weather,meteorology\n", "x.csv", "I").rows.map((r) => r.card.frontText)).toEqual([
+            "#topic: weather",
+        ]);
     });
 
     it("rejects a file with an unclosed quote", () => {
