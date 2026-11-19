@@ -7,10 +7,12 @@ describe("parseNewPerDay", () => {
         [7, 7],
         ["0", 0],
         ["-3", 0],
-        ["2.6", 2],
+        ["2.6", 3],
+        ["1e2", 100],
         [3.6, 4],
         ["100000", MAX_NEW_PER_DAY],
         ["", DEFAULT_NEW_PER_DAY],
+        [" ", DEFAULT_NEW_PER_DAY],
         ["abc", DEFAULT_NEW_PER_DAY],
         [undefined, DEFAULT_NEW_PER_DAY],
     ])("%s → %s", (input, expected) => {

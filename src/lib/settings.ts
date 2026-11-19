@@ -6,7 +6,9 @@ const NEW_PER_DAY_KEY = "rememorize:newPerDay";
 
 /** Clamp to a whole number between 0 and MAX_NEW_PER_DAY; anything else gives the default. */
 export function parseNewPerDay(value: unknown): number {
-    const n = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+    const text = typeof value === "number" ? String(value) : String(value ?? "").trim();
+    // Number(), not parseInt(): a number input can hold "1e2".
+    const n = text === "" ? Number.NaN : Number(text);
     if (!Number.isFinite(n)) return DEFAULT_NEW_PER_DAY;
     return Math.min(MAX_NEW_PER_DAY, Math.max(0, Math.round(n)));
 }
