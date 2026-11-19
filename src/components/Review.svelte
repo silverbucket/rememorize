@@ -25,6 +25,8 @@
     let error = $state("");
     let reviewed = $state(0);
     let tally = $state<Record<Grade, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
+    /** The most recent rating, so it can be undone. */
+    let last: { before: Flashcard; grade: Grade; queue: Flashcard[] } | undefined = $state();
 
     // Read queued cards from the library so sync edits apply and deleted or
     // moved cards drop out instead of being written back.
@@ -57,12 +59,14 @@
         busy = true;
         error = "";
         const card = current;
+        const queueBefore = [...queue];
         try {
             // Same time as the previewed intervals, so the rating matches its label.
             const now = revealedAt;
             const updated = await library.review(card, g, now);
             reviewed += 1;
             tally[g] += 1;
+            last = { before: card, grade: g, queue: queueBefore };
             const rest = live.filter((c) => keyOf(c) !== keyOf(card));
             const dueSoon =
                 updated.review && new Date(updated.review.due).getTime() - now.getTime() <= REQUEUE_WITHIN_MS;
@@ -76,9 +80,35 @@
         }
     }
 
+    async function undo() {
+        if (!last || busy) return;
+        busy = true;
+        error = "";
+        const { before, grade: g, queue: previous } = last;
+        try {
+            await library.undoReview(before);
+            queue = previous;
+            reviewed -= 1;
+            tally[g] -= 1;
+            last = undefined;
+            revealedFor = "";
+            hintFor = "";
+        } catch (e) {
+            error = `Could not undo: ${e instanceof Error ? e.message : String(e)}`;
+        } finally {
+            busy = false;
+        }
+    }
+
     onMount(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+            const undoKey = (e.key === "z" && (e.metaKey || e.ctrlKey) && !e.shiftKey) || (e.key === "u" && !e.metaKey && !e.ctrlKey && !e.altKey);
+            if (undoKey && last) {
+                e.preventDefault();
+                void undo();
+                return;
+            }
             if (e.metaKey || e.ctrlKey || e.altKey) return;
             if (!current) return;
             if (!revealed && (e.key === " " || e.key === "Enter")) {
@@ -100,9 +130,16 @@
 <a class="crumb" href={back}>← {group ?? "All groups"}</a>
 <div class="page-head">
     <h1>Review{group ? `: ${group}` : ""}</h1>
-    {#if current}
-        <span class="muted">{plural(live.length, "card")} left</span>
-    {/if}
+    <div class="head-side">
+        {#if last}
+            <button class="btn ghost undo" type="button" onclick={undo} disabled={busy}>
+                Undo <kbd>U</kbd>
+            </button>
+        {/if}
+        {#if current}
+            <span class="muted">{plural(live.length, "card")} left</span>
+        {/if}
+    </div>
 </div>
 
 {#if error}
@@ -171,6 +208,17 @@
 {/if}
 
 <style>
+    .head-side {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .undo {
+        padding: 0.35rem 0.6rem;
+        font-weight: 500;
+    }
+
     .card {
         min-height: 14rem;
         display: flex;

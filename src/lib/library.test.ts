@@ -82,6 +82,49 @@ describe("Library", () => {
         expect(library.dueIn(library.cards, day2)).toHaveLength(1);
     });
 
+    it("undoing a card's first review gives its new-card slot back", async () => {
+        library.newPerDay = 1;
+        const a = await library.save({ frontText: "a", backText: "a" });
+        await library.save({ frontText: "b", backText: "b" });
+        await library.review(a, 4);
+        expect(library.newRemaining).toBe(0);
+        await library.undoReview(a);
+        expect(library.startedToday).toBe(0);
+        expect(library.dueCount).toBe(1);
+    });
+
+    it("undoes a review of a new card", async () => {
+        const card = await library.save({ frontText: "pivo", backText: "beer" });
+        await library.review(card, 3);
+        const restored = await library.undoReview(card);
+        expect(restored.review).toBeUndefined();
+        expect(restored.reviewedCount).toBeUndefined();
+        expect(library.dueCount).toBe(1);
+        await library.load();
+        expect(library.find("default", card["@id"])?.review).toBeUndefined();
+    });
+
+    it("undo restores the previous schedule but keeps later edits", async () => {
+        const card = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
+        const once = await library.review(card, 3, new Date("2026-01-01T00:00:00.000Z"));
+        const twice = await library.review(once, 3, new Date(once.review?.due ?? 0));
+        // Edited and moved (say, on another device) before the undo.
+        await library.save({ ...twice, backText: "a beer", group: "drinks" }, "food");
+        const restored = await library.undoReview(once);
+        expect(restored.review).toEqual(once.review);
+        expect(restored.reviewedCount).toBe(1);
+        expect(restored.backText).toBe("a beer");
+        expect(restored.group).toBe("drinks");
+        expect(library.cards).toHaveLength(1);
+    });
+
+    it("can't undo a review of a deleted card", async () => {
+        const card = await library.save({ frontText: "pivo", backText: "beer" });
+        const reviewed = await library.review(card, 3);
+        await library.remove(reviewed);
+        await expect(library.undoReview(card)).rejects.toThrow(/deleted/);
+    });
+
     it("removes cards and groups", async () => {
         const a = await library.save({ frontText: "a", backText: "a", group: "one" });
         await library.save({ frontText: "b", backText: "b", group: "one" });

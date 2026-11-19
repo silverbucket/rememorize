@@ -13,7 +13,8 @@ import { defineConfig, devices } from "@playwright/test";
  * Set PW_CHANNEL=chrome to use an installed Chrome instead of downloading
  * Playwright's Chromium.
  */
-const PORT = 4317;
+// Override with E2E_PORT to run alongside another checkout's suite.
+const PORT = Number(process.env.E2E_PORT || 4317);
 
 export default defineConfig({
     testDir: "./tests/e2e",
