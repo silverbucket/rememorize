@@ -206,6 +206,69 @@ test("daily limit on new cards", async ({ page }) => {
     await expect(page.getByRole("link", { name: "Review 1 due" })).toBeVisible();
 });
 
+test("cards can be studied back → front, or both ways", async ({ page }) => {
+    // Back → front only.
+    await page.goto("/#/new?group=Drinks");
+    await page.getByLabel("Front").fill("pivo");
+    await page.getByLabel("Back").fill("beer");
+    await page.getByLabel("Hint").fill("starts with p");
+    await page.getByLabel("Study direction").selectOption("Back → front");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByTitle("Studied back → front")).toBeVisible();
+
+    await page.getByRole("link", { name: "Review 1 due" }).click();
+    await expect(page.getByText("Back → front")).toBeVisible();
+    await expect(page.locator(".side.front")).toHaveText("beer");
+    // The hint is for the front, so it isn't offered here.
+    await expect(page.getByRole("button", { name: "Show hint" })).toHaveCount(0);
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await expect(page.locator(".side.back")).toHaveText("pivo");
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByText("Done for now")).toBeVisible();
+
+    // Undo works on the reversed schedule.
+    await page.getByRole("button", { name: /Undo/ }).click();
+    await expect(page.locator(".side.front")).toHaveText("beer");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await page.goto("/#/group/Drinks");
+    await expect(page.locator(".when")).toHaveText(/^in /);
+
+    // Switch it to both ways: front → back is new, and waits until tomorrow
+    // because the other direction was just reviewed.
+    await page.getByText("pivo").click();
+    await expect(page.getByLabel("Study direction")).toHaveValue("reverse");
+    await page.getByLabel("Study direction").selectOption("Both ways, each on its own schedule");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByTitle("Studied both ways")).toBeVisible();
+    await expect(page.locator(".when")).toHaveText("tomorrow");
+    await expect(page.getByRole("link", { name: /Review \d+ due/ })).toHaveCount(0);
+
+    // A new card studied both ways shows one direction today: front → back.
+    await page.goto("/#/new?group=Drinks");
+    await page.getByLabel("Front").fill("voda");
+    await page.getByLabel("Back").fill("water");
+    await page.getByLabel("Study direction").selectOption("both");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("link", { name: "Review 1 due" }).click();
+    await expect(page.locator(".side.front")).toHaveText("voda");
+    await expect(page.getByText("Back → front")).toHaveCount(0);
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByText("Done for now")).toBeVisible();
+    // The other direction of both cards is next, not the months-away reviews.
+    await expect(page.getByText("2 cards held until tomorrow")).toBeVisible();
+    await expect(page.getByText(/Next card is due/)).toHaveCount(0);
+
+    // The editor shows a schedule for each direction, after a reload too.
+    await page.goto("/#/group/Drinks");
+    await page.reload();
+    await page.getByText("voda").click();
+    await expect(page.getByText("Next review (front → back)")).toBeVisible();
+    await expect(page.getByText("Next review (back → front)")).toBeVisible();
+    await expect(page.locator(".stats")).toContainText("not reviewed yet");
+});
+
 test("statistics follow reviews", async ({ page }) => {
     const tile = (label: string) => page.locator(".tile").filter({ hasText: label }).locator("dd");
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });

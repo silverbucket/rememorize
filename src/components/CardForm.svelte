@@ -1,8 +1,9 @@
 <script lang="ts">
-    import type { Flashcard } from "remotestorage-module-flashcards";
+    import type { CardDirection, Flashcard } from "remotestorage-module-flashcards";
     import { untrack } from "svelte";
     import { formatDateTime, fromNow } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
+    import { itemsOf, stateOf } from "../lib/scheduler";
     import { library } from "../lib/state";
 
     let { card, initialGroup }: { card?: Flashcard; initialGroup?: string } = $props();
@@ -14,6 +15,7 @@
     let backText = $state(initial?.backText ?? "");
     let hint = $state(initial?.hint ?? "");
     let group = $state(initial?.group ?? untrack(() => initialGroup) ?? "");
+    let direction: CardDirection = $state(initial?.direction ?? "forward");
     let saving = $state(false);
     let error = $state("");
 
@@ -33,6 +35,7 @@
                 backText: backText.trim(),
                 hint: hint.trim() || undefined,
                 group: group.trim(),
+                direction,
             };
             // Keep the existing review state; only content changed.
             const saved = await library.save(input, initial?.group);
@@ -88,6 +91,16 @@
         {#if groupError}<small class="error">{groupError}</small>{/if}
     </label>
 
+    <!-- Not wrapped in the label: the options would become part of its name. -->
+    <div class="labelled">
+        <label for="direction">Study direction</label>
+        <select id="direction" class="field" bind:value={direction}>
+            <option value="forward">Front → back</option>
+            <option value="reverse">Back → front</option>
+            <option value="both">Both ways, each on its own schedule</option>
+        </select>
+    </div>
+
     {#if error}
         <p class="error" role="alert">{error}</p>
     {/if}
@@ -108,10 +121,14 @@
 
 {#if initial}
     <dl class="stats">
-        <div><dt>Next review</dt><dd>{initial.review ? fromNow(initial.review.due, library.now) : "not reviewed yet"}</dd></div>
-        <div><dt>Reviews</dt><dd>{initial.review?.reps ?? 0}</dd></div>
-        <div><dt>Lapses</dt><dd>{initial.review?.lapses ?? 0}</dd></div>
-        <div><dt>Last reviewed</dt><dd>{formatDateTime(initial.review?.lastReview ?? initial.reviewedAt)}</dd></div>
+        {#each itemsOf(initial) as item (item.reverse)}
+            {@const review = stateOf(initial, item.reverse)}
+            {@const which = initial.direction === "both" ? (item.reverse ? " (back → front)" : " (front → back)") : ""}
+            <div><dt>Next review{which}</dt><dd>{review ? fromNow(review.due, library.now) : "not reviewed yet"}</dd></div>
+            <div><dt>Reviews{which}</dt><dd>{review?.reps ?? 0}</dd></div>
+            <div><dt>Lapses{which}</dt><dd>{review?.lapses ?? 0}</dd></div>
+        {/each}
+        <div><dt>Last reviewed</dt><dd>{formatDateTime(initial.reviewedAt ?? initial.review?.lastReview)}</dd></div>
         <div><dt>Created</dt><dd>{formatDateTime(initial.createdAt)}</dd></div>
         <div><dt>Updated</dt><dd>{formatDateTime(initial.updatedAt)}</dd></div>
     </dl>
@@ -123,7 +140,8 @@
         gap: 1rem;
     }
 
-    label {
+    label,
+    .labelled {
         display: grid;
         gap: 0.35rem;
         font-weight: 600;

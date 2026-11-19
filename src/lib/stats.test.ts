@@ -90,4 +90,20 @@ describe("forecast", () => {
         ];
         expect(forecast(cards, NOW, 3).map((d) => d.due)).toEqual([2, 1, 1]);
     });
+
+    it("spreads the two directions of a card over two days", () => {
+        const overdue = card(new Date(2026, 10, 10, 9));
+        const both: Flashcard = { ...overdue, direction: "both", reverseReview: overdue.review };
+        expect(forecast([both], NOW, 3).map((d) => d.due)).toEqual([1, 1, 0]);
+        // Front → back was studied today, so back → front can't come up before tomorrow.
+        const studied: Flashcard = {
+            ...both,
+            review: {
+                ...both.review,
+                due: new Date(2026, 10, 29).toISOString(),
+                lastReview: NOW.toISOString(),
+            } as Flashcard["review"],
+        };
+        expect(forecast([studied], NOW, 3).map((d) => d.due)).toEqual([0, 1, 0]);
+    });
 });

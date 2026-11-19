@@ -2,7 +2,8 @@
  * Import and export.
  *
  * - JSON export is a full backup (ids, review state, timestamps).
- * - CSV/TSV is for moving cards between apps: front, back, hint, group.
+ * - CSV/TSV is for moving cards between apps: front, back, hint, group, and
+ *   the study direction when a card isn't plain front → back.
  *   Anki's "Notes in Plain Text" export (tab-separated, `#` header lines)
  *   imports as-is.
  */
@@ -40,9 +41,17 @@ export function exportJson(cards: Flashcard[], now = new Date()): string {
 }
 
 export function exportCsv(cards: Flashcard[]): string {
+    // The direction column only appears when some card uses it.
+    const directions = cards.some((c) => c.direction);
     const rows = [
-        ["front", "back", "hint", "group"],
-        ...cards.map((c) => [c.frontText, c.backText, c.hint ?? "", c.group]),
+        ["front", "back", "hint", "group", ...(directions ? ["direction"] : [])],
+        ...cards.map((c) => [
+            c.frontText,
+            c.backText,
+            c.hint ?? "",
+            c.group,
+            ...(directions ? [c.direction ?? "forward"] : []),
+        ]),
     ];
     return `${rows.map((r) => r.map(csvField).join(",")).join("\r\n")}\r\n`;
 }
@@ -102,6 +111,7 @@ const COLUMN_NAMES: Record<string, keyof Columns> = {
     hint: "hint",
     group: "group",
     deck: "group",
+    direction: "direction",
 };
 
 interface Columns {
@@ -109,6 +119,8 @@ interface Columns {
     back: number;
     hint?: number;
     group?: number;
+    /** Only read when a header row names it. */
+    direction?: number;
 }
 
 /** Header lines Anki writes at the top of a plain-text export. */
@@ -140,6 +152,7 @@ function parseDelimitedImport(text: string, defaultGroup: string, extension?: st
         columns = { front: header.indexOf("front"), back: header.indexOf("back") };
         if (header.includes("hint")) columns.hint = header.indexOf("hint");
         if (header.includes("group")) columns.group = header.indexOf("group");
+        if (header.includes("direction")) columns.direction = header.indexOf("direction");
         firstData = 1;
     }
 
@@ -162,6 +175,8 @@ function parseDelimitedImport(text: string, defaultGroup: string, extension?: st
         const card: FlashcardInput = { frontText: front, backText: back, group };
         const hint = columns.hint !== undefined ? record[columns.hint]?.trim() : "";
         if (hint) card.hint = hint;
+        const direction = columns.direction !== undefined ? record[columns.direction]?.trim().toLowerCase() : "";
+        if (direction === "reverse" || direction === "both") card.direction = direction;
         result.rows.push({ source: line, card });
     }
     return result;

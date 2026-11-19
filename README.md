@@ -17,6 +17,9 @@ so other apps can use the same cards.
 - **Review**: shows due cards one at a time. Reveal the answer (Space), then
   rate how well you remembered it: Again, Hard, Good or Easy (keys 1–4). Each
   button shows when you'd see the card next.
+- **Direction**: a card is normally shown front first. Set its study
+  direction to back → front, or to both ways, and each direction gets its own
+  schedule. Only one direction of a card comes up per day.
 - **Stats**: a calendar of reviews per day, your streak, retention (overall
   and per group) and how many cards are coming due.
 - **Storage**: tap the status pill in the header to connect a remoteStorage

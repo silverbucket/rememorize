@@ -1,6 +1,6 @@
 import type { Flashcard } from "remotestorage-module-flashcards";
 import { describe, expect, it } from "vitest";
-import { dueCards, formatInterval, isDue, nextDue, previewIntervals, rate, startedOn } from "./scheduler";
+import { dueItems, formatInterval, isDue, nextDue, previewIntervals, rate, startedOn } from "./scheduler";
 
 const NOW = new Date("2026-03-01T12:00:00.000Z");
 
@@ -73,7 +73,7 @@ describe("due", () => {
         const fresh = card({ "@id": "new" });
         const overdue = rate(card({ "@id": "old" }), 3, new Date("2026-01-01T00:00:00.000Z"));
         const notYet = rate(card({ "@id": "later" }), 4, NOW);
-        expect(dueCards([fresh, notYet, overdue], NOW).map((c) => c["@id"])).toEqual(["old", "new"]);
+        expect(dueItems([fresh, notYet, overdue], NOW).map((i) => i.card["@id"])).toEqual(["old", "new"]);
     });
 
     it("finds the next due date", () => {
@@ -132,14 +132,79 @@ describe("new-card limit", () => {
         const review = rate(card({ "@id": "r" }), 3, new Date("2026-01-01T00:00:00.000Z"));
         const fresh = ["a", "b", "c"].map((id, i) => card({ "@id": id, createdAt: `2026-01-0${i + 1}T00:00:00.000Z` }));
         const cards = [review, ...fresh];
-        expect(dueCards(cards, NOW, 2).map((c) => c["@id"])).toEqual(["r", "a", "b"]);
-        expect(dueCards(cards, NOW, 0).map((c) => c["@id"])).toEqual(["r"]);
-        expect(dueCards(cards, NOW).map((c) => c["@id"])).toEqual(["r", "a", "b", "c"]);
+        expect(dueItems(cards, NOW, 2).map((i) => i.card["@id"])).toEqual(["r", "a", "b"]);
+        expect(dueItems(cards, NOW, 0).map((i) => i.card["@id"])).toEqual(["r"]);
+        expect(dueItems(cards, NOW).map((i) => i.card["@id"])).toEqual(["r", "a", "b", "c"]);
     });
 
     it("counts cards started today", () => {
         const today = rate(card({ "@id": "t" }), 3, NOW);
         const yesterday = rate(card({ "@id": "y" }), 3, new Date(NOW.getTime() - 86_400_000));
         expect(startedOn([today, yesterday, card()], NOW)).toBe(1);
+    });
+});
+
+describe("reversed cards", () => {
+    const label = (items: { card: Flashcard; reverse: boolean }[]) =>
+        items.map((i) => `${i.card["@id"]}${i.reverse ? " reverse" : ""}`);
+
+    it("schedules back → front separately from front → back", () => {
+        const both = card({ direction: "both" });
+        const forward = rate(both, 3, NOW);
+        expect(forward.reverseReview).toBeUndefined();
+        const later = new Date(NOW.getTime() + 86_400_000);
+        const reversed = rate(forward, 1, later, true);
+        expect(reversed.review).toEqual(forward.review);
+        expect(reversed.reverseReview?.reps).toBe(1);
+        expect(reversed.reverseReview?.firstReview).toBe(later.toISOString());
+        expect(reversed.reviewedCount).toBe(2);
+        expect(isDue(reversed, later, false)).toBe(false);
+    });
+
+    it("studies a card in the directions it asks for", () => {
+        const cards = [card({ "@id": "f" }), card({ "@id": "r", direction: "reverse" })];
+        expect(label(dueItems(cards, NOW))).toEqual(["f", "r reverse"]);
+        // A reverse-only card ignores a front → back schedule left from before.
+        const switched = { ...rate(card({ "@id": "s" }), 4, NOW), direction: "reverse" as const };
+        expect(label(dueItems([switched], NOW))).toEqual(["s reverse"]);
+        expect(nextDue([switched])).toBeUndefined();
+    });
+
+    it("shows only one direction of a card per day", () => {
+        const both = card({ direction: "both" });
+        // Both directions are new: front → back goes first.
+        expect(label(dueItems([both], NOW))).toEqual(["c1"]);
+        // Once it has been reviewed, back → front waits until tomorrow.
+        const forward = rate(both, 1, NOW);
+        const soon = new Date(NOW.getTime() + 3_600_000);
+        expect(isDue(forward, soon, false)).toBe(true);
+        expect(label(dueItems([forward], soon))).toEqual(["c1"]);
+        const done = rate(forward, 4, soon);
+        expect(dueItems([done], soon)).toEqual([]);
+        const tomorrow = new Date(NOW.getTime() + 86_400_000);
+        expect(label(dueItems([done], tomorrow))).toEqual(["c1 reverse"]);
+    });
+
+    it("doesn't promise a held-back direction before tomorrow", () => {
+        // Back → front is due this evening, but front → back was studied at noon.
+        const evening = new Date(NOW.getTime() + 5 * 3_600_000);
+        const reverseReview = { ...rate(card(), 3, NOW).review, due: evening.toISOString() } as Flashcard["review"];
+        delete reverseReview?.lastReview;
+        const studied = rate(card({ direction: "both", reverseReview }), 4, NOW);
+        expect(nextDue([studied], NOW)?.toDateString()).toBe(new Date(NOW.getTime() + 86_400_000).toDateString());
+    });
+
+    it("counts each direction against the new-card limit", () => {
+        const both = card({ direction: "both" });
+        const forward = rate(both, 3, NOW);
+        const tomorrow = new Date(NOW.getTime() + 86_400_000);
+        expect(startedOn([rate(forward, 3, tomorrow, true)], tomorrow)).toBe(1);
+        expect(dueItems([forward], tomorrow, 0).filter((i) => i.reverse)).toEqual([]);
+    });
+
+    it("previews the interval the reverse rating schedules", () => {
+        const c = card({ direction: "reverse" });
+        const due = new Date(rate(c, 3, NOW, true).reverseReview?.due ?? 0).getTime();
+        expect(previewIntervals(c, NOW, true)[3]).toBe(formatInterval(due - NOW.getTime()));
     });
 });
