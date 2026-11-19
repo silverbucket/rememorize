@@ -55,5 +55,7 @@ src/
 
 ## Deploying
 
-`bun run deploy` builds, commits `dist/` to the `production` branch and pushes
-it to 5apps (https://rememorize.5apps.com). See `scripts/deploy` for the one-time remote setup.
+Run the **Deploy** workflow from the Actions tab (master only). It checks,
+tests and builds the app, then pushes `dist/` to 5apps, which serves it at
+https://rememorize.5apps.com. It uses the `FIVEAPPS_DEPLOY_KEY` repository
+secret.
