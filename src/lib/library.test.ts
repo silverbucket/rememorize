@@ -118,6 +118,13 @@ describe("Library", () => {
         expect(library.cards).toHaveLength(1);
     });
 
+    it("undo restores a legacy card's familiarity", async () => {
+        const card = await library.save({ frontText: "pivo", backText: "beer", familiarity: 2 });
+        const reviewed = await library.review(card, 3);
+        expect(reviewed).not.toHaveProperty("familiarity");
+        expect((await library.undoReview(card)).familiarity).toBe(2);
+    });
+
     it("can't undo a review of a deleted card", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer" });
         const reviewed = await library.review(card, 3);

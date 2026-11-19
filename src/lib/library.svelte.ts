@@ -200,6 +200,8 @@ export class Library {
         if (before.review) restored.review = before.review;
         if (before.reviewedCount !== undefined) restored.reviewedCount = before.reviewedCount;
         if (before.reviewedAt) restored.reviewedAt = before.reviewedAt;
+        // rate() drops the legacy v1 field; put it back too.
+        if (before.familiarity !== undefined) restored.familiarity = before.familiarity;
         return this.save(restored, current.group);
     }
 
