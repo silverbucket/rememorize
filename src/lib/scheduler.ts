@@ -70,14 +70,20 @@ export function isNew(card: Flashcard): boolean {
 }
 
 /**
- * Cards to study now: due reviews first (most overdue first), then new cards
- * (oldest first).
+ * Cards to study now: due reviews first (most overdue first), then up to
+ * `newLimit` new cards (oldest first).
  */
-export function dueCards(cards: Flashcard[], now = new Date()): Flashcard[] {
+export function dueCards(cards: Flashcard[], now = new Date(), newLimit = Number.POSITIVE_INFINITY): Flashcard[] {
     const due = cards.filter((c) => isDue(c, now));
     const reviews = due.filter((c) => !isNew(c)).sort((a, b) => dueTime(a) - dueTime(b));
     const fresh = due.filter(isNew).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return [...reviews, ...fresh];
+    return [...reviews, ...fresh.slice(0, Math.max(0, newLimit))];
+}
+
+/** How many cards had their first review on the same (local) day as `now`. */
+export function startedOn(cards: Flashcard[], now = new Date()): number {
+    const day = now.toDateString();
+    return cards.filter((c) => c.review?.firstReview && new Date(c.review.firstReview).toDateString() === day).length;
 }
 
 function dueTime(card: Flashcard): number {
@@ -99,6 +105,9 @@ export function nextDue(cards: Flashcard[]): Date | undefined {
 export function rate(card: Flashcard, grade: Grade, now = new Date()): Flashcard {
     const result = scheduler.review({ card: toSchedulerCard(card, now), grade, now });
     const review = toReviewState(result.card as SchedulerCard);
+    // Cards reviewed before firstReview existed are left without one.
+    const firstReview = card.review?.firstReview ?? (isNew(card) ? now.toISOString() : undefined);
+    if (firstReview) review.firstReview = firstReview;
     const { familiarity: _legacy, ...rest } = card;
     return { ...rest, review, reviewedCount: review.reps, reviewedAt: now.toISOString() };
 }

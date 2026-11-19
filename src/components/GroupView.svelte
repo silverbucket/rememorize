@@ -9,7 +9,7 @@
     const cards = $derived(
         library.cardsIn(group).sort((a, b) => a.frontText.localeCompare(b.frontText, undefined, { sensitivity: "base" })),
     );
-    const due = $derived(cards.filter((c) => isDue(c, library.now)).length);
+    const due = $derived(library.dueIn(cards).length);
     let deleting = $state(false);
     let error = $state("");
 

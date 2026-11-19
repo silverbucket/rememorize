@@ -3,7 +3,7 @@
     import { onMount, untrack } from "svelte";
     import { fromNow, plural } from "../lib/format";
     import { href } from "../lib/router.svelte";
-    import { dueCards, GRADES, type Grade, nextDue, previewIntervals } from "../lib/scheduler";
+    import { GRADES, type Grade, nextDue, previewIntervals } from "../lib/scheduler";
     import { library } from "../lib/state";
 
     let { group }: { group?: string } = $props();
@@ -42,7 +42,7 @@
         if (started || !library.loaded) return;
         const cards = scope;
         untrack(() => {
-            queue = dueCards(cards, new Date());
+            queue = library.dueIn(cards, new Date());
             started = true;
         });
     });
@@ -155,6 +155,13 @@
             <p>Add some cards first.</p>
         {:else}
             <h2>Nothing due</h2>
+        {/if}
+        {#if library.newWaiting > 0}
+            <p class="muted">
+                {plural(library.newWaiting, "more new card")} will come up tomorrow: you've started
+                {library.startedToday} of {library.newPerDay} today.
+                <a href={href.account()}>Change the daily limit</a>.
+            </p>
         {/if}
         {#if nextDue(scope)}
             <p class="muted">Next card is due {fromNow(nextDue(scope)?.toISOString(), library.now)}.</p>

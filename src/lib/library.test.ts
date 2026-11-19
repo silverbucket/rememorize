@@ -51,6 +51,24 @@ describe("Library", () => {
         expect(library.find("default", card["@id"])?.review?.reps).toBe(1);
     });
 
+    it("limits new cards per day across groups", async () => {
+        library.newPerDay = 2;
+        const a = await library.save({ frontText: "a", backText: "a", group: "one" });
+        await library.save({ frontText: "b", backText: "b", group: "one" });
+        await library.save({ frontText: "c", backText: "c", group: "two" });
+        expect(library.dueCount).toBe(2);
+        expect(library.newWaiting).toBe(1);
+        // Each group can still show up to the remaining limit.
+        expect(library.groups).toEqual([
+            { name: "one", total: 2, due: 2 },
+            { name: "two", total: 1, due: 1 },
+        ]);
+        await library.review(a, 4);
+        expect(library.startedToday).toBe(1);
+        expect(library.newRemaining).toBe(1);
+        expect(library.dueCount).toBe(1);
+    });
+
     it("removes cards and groups", async () => {
         const a = await library.save({ frontText: "a", backText: "a", group: "one" });
         await library.save({ frontText: "b", backText: "b", group: "one" });

@@ -1,6 +1,7 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { href } from "../lib/router.svelte";
+    import { MAX_NEW_PER_DAY, parseNewPerDay, saveNewPerDay } from "../lib/settings";
     import { library } from "../lib/state";
 
     const ADDRESS_KEY = "rememorize:userAddress";
@@ -28,6 +29,14 @@
         library.connect(value);
     }
 
+    function setNewPerDay(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const value = parseNewPerDay(input.value);
+        input.value = String(value);
+        library.newPerDay = value;
+        saveNewPerDay(value);
+    }
+
     function disconnect() {
         if (
             !confirm(
@@ -42,7 +51,7 @@
 
 <a class="crumb" href={href.home()}>← All groups</a>
 <div class="page-head">
-    <h1>Storage</h1>
+    <h1>Settings</h1>
 </div>
 
 {#if library.error}
@@ -97,6 +106,27 @@
     {/if}
 </div>
 
+<div class="panel review-settings">
+    <label for="new-per-day">New cards per day</label>
+    <p class="muted">
+        How many unseen cards to introduce each day, across all groups. Reviews of cards you've already started aren't
+        limited. Saved in this browser.
+    </p>
+    <div class="row">
+        <input
+            id="new-per-day"
+            class="field number"
+            type="number"
+            inputmode="numeric"
+            min="0"
+            max={MAX_NEW_PER_DAY}
+            value={library.newPerDay}
+            onchange={setNewPerDay}
+        />
+        <span class="muted">Started today: {library.startedToday}</span>
+    </div>
+</div>
+
 <p class="muted version">Rememorize {__APP_VERSION__}</p>
 
 <style>
@@ -110,6 +140,23 @@
         gap: 0.5rem;
     }
 
+    .review-settings {
+        margin-top: 1rem;
+    }
+
+    .review-settings p {
+        margin: 0.25rem 0 0.75rem;
+    }
+
+    .number {
+        width: 7rem;
+    }
+
+    .row {
+        align-items: center;
+    }
+
+    .review-settings label,
     .connect label {
         font-weight: 700;
         font-size: 1.1rem;
