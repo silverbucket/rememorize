@@ -1,27 +1,18 @@
 {
-  "compilerOptions": {
-    "target": "es5",
-    "outDir": "dist",
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "jsx": "react",
-    "skipDefaultLibCheck": true,
-    "sourceMap": true,
-    "declaration": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": false,
-    "noImplicitAny": true,
-    "noFallthroughCasesInSwitch": true,
-    "removeComments": true,
-    "suppressImplicitAnyIndexErrors": true,
-    "lib": [ "es6", "dom" ],
-    "types" : ["node", "mocha"],
-    "indent-size": [true, 2]
-  },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "strict": true,
+        "noEmit": true,
+        "isolatedModules": true,
+        "verbatimModuleSyntax": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "allowJs": true,
+        "checkJs": false,
+        "types": ["svelte", "vite/client", "vite-plugin-pwa/client"]
+    },
+    "include": ["src/**/*", "vite.config.ts"]
 }

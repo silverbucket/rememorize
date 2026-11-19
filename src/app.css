@@ -1,0 +1,193 @@
+:root {
+    color-scheme: dark light;
+    --bg: #1b1d21;
+    --surface: #24272d;
+    --surface-2: #2d3138;
+    --border: #3a3f47;
+    --text: #eceef1;
+    --text-muted: #9aa1ab;
+    --accent: #6be635;
+    --accent-ink: #0f1a08;
+    --accent-subtle: rgba(107, 230, 53, 0.14);
+    --danger: #ff6b6b;
+    --again: #ff6b6b;
+    --hard: #f0a640;
+    --good: #6be635;
+    --easy: #4fb3ff;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.2);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg: #f4f5f2;
+        --surface: #ffffff;
+        --surface-2: #eceee9;
+        --border: #d6dad1;
+        --text: #1b1d21;
+        --text-muted: #5d636b;
+        --accent: #2f8f0a;
+        --accent-ink: #ffffff;
+        --accent-subtle: rgba(47, 143, 10, 0.1);
+        --danger: #c62828;
+        --again: #c62828;
+        --hard: #b86e00;
+        --good: #2f8f0a;
+        --easy: #1a6fc2;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+}
+
+a {
+    color: var(--accent);
+}
+
+h1,
+h2,
+h3 {
+    line-height: 1.2;
+    margin: 0;
+}
+
+/* iOS zooms into inputs smaller than 16px and doesn't zoom back out. */
+input,
+select,
+textarea {
+    font-size: 16px;
+    font-family: inherit;
+}
+
+.field {
+    width: 100%;
+    padding: 0.65rem 0.8rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+}
+
+.field:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+textarea.field {
+    resize: vertical;
+    min-height: 4.5rem;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+    border-color: var(--text-muted);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+}
+
+.btn.danger {
+    color: var(--danger);
+}
+
+.btn.ghost {
+    background: transparent;
+    border-color: transparent;
+}
+
+.panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+}
+
+.muted {
+    color: var(--text-muted);
+}
+
+.page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.page-head .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.crumb {
+    font-size: 0.85rem;
+    text-decoration: none;
+    color: var(--text-muted);
+}
+
+.crumb:hover {
+    color: var(--text);
+}
+
+.badge {
+    display: inline-block;
+    min-width: 1.6rem;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    background: var(--accent-subtle);
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.error {
+    color: var(--danger);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
