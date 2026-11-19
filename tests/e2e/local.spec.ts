@@ -36,6 +36,7 @@ test("add cards, edit, move between groups, delete", async ({ page }) => {
     await page.getByLabel("Group").fill("Bakery");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Bakery" })).toBeVisible();
+    await expect(page.getByText("chléb")).toBeVisible();
     await page.goto("/");
     await expect(page.locator(".groups li")).toHaveCount(2);
     await page.reload();

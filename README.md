@@ -39,6 +39,7 @@ End-to-end tests run the production build against a real remoteStorage
 server ([armadietto](https://github.com/remotestorage/armadietto)) in Docker:
 
 ```sh
+bunx playwright install chromium  # once
 bun run armadietto:up   # localhost:8100 (override with RS_PORT)
 bun run test:e2e        # PW_CHANNEL=chrome to use your installed Chrome
 bun run armadietto:down
