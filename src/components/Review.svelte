@@ -6,6 +6,7 @@
     import {
         GRADES,
         type Grade,
+        heldUntilTomorrow,
         itemKey,
         nextDue,
         previewIntervals,
@@ -53,6 +54,7 @@
     const showHint = $derived(currentKey !== "" && hintFor === currentKey);
     const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt, reverse) : undefined);
     const back = $derived(group ? href.group(group) : href.home());
+    const held = $derived(heldUntilTomorrow(scope, library.now));
 
     // Snapshot the due queue once cards have loaded, so sync updates during a
     // session don't reshuffle it.
@@ -220,7 +222,12 @@
                 <a href={href.account()}>Change the daily limit</a>.
             </p>
         {/if}
-        {#if nextDue(scope) && library.newWaiting === 0}
+        {#if held > 0}
+            <p class="muted">
+                {plural(held, "card")} held until tomorrow: the other direction of a card you studied today.
+            </p>
+        {/if}
+        {#if nextDue(scope) && library.newWaiting === 0 && held === 0}
             <p class="muted">Next card is due {fromNow(nextDue(scope)?.toISOString(), library.now)}.</p>
         {/if}
         <a class="btn" href={back}>Back</a>

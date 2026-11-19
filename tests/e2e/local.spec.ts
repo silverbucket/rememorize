@@ -241,7 +241,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByLabel("Study direction").selectOption("Both ways, each on its own schedule");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByTitle("Studied both ways")).toBeVisible();
-    await expect(page.locator(".when")).toHaveText("new");
+    await expect(page.locator(".when")).toHaveText("tomorrow");
     await expect(page.getByRole("link", { name: /Review \d+ due/ })).toHaveCount(0);
 
     // A new card studied both ways shows one direction today: front → back.
@@ -256,6 +256,9 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
     await expect(page.getByText("Done for now")).toBeVisible();
+    // The other direction of both cards is next, not the months-away reviews.
+    await expect(page.getByText("2 cards held until tomorrow")).toBeVisible();
+    await expect(page.getByText(/Next card is due/)).toHaveCount(0);
 
     // The editor shows a schedule for each direction, after a reload too.
     await page.goto("/#/group/Drinks");

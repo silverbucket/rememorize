@@ -112,7 +112,7 @@ function lastReviewedOn(item: ReviewItem, now: Date): number | undefined {
  * so once one has been reviewed today the other waits until tomorrow. (If
  * both were, say on two devices, the one reviewed last carries on.)
  */
-function isBuried(item: ReviewItem, now: Date): boolean {
+export function isBuried(item: ReviewItem, now: Date): boolean {
     if (item.card.direction !== "both") return false;
     const sibling = lastReviewedOn({ card: item.card, reverse: !item.reverse }, now);
     return sibling !== undefined && sibling > (lastReviewedOn(item, now) ?? 0);
@@ -133,6 +133,11 @@ export function dueItems(cards: Flashcard[], now = new Date(), newLimit = Number
     const seen = new Set<Flashcard>();
     const once = (item: ReviewItem) => !seen.has(item.card) && !!seen.add(item.card);
     return [...reviews.filter(once), ...fresh.filter(once).slice(0, Math.max(0, newLimit))];
+}
+
+/** Directions that are due but waiting for tomorrow, because the card's other direction was studied today. */
+export function heldUntilTomorrow(cards: Flashcard[], now = new Date()): number {
+    return cards.flatMap(itemsOf).filter((i) => isDue(i.card, now, i.reverse) && isBuried(i, now)).length;
 }
 
 /** How many cards (counting each direction) had their first review on the same (local) day as `now`. */

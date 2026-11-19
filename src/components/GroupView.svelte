@@ -3,7 +3,7 @@
     import type { Flashcard } from "remotestorage-module-flashcards";
 import { fromNow, plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
-    import { isDue, itemsOf, nextDue, stateOf } from "../lib/scheduler";
+    import { isBuried, isDue, itemsOf, nextDue, stateOf } from "../lib/scheduler";
     import { library } from "../lib/state";
 
     let { group }: { group: string } = $props();
@@ -12,9 +12,19 @@ import { fromNow, plural } from "../lib/format";
         library.cardsIn(group).sort((a, b) => a.frontText.localeCompare(b.frontText, undefined, { sensitivity: "base" })),
     );
     const due = $derived(library.dueIn(cards).length);
-    /** A card studied both ways is "new" or "due" if either direction is. */
-    const anyNew = (card: Flashcard) => itemsOf(card).some((i) => !stateOf(card, i.reverse));
-    const anyDue = (card: Flashcard) => itemsOf(card).some((i) => isDue(card, library.now, i.reverse));
+    /**
+     * When a card comes up next. One studied both ways is "new" or "due" if
+     * either direction is, unless that direction waits for tomorrow because
+     * the other one was studied today.
+     */
+    function when(card: Flashcard): { text: string; due: boolean } {
+        const due = itemsOf(card).filter((i) => isDue(card, library.now, i.reverse));
+        const open = due.filter((i) => !isBuried(i, library.now));
+        if (open.some((i) => !stateOf(card, i.reverse))) return { text: "new", due: true };
+        if (open.length > 0) return { text: "due", due: true };
+        if (due.length > 0) return { text: "tomorrow", due: false };
+        return { text: fromNow(nextDue([card])?.toISOString(), library.now), due: false };
+    }
     let deleting = $state(false);
     let error = $state("");
 
@@ -68,14 +78,8 @@ import { fromNow, plural } from "../lib/format";
                         {/if}
                         {card.backText}
                     </span>
-                    <span class="when" class:due={anyDue(card)}>
-                        {#if anyNew(card)}
-                            new
-                        {:else if anyDue(card)}
-                            due
-                        {:else}
-                            {fromNow(nextDue([card])?.toISOString(), library.now)}
-                        {/if}
+                    <span class="when" class:due={when(card).due}>
+                        {when(card).text}
                     </span>
                 </a>
             </li>
