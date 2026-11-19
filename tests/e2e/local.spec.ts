@@ -109,6 +109,7 @@ test("undo the last rating", async ({ page, isMobile }) => {
         await page.goto("/#/review");
         await page.keyboard.press("Space");
         await page.keyboard.press("3");
+        await expect(page.getByText("1 card left")).toBeVisible();
         await page.keyboard.press("Space");
         await page.keyboard.press("3");
         await expect(page.getByText("Done for now")).toBeVisible();
