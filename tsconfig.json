@@ -14,5 +14,5 @@
         "checkJs": false,
         "types": ["svelte", "vite/client", "vite-plugin-pwa/client"]
     },
-    "include": ["src/**/*", "vite.config.ts"]
+    "include": ["src/**/*", "tests/**/*", "vite.config.ts", "playwright.config.ts"]
 }
