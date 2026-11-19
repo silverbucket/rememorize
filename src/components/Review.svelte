@@ -3,19 +3,25 @@
     import { onMount, untrack } from "svelte";
     import { fromNow, plural } from "../lib/format";
     import { href } from "../lib/router.svelte";
-    import { GRADES, type Grade, nextDue, previewIntervals } from "../lib/scheduler";
+    import {
+        GRADES,
+        type Grade,
+        itemKey,
+        nextDue,
+        previewIntervals,
+        type ReviewItem,
+        stateOf,
+    } from "../lib/scheduler";
     import { library } from "../lib/state";
 
     let { group }: { group?: string } = $props();
-
-    const keyOf = (card: Flashcard) => `${card.group}/${card["@id"]}`;
 
     /** Cards rated "Again" (or still in learning steps) come back this session. */
     const REQUEUE_WITHIN_MS = 20 * 60 * 1000;
 
     const scope = $derived(group ? library.cardsIn(group) : library.cards);
 
-    let queue: Flashcard[] = $state([]);
+    let queue: ReviewItem[] = $state([]);
     let started = $state(false);
     // Reveal and hint state belong to one card, so they reset if sync swaps it.
     let revealedFor = $state("");
@@ -26,16 +32,26 @@
     let reviewed = $state(0);
     let tally = $state<Record<Grade, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
     /** The most recent rating, so it can be undone. */
-    let last: { before: Flashcard; grade: Grade; queue: Flashcard[] } | undefined = $state();
+    let last: { before: Flashcard; reverse: boolean; grade: Grade; queue: ReviewItem[] } | undefined = $state();
 
     // Read queued cards from the library so sync edits apply and deleted or
     // moved cards drop out instead of being written back.
-    const live = $derived(queue.map((c) => library.find(c.group, c["@id"])).filter((c) => c !== undefined));
-    const current = $derived(live[0]);
-    const currentKey = $derived(current ? keyOf(current) : "");
+    const live: ReviewItem[] = $derived(
+        queue.flatMap((item) => {
+            const card = library.find(item.card.group, item.card["@id"]);
+            return card ? [{ card, reverse: item.reverse }] : [];
+        }),
+    );
+    const item = $derived(live[0]);
+    const current = $derived(item?.card);
+    const reverse = $derived(item?.reverse ?? false);
+    const currentKey = $derived(item ? itemKey(item) : "");
+    // Back → front shows the back and asks for the front.
+    const question = $derived(reverse ? current?.backText : current?.frontText);
+    const answer = $derived(reverse ? current?.frontText : current?.backText);
     const revealed = $derived(currentKey !== "" && revealedFor === currentKey);
     const showHint = $derived(currentKey !== "" && hintFor === currentKey);
-    const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt) : undefined);
+    const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt, reverse) : undefined);
     const back = $derived(group ? href.group(group) : href.home());
 
     // Snapshot the due queue once cards have loaded, so sync updates during a
@@ -55,22 +71,23 @@
     }
 
     async function grade(g: Grade) {
-        if (!current || busy || !revealed) return;
+        if (!item || busy || !revealed) return;
         busy = true;
         error = "";
-        const card = current;
+        const { card, reverse } = item;
+        const key = itemKey(item);
         const queueBefore = [...queue];
         try {
             // Same time as the previewed intervals, so the rating matches its label.
             const now = revealedAt;
-            const updated = await library.review(card, g, now);
+            const updated = await library.review(card, g, now, reverse);
             reviewed += 1;
             tally[g] += 1;
-            last = { before: card, grade: g, queue: queueBefore };
-            const rest = live.filter((c) => keyOf(c) !== keyOf(card));
-            const dueSoon =
-                updated.review && new Date(updated.review.due).getTime() - now.getTime() <= REQUEUE_WITHIN_MS;
-            queue = dueSoon ? [...rest, updated] : rest;
+            last = { before: card, reverse, grade: g, queue: queueBefore };
+            const rest = live.filter((i) => itemKey(i) !== key);
+            const due = stateOf(updated, reverse)?.due;
+            const dueSoon = due && new Date(due).getTime() - now.getTime() <= REQUEUE_WITHIN_MS;
+            queue = dueSoon ? [...rest, { card: updated, reverse }] : rest;
             revealedFor = "";
             hintFor = "";
         } catch (e) {
@@ -86,7 +103,7 @@
         error = "";
         const { before, grade: g, queue: previous } = last;
         try {
-            await library.undoReview(before);
+            await library.undoReview(before, last.reverse);
             queue = previous;
             reviewed -= 1;
             tally[g] -= 1;
@@ -152,8 +169,9 @@
     <p class="muted">Loading…</p>
 {:else if current}
     <div class="panel card">
-        <div class="side front">{current.frontText}</div>
-        {#if current.hint && !revealed}
+        {#if reverse}<span class="direction muted">Back → front</span>{/if}
+        <div class="side front">{question}</div>
+        {#if current.hint && !reverse && !revealed}
             {#if showHint}
                 <p class="hint muted">{current.hint}</p>
             {:else}
@@ -162,7 +180,7 @@
         {/if}
         {#if revealed}
             <hr />
-            <div class="side back">{current.backText}</div>
+            <div class="side back">{answer}</div>
         {/if}
     </div>
 
@@ -230,6 +248,10 @@
         gap: 0.75rem;
         padding: 2rem 1.25rem;
         text-align: center;
+    }
+
+    .direction {
+        font-size: 0.8rem;
     }
 
     .side {

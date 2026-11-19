@@ -3,6 +3,7 @@
  * and the cards' due dates. Days are local calendar days.
  */
 import type { Flashcard, ReviewLogEntry } from "remotestorage-module-flashcards";
+import { itemsOf, stateOf } from "./scheduler";
 
 export interface DayStats {
     /** Local day, `YYYY-MM-DD`. */
@@ -114,14 +115,15 @@ export function retentionByGroup(log: ReviewLogEntry[]): { group: string; retent
 /**
  * Cards coming due on each of the next `count` days, starting today. Today
  * includes everything overdue. Cards never reviewed have no due date and
- * aren't counted.
+ * aren't counted. A card studied both ways counts once per direction.
  */
 export function forecast(cards: Flashcard[], now: Date, count: number): { date: Date; due: number }[] {
     const out = Array.from({ length: count }, (_, i) => ({ date: addDays(now, i), due: 0 }));
     const today = addDays(now, 0).getTime();
-    for (const card of cards) {
-        if (!card.review) continue;
-        const due = new Date(card.review.due);
+    for (const item of cards.flatMap(itemsOf)) {
+        const review = stateOf(item.card, item.reverse);
+        if (!review) continue;
+        const due = new Date(review.due);
         // Rounded, so a 23- or 25-hour day (clock change) still counts as one.
         const index = Math.max(0, Math.round((addDays(due, 0).getTime() - today) / 86_400_000));
         if (index < count) out[index].due += 1;

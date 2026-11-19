@@ -18,7 +18,7 @@ import {
     type Settings,
 } from "remotestorage-module-flashcards";
 import type { RSWithModules } from "./rs";
-import { dueCards, type Grade, isDue, isNew, rate, startedOn } from "./scheduler";
+import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
 import { DEFAULT_NEW_PER_DAY, parseNewPerDay, saveNewPerDay } from "./settings";
 
 export type ConnectionStatus = "local" | "connecting" | "connected" | "unauthorized";
@@ -89,7 +89,7 @@ export class Library {
 
     /** New cards held back today by the daily limit. */
     newWaiting = $derived(
-        Math.max(0, this.cards.filter((c) => isNew(c) && isDue(c, this.now)).length - this.newRemaining),
+        Math.max(0, dueItems(this.cards, this.now).filter((i) => isNew(i.card, i.reverse)).length - this.newRemaining),
     );
 
     constructor(rs: RSWithModules, options: { newPerDay?: number } = {}) {
@@ -171,10 +171,10 @@ export class Library {
     }
 
     /** The review queue for some cards: due reviews, then new cards up to today's limit. */
-    dueIn(cards: Flashcard[], now = this.now): Flashcard[] {
+    dueIn(cards: Flashcard[], now = this.now): ReviewItem[] {
         // Today's allowance at `now`, not at the last clock tick (matters just after midnight).
         const remaining = Math.max(0, this.newPerDay - startedOn(this.cards, now));
-        return dueCards(cards, now, remaining);
+        return dueItems(cards, now, remaining);
     }
 
     find(group: string, id: string): Flashcard | undefined {
@@ -228,16 +228,17 @@ export class Library {
         this.#cards = next;
     }
 
-    /** Record a review and store the rescheduled card. */
-    async review(card: Flashcard, grade: Grade, now = new Date()): Promise<Flashcard> {
-        const saved = await this.save(rate(card, grade, now), card.group);
+    /** Record a review of one direction of a card and store the rescheduled card. */
+    async review(card: Flashcard, grade: Grade, now = new Date(), reverse = false): Promise<Flashcard> {
+        const saved = await this.save(rate(card, grade, now, reverse), card.group);
         const entry: ReviewLogEntry = {
             at: now.toISOString(),
             cardId: card["@id"],
             group: card.group,
             rating: grade,
-            state: card.review?.state ?? 0,
+            state: stateOf(card, reverse)?.state ?? 0,
         };
+        if (reverse) entry.reverse = true;
         // Whatever happens next, the review before this one can no longer be undone.
         this.#lastLogged = undefined;
         try {
@@ -255,12 +256,13 @@ export class Library {
      * `before`, keeping any other edits made since (e.g. synced from another
      * device). Looks the card up by id, so it still works if it was moved.
      */
-    async undoReview(before: Flashcard): Promise<Flashcard> {
+    async undoReview(before: Flashcard, reverse = false): Promise<Flashcard> {
         const current = this.cards.find((c) => c["@id"] === before["@id"]);
         if (!current) throw new Error("This card was deleted, so its rating can't be undone.");
-        const { review: _review, reviewedCount: _count, reviewedAt: _at, ...rest } = current;
+        const field = reverse ? "reverseReview" : "review";
+        const { [field]: _review, reviewedCount: _count, reviewedAt: _at, ...rest } = current;
         const restored: Flashcard = { ...rest };
-        if (before.review) restored.review = before.review;
+        if (before[field]) restored[field] = before[field];
         if (before.reviewedCount !== undefined) restored.reviewedCount = before.reviewedCount;
         if (before.reviewedAt) restored.reviewedAt = before.reviewedAt;
         // rate() drops the legacy v1 field; put it back too.
@@ -268,12 +270,12 @@ export class Library {
         const saved = await this.save(restored, current.group);
         // Only the review made here is taken out of the log, not a later one synced from elsewhere.
         const undone = this.#lastLogged;
-        if (undone?.cardId === before["@id"]) {
+        if (undone?.cardId === before["@id"] && !undone.reverse === !reverse) {
             this.#lastLogged = undefined;
             try {
                 await this.#rs.flashcards.unlogReview(undone);
                 const day = (this.#log[logDay(undone)] ?? []).filter(
-                    (e) => e.at !== undone.at || e.cardId !== undone.cardId,
+                    (e) => e.at !== undone.at || e.cardId !== undone.cardId || !e.reverse !== !undone.reverse,
                 );
                 this.#log = { ...this.#log, [logDay(undone)]: day };
             } catch {

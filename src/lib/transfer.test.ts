@@ -143,6 +143,22 @@ describe("parseImport (JSON)", () => {
     });
 });
 
+describe("study direction in CSV", () => {
+    const card = (frontText: string, direction?: "reverse" | "both") =>
+        ({ frontText, backText: "x", group: "g", ...(direction ? { direction } : {}) }) as Flashcard;
+
+    it("round-trips through export and import", () => {
+        const csv = exportCsv([card("a"), card("b", "reverse"), card("c", "both")]);
+        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction");
+        const parsed = parseImport(csv, "cards.csv", "Imported");
+        expect(parsed.rows.map((r) => r.card.direction)).toEqual([undefined, "reverse", "both"]);
+    });
+
+    it("leaves the column out when no card uses it", () => {
+        expect(exportCsv([card("a")]).split("\r\n")[0]).toBe("front,back,hint,group");
+    });
+});
+
 describe("planImport", () => {
     it("adds new cards and skips exact duplicates in the same group", () => {
         const existing = [card()];

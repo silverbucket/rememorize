@@ -1,7 +1,9 @@
 <script lang="ts">
-    import { fromNow, plural } from "../lib/format";
+    
+    import type { Flashcard } from "remotestorage-module-flashcards";
+import { fromNow, plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
-    import { isDue } from "../lib/scheduler";
+    import { isDue, itemsOf, nextDue, stateOf } from "../lib/scheduler";
     import { library } from "../lib/state";
 
     let { group }: { group: string } = $props();
@@ -10,6 +12,9 @@
         library.cardsIn(group).sort((a, b) => a.frontText.localeCompare(b.frontText, undefined, { sensitivity: "base" })),
     );
     const due = $derived(library.dueIn(cards).length);
+    /** A card studied both ways is "new" or "due" if either direction is. */
+    const anyNew = (card: Flashcard) => itemsOf(card).some((i) => !stateOf(card, i.reverse));
+    const anyDue = (card: Flashcard) => itemsOf(card).some((i) => isDue(card, library.now, i.reverse));
     let deleting = $state(false);
     let error = $state("");
 
@@ -55,14 +60,21 @@
             <li>
                 <a class="panel card" href={href.card(card.group, card["@id"])}>
                     <span class="front">{card.frontText}</span>
-                    <span class="back muted">{card.backText}</span>
-                    <span class="when" class:due={isDue(card, library.now)}>
-                        {#if !card.review}
+                    <span class="back muted">
+                        {#if card.direction === "both"}
+                            <span class="direction" title="Studied both ways">⇄</span>
+                        {:else if card.direction === "reverse"}
+                            <span class="direction" title="Studied back → front">←</span>
+                        {/if}
+                        {card.backText}
+                    </span>
+                    <span class="when" class:due={anyDue(card)}>
+                        {#if anyNew(card)}
                             new
-                        {:else if isDue(card, library.now)}
+                        {:else if anyDue(card)}
                             due
                         {:else}
-                            {fromNow(card.review.due, library.now)}
+                            {fromNow(nextDue([card])?.toISOString(), library.now)}
                         {/if}
                     </span>
                 </a>
@@ -107,6 +119,10 @@
     .front,
     .back {
         overflow-wrap: anywhere;
+    }
+
+    .direction {
+        margin-right: 0.25rem;
     }
 
     .when {

@@ -175,6 +175,30 @@ describe("Library", () => {
         expect(library.log.map((e) => e.rating)).toEqual([4]);
     });
 
+    it("reviews and undoes each direction of a card on its own", async () => {
+        const card = await library.save({ frontText: "pivo", backText: "beer", direction: "both" });
+        // Both directions are new, but only one is shown per day.
+        expect(library.dueCount).toBe(1);
+        const day1 = new Date(2026, 4, 1, 12);
+        const day2 = new Date(2026, 4, 2, 12);
+        const forward = await library.review(card, 4, day1);
+        expect(library.dueIn(library.cards, day1)).toEqual([]);
+        expect(library.dueIn(library.cards, day2)).toEqual([{ card: forward, reverse: true }]);
+
+        const reversed = await library.review(forward, 3, day2, true);
+        expect(reversed.review).toEqual(forward.review);
+        expect(reversed.reverseReview?.reps).toBe(1);
+        expect(library.log.map((e) => e.reverse)).toEqual([undefined, true]);
+
+        const restored = await library.undoReview(forward, true);
+        expect(restored.reverseReview).toBeUndefined();
+        expect(restored.review).toEqual(forward.review);
+        expect(restored.reviewedCount).toBe(1);
+        expect(library.log).toHaveLength(1);
+        await library.load();
+        expect(library.find("default", card["@id"])).toEqual(restored);
+    });
+
     it("saves the daily limit with the cards", async () => {
         await library.setNewPerDay(7);
         expect(library.newPerDay).toBe(7);

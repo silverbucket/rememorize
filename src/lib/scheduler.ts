@@ -1,6 +1,10 @@
 /**
  * FSRS scheduling, via ts-fsrs. Translates between the stored `ReviewState`
  * (ISO strings, module field names) and ts-fsrs cards (Dates).
+ *
+ * A card can be studied front → back, back → front, or both. Each direction
+ * has its own schedule (`review` and `reverseReview`), so most functions
+ * take a `reverse` flag saying which one they mean.
  */
 import type { Flashcard, ReviewState, ReviewStateValue } from "remotestorage-module-flashcards";
 import { DefaultScheduler, Rating } from "ts-fsrs";
@@ -21,10 +25,37 @@ const scheduler = await DefaultScheduler({ version: "FSRS-7", enableFuzz: true, 
 
 type SchedulerCard = ReturnType<typeof scheduler.newCard>;
 
-function toSchedulerCard(card: Flashcard, now: Date): SchedulerCard {
+/** One thing to study: a card in one direction. */
+export interface ReviewItem {
+    card: Flashcard;
+    /** True for back → front. */
+    reverse: boolean;
+}
+
+/** The schedule for one direction of a card. */
+export function stateOf(card: Flashcard, reverse = false): ReviewState | undefined {
+    return reverse ? card.reverseReview : card.review;
+}
+
+/** The directions a card is studied in. */
+export function itemsOf(card: Flashcard): ReviewItem[] {
+    if (card.direction === "reverse") return [{ card, reverse: true }];
+    if (card.direction === "both")
+        return [
+            { card, reverse: false },
+            { card, reverse: true },
+        ];
+    return [{ card, reverse: false }];
+}
+
+export function itemKey(item: ReviewItem): string {
+    return `${item.reverse ? "reverse" : "forward"}:${item.card.group}/${item.card["@id"]}`;
+}
+
+function toSchedulerCard(card: Flashcard, now: Date, reverse: boolean): SchedulerCard {
     // cardId seeds the fuzz, so the previewed interval is the one rate() gives.
-    const fresh = scheduler.newCard({ now, cardId: card["@id"] });
-    const review = card.review;
+    const fresh = scheduler.newCard({ now, cardId: reverse ? `${card["@id"]}:reverse` : card["@id"] });
+    const review = stateOf(card, reverse);
     // State from another algorithm can't seed FSRS-7 memory; start over.
     if (!review || (review.algorithm && review.algorithm !== ALGORITHM)) return fresh;
     return {
@@ -61,61 +92,91 @@ function toReviewState(card: SchedulerCard): ReviewState {
 }
 
 /** A card is due if it has never been reviewed or its due date has passed. */
-export function isDue(card: Flashcard, now = new Date()): boolean {
-    return !card.review || new Date(card.review.due).getTime() <= now.getTime();
+export function isDue(card: Flashcard, now = new Date(), reverse = false): boolean {
+    const review = stateOf(card, reverse);
+    return !review || new Date(review.due).getTime() <= now.getTime();
 }
 
-export function isNew(card: Flashcard): boolean {
-    return !card.review || card.review.state === 0;
+export function isNew(card: Flashcard, reverse = false): boolean {
+    const review = stateOf(card, reverse);
+    return !review || review.state === 0;
+}
+
+function lastReviewedOn(item: ReviewItem, now: Date): number | undefined {
+    const last = stateOf(item.card, item.reverse)?.lastReview;
+    return last && new Date(last).toDateString() === now.toDateString() ? new Date(last).getTime() : undefined;
 }
 
 /**
- * Cards to study now: due reviews first (most overdue first), then up to
- * `newLimit` new cards (oldest first).
+ * For cards studied both ways: seeing one direction gives away the other,
+ * so once one has been reviewed today the other waits until tomorrow. (If
+ * both were, say on two devices, the one reviewed last carries on.)
  */
-export function dueCards(cards: Flashcard[], now = new Date(), newLimit = Number.POSITIVE_INFINITY): Flashcard[] {
-    const due = cards.filter((c) => isDue(c, now));
-    const reviews = due.filter((c) => !isNew(c)).sort((a, b) => dueTime(a) - dueTime(b));
-    const fresh = due.filter(isNew).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return [...reviews, ...fresh.slice(0, Math.max(0, newLimit))];
+function isBuried(item: ReviewItem, now: Date): boolean {
+    if (item.card.direction !== "both") return false;
+    const sibling = lastReviewedOn({ card: item.card, reverse: !item.reverse }, now);
+    return sibling !== undefined && sibling > (lastReviewedOn(item, now) ?? 0);
 }
 
-/** How many cards had their first review on the same (local) day as `now`. */
+/**
+ * What to study now: due reviews first (most overdue first), then up to
+ * `newLimit` new cards (oldest first). A card studied both ways appears
+ * once; its other direction waits for another day.
+ */
+export function dueItems(cards: Flashcard[], now = new Date(), newLimit = Number.POSITIVE_INFINITY): ReviewItem[] {
+    const due = cards.flatMap(itemsOf).filter((i) => isDue(i.card, now, i.reverse) && !isBuried(i, now));
+    const reviews = due.filter((i) => !isNew(i.card, i.reverse)).sort((a, b) => dueTime(a) - dueTime(b));
+    // The sort is stable, so a card's front → back comes before its back → front.
+    const fresh = due
+        .filter((i) => isNew(i.card, i.reverse))
+        .sort((a, b) => a.card.createdAt.localeCompare(b.card.createdAt));
+    const seen = new Set<Flashcard>();
+    const once = (item: ReviewItem) => !seen.has(item.card) && !!seen.add(item.card);
+    return [...reviews.filter(once), ...fresh.filter(once).slice(0, Math.max(0, newLimit))];
+}
+
+/** How many cards (counting each direction) had their first review on the same (local) day as `now`. */
 export function startedOn(cards: Flashcard[], now = new Date()): number {
     const day = now.toDateString();
-    return cards.filter((c) => c.review?.firstReview && new Date(c.review.firstReview).toDateString() === day).length;
+    return cards
+        .flatMap((c) => [c.review, c.reverseReview])
+        .filter((r) => r?.firstReview && new Date(r.firstReview).toDateString() === day).length;
 }
 
-function dueTime(card: Flashcard): number {
-    return card.review ? new Date(card.review.due).getTime() : 0;
+function dueTime(item: ReviewItem): number {
+    const review = stateOf(item.card, item.reverse);
+    return review ? new Date(review.due).getTime() : 0;
 }
 
 /** When the next card becomes due, if none are due now. */
 export function nextDue(cards: Flashcard[]): Date | undefined {
     let next: number | undefined;
-    for (const card of cards) {
-        if (!card.review) continue;
-        const t = new Date(card.review.due).getTime();
+    for (const item of cards.flatMap(itemsOf)) {
+        const review = stateOf(item.card, item.reverse);
+        if (!review) continue;
+        const t = new Date(review.due).getTime();
         if (next === undefined || t < next) next = t;
     }
     return next === undefined ? undefined : new Date(next);
 }
 
-/** Apply a rating and return the updated card (not yet stored). */
-export function rate(card: Flashcard, grade: Grade, now = new Date()): Flashcard {
-    const result = scheduler.review({ card: toSchedulerCard(card, now), grade, now });
+/** Apply a rating to one direction of a card and return the updated card (not yet stored). */
+export function rate(card: Flashcard, grade: Grade, now = new Date(), reverse = false): Flashcard {
+    const result = scheduler.review({ card: toSchedulerCard(card, now, reverse), grade, now });
     const review = toReviewState(result.card as SchedulerCard);
     // Cards reviewed before firstReview existed are left without one.
-    const firstReview = card.review?.firstReview ?? (isNew(card) ? now.toISOString() : undefined);
+    const firstReview = stateOf(card, reverse)?.firstReview ?? (isNew(card, reverse) ? now.toISOString() : undefined);
     if (firstReview) review.firstReview = firstReview;
     const { familiarity: _legacy, ...rest } = card;
-    return { ...rest, review, reviewedCount: review.reps, reviewedAt: now.toISOString() };
+    const next: Flashcard = { ...rest, [reverse ? "reverseReview" : "review"]: review };
+    const reviewedCount = (next.review?.reps ?? 0) + (next.reverseReview?.reps ?? 0);
+    return { ...next, reviewedCount, reviewedAt: now.toISOString() };
 }
 
 /** Interval the card would get for each grade, for button labels. */
-export function previewIntervals(card: Flashcard, now = new Date()): Record<Grade, string> {
+export function previewIntervals(card: Flashcard, now = new Date(), reverse = false): Record<Grade, string> {
     const out = {} as Record<Grade, string>;
-    for (const item of scheduler.preview({ card: toSchedulerCard(card, now), now })) {
+    for (const item of scheduler.preview({ card: toSchedulerCard(card, now, reverse), now })) {
         out[item.grade as Grade] = formatInterval(new Date(item.card.dueAt).getTime() - now.getTime());
     }
     return out;
