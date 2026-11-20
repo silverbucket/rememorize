@@ -44,6 +44,36 @@ describe("Library", () => {
         expect(library.cards.map((c) => c.group)).toEqual(["drinks"]);
     });
 
+    it("moves several cards from different groups at once, keeping their schedules", async () => {
+        const pivo = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
+        const voda = await library.save({ frontText: "voda", backText: "water", group: "misc" });
+        const pit = await library.save({ frontText: "pít", backText: "to drink", group: "drinks" });
+        const reviewed = await library.review(pivo, 4);
+        await library.moveCards([reviewed, voda, pit], "drinks");
+        expect(
+            library
+                .cardsIn("drinks")
+                .map((c) => c.frontText)
+                .sort(),
+        ).toEqual(["pivo", "pít", "voda"]);
+        expect(library.groups.map((g) => g.name)).toEqual(["drinks"]);
+        await library.load();
+        expect(library.find("drinks", pivo["@id"])?.review?.reps).toBe(1);
+        expect(library.cards).toHaveLength(3);
+    });
+
+    it("moves nothing when a card would overwrite another with the same id", async () => {
+        const a = await library.save({ "@id": "same", frontText: "a", backText: "a", group: "one" });
+        const b = await library.save({ "@id": "same", frontText: "b", backText: "b", group: "two" });
+        const c = await library.save({ frontText: "c", backText: "c", group: "one" });
+        await expect(library.moveCards([c, b], "one")).rejects.toThrow('"one" already has a card');
+        // Two picked from different groups can't both land in a third.
+        await expect(library.moveCards([c, a, b], "three")).rejects.toThrow('"three" already has a card');
+        expect(library.cardsIn("one")).toHaveLength(2);
+        expect(library.cardsIn("two")).toHaveLength(1);
+        expect(library.cardsIn("three")).toHaveLength(0);
+    });
+
     it("reviews a card and takes it out of the due count", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer" });
         const reviewed = await library.review(card, 4);

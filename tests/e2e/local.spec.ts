@@ -92,6 +92,86 @@ test("a group can be renamed, and renamed onto another group to merge them", asy
     await expect(page.getByText("Verbs")).toHaveCount(0);
 });
 
+test("cards can be picked and moved to another group, a new one, and back", async ({ page }) => {
+    await addCard(page, { front: "pivo", back: "beer", group: "Czech" });
+    await addCard(page, { front: "voda", back: "water", group: "Czech" });
+    await addCard(page, { front: "chléb", back: "bread", group: "Czech" });
+    await addCard(page, { front: "pít", back: "to drink", group: "Verbs" });
+    // Studied, to see that the schedule moves with the card.
+    await page.goto("/#/review/Czech");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+
+    await page.goto("/#/group/Czech");
+    await page.getByRole("button", { name: "Select", exact: true }).click();
+    const bar = page.getByRole("toolbar", { name: "Selected cards" });
+    await expect(bar).toContainText("Pick cards to move");
+    await expect(bar.getByRole("button", { name: "Move to…" })).toBeDisabled();
+    // A tap on a row picks it instead of opening it.
+    await page.locator(".cards li").filter({ hasText: "pivo" }).click();
+    await page.locator(".cards li").filter({ hasText: "voda" }).click();
+    await expect(page).toHaveURL(/#\/group\/Czech$/);
+    await expect(bar).toContainText("2 selected");
+    await bar.getByRole("button", { name: "Move to…" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Move 2 cards" });
+    // The group they're in isn't offered.
+    await expect(dialog.getByRole("button", { name: /Czech/ })).toHaveCount(0);
+    await dialog.getByRole("button", { name: /Verbs/ }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("status").filter({ hasText: "Moved 2 cards to Verbs" })).toBeVisible();
+    await expect(page.locator(".cards li")).toHaveCount(1);
+
+    // Undo puts them back.
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.locator(".cards li")).toHaveCount(3);
+
+    // To a new group, named in the dialog, after picking them all.
+    await page.getByRole("button", { name: "Select", exact: true }).click();
+    await bar.getByRole("button", { name: "Select all" }).click();
+    await expect(bar).toContainText("3 selected");
+    await bar.getByRole("button", { name: "Move to…" }).click();
+    await page.getByLabel("Move to group").fill("Food");
+    await page.getByRole("button", { name: "New group “Food”" }).click();
+    await expect(page.getByText("No cards in this group.")).toBeVisible();
+    await page.getByRole("status").getByRole("link", { name: "Food" }).click();
+    await expect(page.getByRole("heading", { name: "Food" })).toBeVisible();
+    await expect(page.locator(".cards li")).toHaveCount(3);
+    await expect(page.locator(".cards li .when").filter({ hasText: /^in / })).toHaveCount(1);
+
+    // From the page of every card, picked across groups; Enter takes the group typed.
+    await page.goto("/#/cards");
+    await page.getByRole("button", { name: "Select", exact: true }).click();
+    await page.locator(".cards li").filter({ hasText: "pít" }).click();
+    await page.locator(".cards li").filter({ hasText: "chléb" }).click();
+    await bar.getByRole("button", { name: "Move to…" }).click();
+    await page.getByLabel("Move to group").fill("Verbs");
+    await page.getByLabel("Move to group").press("Enter");
+    await expect(page.getByRole("status").filter({ hasText: "Moved 1 card to Verbs" })).toBeVisible();
+
+    await page.reload();
+    await page.goto("/");
+    await expect(page.locator(".groups li")).toHaveCount(2);
+    await expect(page.locator(".groups li").filter({ hasText: "Verbs" })).toContainText("2 cards");
+    await expect(page.locator(".groups li").filter({ hasText: "Food" })).toContainText("2 cards");
+});
+
+test("Escape leaves picking, and closes the move dialog first", async ({ page }) => {
+    await addCard(page, { front: "pivo", back: "beer", group: "Czech" });
+    await page.goto("/#/group/Czech");
+    await page.getByRole("button", { name: "Select", exact: true }).click();
+    await page.locator(".cards li").first().click();
+    await page.getByRole("button", { name: "Move to…" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByRole("toolbar", { name: "Selected cards" })).toContainText("1 selected");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("toolbar", { name: "Selected cards" })).toBeHidden();
+    await page.locator(".cards li").first().click();
+    await expect(page.getByRole("heading", { name: "Edit card" })).toBeVisible();
+});
+
 test("views narrow the cards, in a group and across all of them, and can be reviewed", async ({ page }) => {
     const DAY = 24 * 60 * 60 * 1000;
     const ago = (days: number) => new Date(Date.now() - days * DAY).toISOString();
