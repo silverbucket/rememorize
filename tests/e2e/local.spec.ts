@@ -147,6 +147,8 @@ test("cards can be picked and moved to another group, a new one, and back", asyn
     await page.getByLabel("Move to group").fill("Food");
     await page.getByRole("button", { name: "New group “Food”" }).click();
     await expect(page.getByText("No cards in this group.")).toBeVisible();
+    // With no cards left here, focus goes to where they went.
+    await expect(page.getByRole("status").getByRole("link", { name: "Food" })).toBeFocused();
     await page.getByRole("status").getByRole("link", { name: "Food" }).click();
     await expect(page.getByRole("heading", { name: "Food" })).toBeVisible();
     await expect(page.locator(".cards li")).toHaveCount(3);

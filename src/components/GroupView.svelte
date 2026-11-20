@@ -78,7 +78,8 @@
     let choosing = $state(false);
     /** Cards that went away meanwhile (moved or deleted elsewhere) drop out of the pick. */
     const pickedCards = $derived(all.filter((c) => picked.has(keyOf(c))));
-    const allShownPicked = $derived(shown.length > 0 && shown.every((c) => picked.has(keyOf(c))));
+    /** Nothing left to add: every card shown is picked, or a search hides all the ones that are. */
+    const allShownPicked = $derived(picked.size > 0 && shown.every((c) => picked.has(keyOf(c))));
 
     let selectButton: HTMLButtonElement | undefined = $state();
 
@@ -125,15 +126,23 @@
     }
 
     let undoing = $state(false);
+    let noteLink: HTMLAnchorElement | undefined = $state();
+    let gone = false;
 
-    function done(move: Moved) {
+    async function done(move: Moved) {
+        // Finished after the page was left: there is nowhere to show it.
+        if (gone) return;
         stopSelecting();
         moved = move;
+        await tick();
+        // Without Select (every card moved out), focus goes to where they went.
+        if (!selectButton?.isConnected) noteLink?.focus();
     }
 
     async function undo() {
         if (!moved || undoing) return;
-        const { to, from } = moved;
+        const note = moved;
+        const { to, from } = note;
         undoing = true;
         error = "";
         try {
@@ -143,7 +152,7 @@
                 if (card) back.set(group, [...(back.get(group) ?? []), card]);
             }
             for (const [group, cards] of back) await library.moveCards(cards, group);
-            moved = undefined;
+            if (moved === note) moved = undefined;
         } catch (e) {
             error = e instanceof Error ? e.message : String(e);
         } finally {
@@ -153,6 +162,7 @@
 
     // The note lasts while you look through cards, and goes once you leave them.
     onDestroy(() => {
+        gone = true;
         queueMicrotask(() => {
             const name = router.route.name;
             if (name !== "group" && name !== "cards") moved = undefined;
@@ -388,7 +398,7 @@
         <span class="picked" aria-live="polite">
             {pickedCards.length === 0 ? "Pick cards to move" : `${pickedCards.length} selected`}
         </span>
-        <button class="btn ghost" type="button" onclick={toggleAll}>
+        <button class="btn ghost" type="button" onclick={toggleAll} disabled={!allShownPicked && shown.length === 0}>
             {allShownPicked ? "Select none" : `Select all${shown.length < cards.length ? " shown" : ""}`}
         </button>
         <button
@@ -402,7 +412,7 @@
     <div class="bar note" role="status">
         <span class="picked">
             Moved {plural(moved.from.length, "card")} to
-            <a class="content" href={href.group(moved.to)}>{moved.to}</a>
+            <a class="content" href={href.group(moved.to)} bind:this={noteLink}>{moved.to}</a>
         </span>
         <button class="btn ghost" type="button" onclick={undo} disabled={undoing}>
             <Icon name="undo" size={18} />{undoing ? "Undoing…" : "Undo"}
