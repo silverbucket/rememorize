@@ -66,7 +66,7 @@
             key: dayKey(d.date),
             value: d.due,
             tick: i === 0 ? "Today" : i % 7 === 0 ? shortDay.format(d.date) : undefined,
-            text: `${i === 0 ? "Today (with overdue)" : dayName.format(d.date)}: ${plural(d.due, "card")} due`,
+            text: `${i === 0 ? "By the end of today (with overdue)" : dayName.format(d.date)}: ${plural(d.due, "card")} due`,
         })),
     );
     const upcomingWeek = $derived(upcoming.slice(0, 7).reduce((sum, d) => sum + d.due, 0));
@@ -194,10 +194,13 @@
 
     <section class="panel">
         <h2>Coming up</h2>
-        <p class="muted sub">Cards due each day for the next {DAYS} days. New cards aren't counted.</p>
+        <p class="muted sub">
+            Cards due each day for the next {DAYS} days. Today counts cards that come due later today too. New cards
+            aren't counted.
+        </p>
         <BarChart
             bars={upcomingBars}
-            summary="{plural(upcoming[0].due, 'card')} due today, {upcomingWeek} in the next 7 days"
+            summary="{plural(upcoming[0].due, 'card')} due by the end of today, {upcomingWeek} in the next 7 days"
         />
     </section>
 {/if}

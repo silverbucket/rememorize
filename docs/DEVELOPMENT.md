@@ -113,7 +113,8 @@ captures again from the browser profile the last full run left in
 The colours, radii and type are CSS custom properties at the top of
 [`src/app.css`](../src/app.css), once for light and once for dark. Light is
 tinted like pale green ledger paper and dark like a chalkboard, with one green
-accent; the four answer buttons are the only other colours. Components use the
+accent. The only other colours are the four answer buttons and the red of
+controls that remove something (Delete, Disconnect). Components use the
 properties and never a colour of their own.
 
 There are two typefaces, bundled from `@fontsource-variable` so nothing is

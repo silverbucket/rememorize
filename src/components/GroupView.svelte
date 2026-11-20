@@ -19,6 +19,8 @@
     /** Reviews that are due, and cards never studied: counted apart, as on the home page. */
     const reviews = $derived(queue.filter((i) => !isNew(i.card, i.reverse)).length);
     const fresh = $derived(cards.filter((c) => itemsOf(c).every((i) => isNew(c, i.reverse))).length);
+    /** New cards a review would start now. Fewer than `fresh` when the daily limit is in the way. */
+    const starting = $derived(due - reviews);
 
     let query = $state("");
     const needle = $derived(query.trim().toLocaleLowerCase());
@@ -66,6 +68,17 @@
             <p class="sub">
                 {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if fresh > 0}, {fresh} new{/if}
             </p>
+            <!-- Says why the button's count is smaller than due plus new. -->
+            {#if starting < fresh}
+                <p class="sub limit">
+                    {#if starting === 0}
+                        No more new cards today:
+                    {:else}
+                        Today's review takes {starting} of the {fresh} new cards:
+                    {/if}
+                    <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
+                </p>
+            {/if}
         {/if}
     </div>
     <div class="actions">
@@ -129,6 +142,10 @@
 {/if}
 
 <style>
+    .limit {
+        font-size: 0.9rem;
+    }
+
     .none {
         display: grid;
         gap: 1rem;

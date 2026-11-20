@@ -73,7 +73,8 @@ devices.
 
 1. Open **[rememorize.5apps.com](https://rememorize.5apps.com)**.
 2. Add a card, or import a deck.
-3. Press **Review** when cards are due. A few minutes a day is enough.
+3. Press **Review** when cards are ready to study. A few minutes a day is
+   enough.
 4. Tap a card to see its answer, then say how well you knew it.
 
 To install it, use your browser's _Install_ or _Add to Home Screen_.

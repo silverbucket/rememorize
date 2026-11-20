@@ -181,6 +181,11 @@ test("daily limit on new cards", async ({ page }) => {
     await page.getByLabel("New cards per day").press("Enter");
     await page.getByLabel("New cards per day").blur();
 
+    // The group says why its review is shorter than its count of new cards.
+    await page.goto("/#/group/Numbers");
+    await expect(page.getByText("3 cards, 3 new")).toBeVisible();
+    await expect(page.getByText("Today's review takes 2 of the 3 new cards: the daily limit is 2.")).toBeVisible();
+
     await page.goto("/");
     await expect(page.getByRole("link", { name: "Review 2 cards" })).toBeVisible();
     await page.getByRole("link", { name: "Review 2 cards" }).click();
@@ -192,6 +197,10 @@ test("daily limit on new cards", async ({ page }) => {
     await expect(page.getByText("1 more new card waiting: you've started 2 of 2 new cards for today.")).toBeVisible();
     // Don't claim the next card is months away while a new one is waiting.
     await expect(page.getByText(/Next card is due/)).toHaveCount(0);
+
+    await page.getByRole("link", { name: "Back to your cards" }).click();
+    await page.getByText("Numbers").click();
+    await expect(page.getByText("No more new cards today: the daily limit is 2.")).toBeVisible();
 
     // The setting is remembered, and today's count shows.
     await page.reload();
@@ -309,7 +318,7 @@ test("statistics follow reviews", async ({ page }) => {
     await expect(page.getByRole("row", { name: /Animals/ })).toContainText("50%");
     await expect(page.getByText("2 new cards started in the last 30 days")).toBeVisible();
     // The card rated Easy is scheduled for a later day.
-    await expect(page.getByText(/^\d+ cards? due today, 1 in the next 7 days$/)).toBeVisible();
+    await expect(page.getByText(/^\d+ cards? due by the end of today, 1 in the next 7 days$/)).toBeVisible();
 });
 
 test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
