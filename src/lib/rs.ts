@@ -36,6 +36,9 @@ rs.authorize = (options) => {
     }
 };
 
+// Cards live in the shared flashcards format; Rememorize's own settings in its own folder.
 rs.access.claim("flashcards", "rw");
+rs.access.claim("rememorize", "rw");
 // Caching strategies aren't persisted; this has to run on every load.
 rs.caching.enable("/flashcards/");
+rs.caching.enable("/rememorize/");

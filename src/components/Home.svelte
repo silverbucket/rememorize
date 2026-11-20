@@ -12,11 +12,11 @@
     const days = $derived(streak(library.log, library.now));
     const reviewedToday = $derived(lastDays(library.log, library.now, 1)[0].reviews);
 
-    /** "4 due for review and 3 new", leaving out whichever is zero. */
+    /** "20 new · 10 reviews", leaving out whichever is zero. New first: that's the number the daily limit sets. */
     const breakdown = $derived(
-        [queue.length - fresh > 0 ? `${queue.length - fresh} due for review` : "", fresh > 0 ? `${fresh} new` : ""]
+        [fresh > 0 ? `${fresh} new` : "", queue.length > fresh ? plural(queue.length - fresh, "review") : ""]
             .filter(Boolean)
-            .join(" and "),
+            .join(" · "),
     );
 </script>
 
@@ -60,12 +60,15 @@
     <section class="panel today" aria-label="Today">
         <div class="today-text">
             {#if queue.length > 0}
-                <p class="headline">{plural(queue.length, "card")} to study today</p>
-                <p class="muted">{breakdown}</p>
+                <!-- The split leads: a total of new plus reviews read as if the new-card limit were ignored. -->
+                <p class="headline">{breakdown}</p>
+                <p class="muted">{plural(queue.length, "card")} to study today</p>
             {:else}
                 <p class="headline">You're all caught up</p>
                 <p class="muted">
-                    {#if library.newWaiting > 0}
+                    {#if library.cardsWaiting > 0}
+                        Daily limit reached: {plural(library.cardsWaiting, "more card")} waiting for tomorrow.
+                    {:else if library.newWaiting > 0}
                         {plural(library.newWaiting, "new card")} waiting for tomorrow.
                     {:else if next}
                         The next card is due {fromNow(next.toISOString(), library.now)}.

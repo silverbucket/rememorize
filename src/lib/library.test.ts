@@ -10,7 +10,9 @@ let library: Library;
 beforeEach(async () => {
     rs = new RemoteStorage({ modules: [Flashcards], changeEvents: { local: false, window: false } }) as RSWithModules;
     rs.access.claim("flashcards", "rw");
+    rs.access.claim("rememorize", "rw");
     rs.caching.enable("/flashcards/");
+    rs.caching.enable("/rememorize/");
     library = new Library(rs);
     await new Promise<void>((resolve) => rs.on("ready", () => resolve()));
     // `ready` triggers a load; wait for it to finish.
@@ -221,13 +223,87 @@ describe("Library", () => {
         expect(library.find("default", card["@id"])).toEqual(restored);
     });
 
-    it("saves the daily limit with the cards", async () => {
+    it("saves the daily limits in the app's own folder", async () => {
         await library.setNewPerDay(7);
+        await library.setCardsPerDay(50);
         expect(library.newPerDay).toBe(7);
-        // A second device (or a reload) reads it from storage.
-        const other = new Library(rs, { newPerDay: 3 });
+        expect(library.cardsPerDay).toBe(50);
+        expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
+            newCardsPerDay: 7,
+            cardsPerDay: 50,
+        });
+        expect(await rs.flashcards.getSettings(false)).toEqual({});
+        // A second device (or a reload) reads them from storage.
+        const other = new Library(rs, { newPerDay: 3, cardsPerDay: 10 });
         await other.load();
         expect(other.newPerDay).toBe(7);
+        expect(other.cardsPerDay).toBe(50);
+        // And the card limit can be turned off again.
+        await library.setCardsPerDay(null);
+        await other.load();
+        expect(other.cardsPerDay).toBeNull();
+        expect(other.newPerDay).toBe(7);
+    });
+
+    it("moves the new-card limit an older version saved with the cards", async () => {
+        await rs.flashcards.setSettings({ newCardsPerDay: 4 });
+        await library.load();
+        expect(library.newPerDay).toBe(4);
+        await expect
+            .poll(() => rs.scope("/rememorize/").getObject("settings", false))
+            .toMatchObject({ newCardsPerDay: 4 });
+        // From then on the app's own setting wins.
+        await library.setNewPerDay(9);
+        await library.load();
+        expect(library.newPerDay).toBe(9);
+    });
+
+    it("keeps both limits when they are saved at the same time", async () => {
+        await Promise.all([library.setNewPerDay(5), library.setCardsPerDay(30)]);
+        expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
+            newCardsPerDay: 5,
+            cardsPerDay: 30,
+        });
+    });
+
+    it("moves an older version's limit that arrives by sync", async () => {
+        // Arrived after the first load, as on a device that has just connected.
+        await rs.flashcards.setSettings({ newCardsPerDay: 6 });
+        (rs as unknown as { _emit(n: string): void })._emit("sync-done");
+        await expect
+            .poll(() => rs.scope("/rememorize/").getObject("settings", false))
+            .toMatchObject({ newCardsPerDay: 6 });
+        expect(library.newPerDay).toBe(6);
+        // A limit the app already has of its own is left alone.
+        await library.setNewPerDay(8);
+        await rs.flashcards.setSettings({ newCardsPerDay: 2 });
+        (rs as unknown as { _emit(n: string): void })._emit("sync-done");
+        await library.load();
+        expect(library.newPerDay).toBe(8);
+    });
+
+    it("caps the day's cards, reviews and new together", async () => {
+        library.cardsPerDay = 2;
+        const long = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        const old = await library.save({ frontText: "r", backText: "r", group: "one" });
+        await library.review(old, 3, long);
+        await library.save({ frontText: "a", backText: "a", group: "one" });
+        await library.save({ frontText: "b", backText: "b", group: "two" });
+        expect(library.dueCount).toBe(2);
+        expect(library.cardsWaiting).toBe(1);
+        expect(library.newWaiting).toBe(0);
+        // The group still says how much is really due.
+        expect(library.groups.map((g) => [g.reviews, g.fresh])).toEqual([
+            [1, 1],
+            [0, 1],
+        ]);
+        const [first] = library.dueIn(library.cards);
+        await library.review(first.card, 4);
+        expect(library.studiedToday).toBe(1);
+        expect(library.dueCount).toBe(1);
+        library.cardsPerDay = null;
+        expect(library.dueCount).toBe(2);
+        expect(library.cardsWaiting).toBe(0);
     });
 
     it("keeps this browser's limit until one has been saved to storage", async () => {
@@ -238,9 +314,11 @@ describe("Library", () => {
 
     it("applies change events from sync", async () => {
         const handlers: ((e: unknown) => void)[] = [];
+        const appHandlers: ((e: unknown) => void)[] = [];
         const fake = {
             ...rs,
             on: () => {},
+            scope: () => ({ declareType: () => {}, on: (_: string, h: (e: unknown) => void) => appHandlers.push(h) }),
             flashcards: { ...rs.flashcards, on: (_: string, h: (e: unknown) => void) => handlers.push(h) },
         } as unknown as RSWithModules;
         const lib = new Library(fake);
@@ -256,9 +334,18 @@ describe("Library", () => {
         expect(lib.find("synced", "r1")?.createdAt).toBe("2018-10-25T14:30:05.000Z");
         handlers[0]({ origin: "remote", relativePath: "synced/r1", oldValue: remote, newValue: undefined });
         expect(lib.find("synced", "r1")).toBeUndefined();
-        // Settings changed on another device.
+        // Settings changed on another device by an older version, before this app has its own.
         handlers[0]({ origin: "remote", relativePath: ".settings", newValue: { newCardsPerDay: 4 } });
         expect(lib.newPerDay).toBe(4);
+        // Then by this version, in the app's folder; the older document no longer counts.
+        appHandlers[0]({
+            origin: "remote",
+            relativePath: "settings",
+            newValue: { newCardsPerDay: 6, cardsPerDay: 40 },
+        });
+        expect([lib.newPerDay, lib.cardsPerDay]).toEqual([6, 40]);
+        handlers[0]({ origin: "remote", relativePath: ".settings", newValue: { newCardsPerDay: 4 } });
+        expect(lib.newPerDay).toBe(6);
         expect(lib.cards).toEqual([]);
         // Reviews logged on another device.
         const entry = { at: "2026-01-01T10:00:00.000Z", cardId: "r1", rating: 3, state: 0 };

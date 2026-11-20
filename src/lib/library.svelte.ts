@@ -5,6 +5,7 @@
  *   works offline and before any account is connected.
  * - Applies `change` events that arrive from sync (remote/conflict origin).
  * - Writes go through the flashcards module and are applied here directly.
+ * - Settings live in the app's own folder, `/rememorize/`, not with the cards.
  */
 import {
     type Flashcard,
@@ -18,28 +19,50 @@ import {
     type Settings,
 } from "remotestorage-module-flashcards";
 import type { RSWithModules } from "./rs";
-import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
-import { DEFAULT_NEW_PER_DAY, parseNewPerDay, saveNewPerDay } from "./settings";
+import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf, studiedOn } from "./scheduler";
+import {
+    type AppSettings,
+    appSettingsSchema,
+    DEFAULT_CARDS_PER_DAY,
+    DEFAULT_NEW_PER_DAY,
+    normalizeAppSettings,
+    parseCardsPerDay,
+    parseNewPerDay,
+    SETTINGS_FILE,
+    saveCardsPerDay,
+    saveNewPerDay,
+} from "./settings";
 
 export type ConnectionStatus = "local" | "connecting" | "connected" | "unauthorized";
 
 export interface GroupSummary {
     name: string;
     total: number;
-    /** What a review of the group would show now: due reviews, then new cards up to today's limit. */
+    /** What a review of the group would show now: due reviews, then new cards, within today's limits. */
     due: number;
-    /** The part of `due` that is reviews of cards already started. */
+    /** Reviews of cards already started that are due, whether or not the daily card limit lets them all in. */
     reviews: number;
-    /** New cards a review could start now if there were no daily limit. `due - reviews` of them fit under it. */
+    /** New cards a review could start now if there were no daily limits. */
     fresh: number;
 }
 
 type ChangeEvent = { relativePath?: string; newValue?: unknown; origin?: string };
 
+type BaseClient = ReturnType<RSWithModules["scope"]>;
+
 const keyOf = (group: string, id: string) => `${group}/${id}`;
 
 export class Library {
     #rs: RSWithModules;
+    /** Rememorize's own folder, for its settings. */
+    #app: BaseClient;
+    /**
+     * Whether the app's settings hold a new-card limit yet. Until they do,
+     * the one older versions kept in `/flashcards/.settings` applies.
+     */
+    #ownNewPerDay = false;
+    /** Settings writes, one after another, so each reads what the last one wrote. */
+    #settingsWrite: Promise<unknown> = Promise.resolve();
     #cards: Record<string, Flashcard> = $state({});
     /** The review log as stored: one list of reviews per UTC day. */
     #log: Record<string, ReviewLogEntry[]> = $state({});
@@ -57,10 +80,16 @@ export class Library {
     now = $state(new Date());
 
     /**
-     * Most new cards to start per day, across all groups. Stored with the
-     * cards, so it syncs; change it with `setNewPerDay()`.
+     * Most new cards to start per day, across all groups. Synced; change it
+     * with `setNewPerDay()`.
      */
     newPerDay = $state(DEFAULT_NEW_PER_DAY);
+
+    /**
+     * Most cards to study per day, reviews and new together, or `null` for no
+     * limit. Synced; change it with `setCardsPerDay()`.
+     */
+    cardsPerDay: number | null = $state(DEFAULT_CARDS_PER_DAY);
 
     cards = $derived(Object.values(this.#cards));
 
@@ -77,6 +106,9 @@ export class Library {
     /** How many more new cards can be started today. */
     newRemaining = $derived(Math.max(0, this.newPerDay - this.startedToday));
 
+    /** Cards studied today (each direction counts), against the daily card limit. */
+    studiedToday = $derived(studiedOn(this.cards, this.now));
+
     groups: GroupSummary[] = $derived.by(() => {
         const byName = new Map<string, Flashcard[]>();
         for (const card of this.cards) {
@@ -91,7 +123,7 @@ export class Library {
                     name,
                     total: cards.length,
                     due: queue.length,
-                    reviews: queue.filter((i) => !isNew(i.card, i.reverse)).length,
+                    reviews: this.reviewsIn(cards),
                     fresh: this.freshIn(cards),
                 };
             })
@@ -101,14 +133,22 @@ export class Library {
     /** Cards that a review of everything would show now (new cards capped). */
     dueCount = $derived(this.dueIn(this.cards).length);
 
-    /** New cards held back today by the daily limit. */
+    /** New cards held back today by the daily new-card limit. */
     newWaiting = $derived(
         Math.max(0, dueItems(this.cards, this.now).filter((i) => isNew(i.card, i.reverse)).length - this.newRemaining),
     );
 
-    constructor(rs: RSWithModules, options: { newPerDay?: number } = {}) {
+    /** Cards held back today by the daily card limit (on top of any held by the new-card limit). */
+    cardsWaiting = $derived(Math.max(0, dueItems(this.cards, this.now, this.newRemaining).length - this.dueCount));
+
+    constructor(rs: RSWithModules, options: { newPerDay?: number; cardsPerDay?: number | null } = {}) {
         this.#rs = rs;
+        this.#app = rs.scope("/rememorize/");
+        this.#app.declareType("settings", appSettingsSchema);
         if (options.newPerDay !== undefined) this.newPerDay = options.newPerDay;
+        if (options.cardsPerDay !== undefined) this.cardsPerDay = options.cardsPerDay;
+        // Connected before Rememorize had its own folder: the token doesn't cover it yet.
+        rs.on("scope-change-required", () => this.#checkAccess());
         rs.on("ready", () => void this.load());
         rs.on("connecting", () => {
             this.status = "connecting";
@@ -119,6 +159,7 @@ export class Library {
         rs.on("connected", () => {
             this.status = "connected";
             this.error = "";
+            this.#checkAccess();
             this.userAddress = rs.remote?.userAddress ?? "";
             void this.load();
         });
@@ -132,6 +173,7 @@ export class Library {
             // Disconnecting wipes the local cache; caching has to be
             // re-enabled for the next session.
             rs.caching.enable("/flashcards/");
+            rs.caching.enable("/rememorize/");
             this.#cards = {};
             this.#log = {};
             void this.load();
@@ -147,9 +189,12 @@ export class Library {
         });
         rs.on("sync-done", () => {
             this.syncing = false;
+            // An older version's limit may only just have arrived; both folders have synced by now.
+            void this.#migrateSettings().catch(() => {});
         });
         rs.on("error", (e: unknown) => this.#onError(e));
         rs.flashcards.on("change", (e) => this.#applyChange(e as ChangeEvent));
+        this.#app.on("change", (e) => this.#applyAppChange(e as ChangeEvent));
     }
 
     /** Start the clock that keeps due counts fresh. Returns a stop function. */
@@ -166,11 +211,12 @@ export class Library {
         try {
             const [cards, settings, log] = await Promise.all([
                 this.#rs.flashcards.getAll(false),
-                this.#rs.flashcards.getSettings(false),
+                this.#app.getObject(SETTINGS_FILE, false),
                 this.#rs.flashcards.getReviewLog(false),
             ]);
             if (generation !== this.#loadGeneration) return;
-            this.#applySettings(settings);
+            this.#applySettings(normalizeAppSettings(settings));
+            await this.#migrateSettings().catch(() => {});
             const days: Record<string, ReviewLogEntry[]> = {};
             for (const entry of log) days[logDay(entry)] = [...(days[logDay(entry)] ?? []), entry];
             this.#log = days;
@@ -184,11 +230,15 @@ export class Library {
         }
     }
 
-    /** The review queue for some cards: due reviews, then new cards up to today's limit. */
+    /** The review queue for some cards: due reviews, then new cards, within today's limits. */
     dueIn(cards: Flashcard[], now = this.now): ReviewItem[] {
         // Today's allowance at `now`, not at the last clock tick (matters just after midnight).
-        const remaining = Math.max(0, this.newPerDay - startedOn(this.cards, now));
-        return dueItems(cards, now, remaining);
+        const fresh = Math.max(0, this.newPerDay - startedOn(this.cards, now));
+        const total =
+            this.cardsPerDay === null
+                ? Number.POSITIVE_INFINITY
+                : Math.max(0, this.cardsPerDay - studiedOn(this.cards, now));
+        return dueItems(cards, now, fresh, total);
     }
 
     /**
@@ -198,6 +248,11 @@ export class Library {
      */
     freshIn(cards: Flashcard[], now = this.now): number {
         return dueItems(cards, now).filter((i) => isNew(i.card, i.reverse)).length;
+    }
+
+    /** Due reviews of these, ignoring the daily card limit. */
+    reviewsIn(cards: Flashcard[], now = this.now): number {
+        return dueItems(cards, now, 0).length;
     }
 
     find(group: string, id: string): Flashcard | undefined {
@@ -224,15 +279,68 @@ export class Library {
 
     /** Change the daily new-card limit on every device. */
     async setNewPerDay(value: number): Promise<void> {
-        const previous = this.newPerDay;
+        await this.#changeSettings({ newCardsPerDay: parseNewPerDay(value) });
+    }
+
+    /** Change the daily card limit (`null` for none) on every device. */
+    async setCardsPerDay(value: number | null): Promise<void> {
+        await this.#changeSettings({ cardsPerDay: parseCardsPerDay(value) });
+    }
+
+    async #changeSettings(changes: AppSettings): Promise<void> {
+        // Only what this call changes is put back if it fails, not a setting saved alongside it.
+        const previous: AppSettings = {};
+        if ("newCardsPerDay" in changes) previous.newCardsPerDay = this.newPerDay;
+        if ("cardsPerDay" in changes) previous.cardsPerDay = this.cardsPerDay;
+        const hadOwn = this.#ownNewPerDay;
         // Applied before the write finishes, so it holds even if the page is left straight away.
-        this.#applySettings({ newCardsPerDay: value });
+        this.#applySettings(changes);
         try {
-            await this.#rs.flashcards.setSettings({ newCardsPerDay: this.newPerDay });
+            await this.#saveSettings(changes);
         } catch (e) {
-            this.#applySettings({ newCardsPerDay: previous });
+            this.#applySettings(previous);
+            this.#ownNewPerDay = hadOwn;
             throw e;
         }
+    }
+
+    /** Write some settings, keeping the others as stored. */
+    #saveSettings(changes: AppSettings): Promise<void> {
+        return this.#queueSettings(async () => changes);
+    }
+
+    /**
+     * Move the new-card limit an older version saved next to the cards into
+     * the app's folder, unless the app has one of its own by then.
+     */
+    async #migrateSettings(): Promise<void> {
+        // Read before the app's own settings, so a limit that syncs down meanwhile is seen and kept.
+        const legacy = (await this.#rs.flashcards.getSettings(false)).newCardsPerDay;
+        if (legacy === undefined) return;
+        await this.#queueSettings(async (stored) => {
+            if (normalizeAppSettings(stored).newCardsPerDay !== undefined) return undefined;
+            this.#applyLegacySettings(legacy);
+            this.#ownNewPerDay = true;
+            return { newCardsPerDay: parseNewPerDay(legacy) };
+        });
+    }
+
+    /** Read the stored settings, then write `change(stored)` over them (nothing if undefined), after earlier writes. */
+    #queueSettings(change: (stored: unknown) => Promise<AppSettings | undefined>): Promise<void> {
+        const run = this.#settingsWrite.then(async () => {
+            const stored = await this.#app.getObject(SETTINGS_FILE, false);
+            const changes = await change(stored);
+            if (!changes) return;
+            // Fields this version doesn't know (from a newer app) are kept as they are.
+            const base = typeof stored === "object" && stored !== null ? stored : {};
+            await this.#app.storeObject("settings", SETTINGS_FILE, {
+                ...base,
+                ...changes,
+                updatedAt: new Date().toISOString(),
+            });
+        });
+        this.#settingsWrite = run.catch(() => {});
+        return run;
     }
 
     async remove(card: Flashcard): Promise<void> {
@@ -328,18 +436,49 @@ export class Library {
         this.#rs.reconnect();
     }
 
-    /** Until settings have been saved to storage, the value this browser last used stays. */
-    #applySettings(settings: Settings): void {
-        if (settings.newCardsPerDay === undefined) return;
-        this.newPerDay = parseNewPerDay(settings.newCardsPerDay);
-        // Remembered per browser so the limit is right before storage has loaded.
+    /** Until settings have been saved to storage, the values this browser last used stay. */
+    #applySettings(settings: AppSettings): void {
+        // Remembered per browser so the limits are right before storage has loaded.
+        if (settings.newCardsPerDay !== undefined) {
+            this.#ownNewPerDay = true;
+            this.newPerDay = parseNewPerDay(settings.newCardsPerDay);
+            saveNewPerDay(this.newPerDay);
+        }
+        if (settings.cardsPerDay !== undefined) {
+            this.cardsPerDay = parseCardsPerDay(settings.cardsPerDay);
+            saveCardsPerDay(this.cardsPerDay);
+        }
+    }
+
+    /** The new-card limit as older versions stored it, which counts only until the app has its own. */
+    #applyLegacySettings(value: Settings["newCardsPerDay"]): void {
+        if (this.#ownNewPerDay || value === undefined) return;
+        this.newPerDay = parseNewPerDay(value);
         saveNewPerDay(this.newPerDay);
+    }
+
+    /**
+     * Ask to sign in again if the connection was made before Rememorize had
+     * its own folder. Checked a tick late: rs.js says `connected` just before
+     * it records the scope a new sign-in granted, and replays its
+     * scope-change event to late listeners even once it's resolved.
+     */
+    #checkAccess(): void {
+        setTimeout(() => {
+            if (!this.#rs.scopeChangeRequired || this.status !== "connected") return;
+            this.status = "unauthorized";
+            this.error = "Rememorize now keeps its settings in a folder of its own. Sign in again to give it access.";
+        }, 0);
+    }
+
+    #applyAppChange(event: ChangeEvent): void {
+        if (event.relativePath === SETTINGS_FILE) this.#applySettings(normalizeAppSettings(event.newValue));
     }
 
     #applyChange(event: ChangeEvent): void {
         const path = event.relativePath ?? "";
         if (path === SETTINGS_PATH) {
-            this.#applySettings(normalizeSettings(event.newValue));
+            this.#applyLegacySettings(normalizeSettings(event.newValue).newCardsPerDay);
             return;
         }
         if (path.startsWith(`${LOG_FOLDER}/`)) {

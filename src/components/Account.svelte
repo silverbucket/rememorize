@@ -1,7 +1,7 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { href } from "../lib/router.svelte";
-    import { MAX_NEW_PER_DAY, parseNewPerDay } from "../lib/settings";
+    import { MAX_NEW_PER_DAY, parseCardsPerDay, parseNewPerDay } from "../lib/settings";
     import { library } from "../lib/state";
     import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from "../lib/theme";
     import { exportCsv, exportJson } from "../lib/transfer";
@@ -44,6 +44,19 @@
         } catch (e) {
             settingsError = `Could not save the setting: ${e instanceof Error ? e.message : String(e)}`;
             input.value = String(library.newPerDay);
+        }
+    }
+
+    async function setCardsPerDay(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const value = parseCardsPerDay(input.value);
+        input.value = value === null ? "" : String(value);
+        settingsError = "";
+        try {
+            await library.setCardsPerDay(value);
+        } catch (e) {
+            settingsError = `Could not save the setting: ${e instanceof Error ? e.message : String(e)}`;
+            input.value = library.cardsPerDay === null ? "" : String(library.cardsPerDay);
         }
     }
 
@@ -137,8 +150,8 @@
 <section class="panel">
     <label class="title" for="new-per-day">New cards per day</label>
     <p class="muted">
-        How many unseen cards to introduce each day, across all groups. Reviews of cards you've already started aren't
-        limited. This setting is saved with your cards, so it's the same on every device you connect.
+        How many unseen cards to introduce each day, across all groups. Reviews of cards you've already started don't
+        count toward this.
     </p>
     <div class="row">
         <input
@@ -153,6 +166,27 @@
         />
         <span class="muted">Started today: {library.startedToday}</span>
     </div>
+
+    <label class="title next" for="cards-per-day">Most cards per day</label>
+    <p class="muted">
+        A cap on everything you study in a day, reviews and new cards together. Leave it empty for no limit. Reviews
+        held back by it come back the next day, later than planned, so you may remember them less well.
+    </p>
+    <div class="row">
+        <input
+            id="cards-per-day"
+            class="field number"
+            type="number"
+            inputmode="numeric"
+            min="0"
+            max={MAX_NEW_PER_DAY}
+            placeholder="No limit"
+            value={library.cardsPerDay ?? ""}
+            onchange={setCardsPerDay}
+        />
+        <span class="muted">Studied today: {library.studiedToday}</span>
+    </div>
+    <p class="muted">These settings are the same on every device you connect.</p>
     {#if settingsError}<p class="error" role="alert">{settingsError}</p>{/if}
 </section>
 
@@ -224,6 +258,12 @@
         font-weight: 650;
         letter-spacing: -0.005em;
         line-height: 1.15;
+    }
+
+    /* A second setting in the same panel. */
+    .title.next {
+        display: block;
+        margin-top: 1.75rem;
     }
 
     section p {
