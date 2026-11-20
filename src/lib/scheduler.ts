@@ -146,6 +146,16 @@ export function dueItems(
     return shown.slice(0, Math.max(0, totalLimit));
 }
 
+/** When each direction that isn't due yet comes due, between `from` and `to`. */
+export function dueBetween(cards: Flashcard[], from: Date, to: Date): Date[] {
+    return cards
+        .flatMap(itemsOf)
+        .map((i) => stateOf(i.card, i.reverse)?.due)
+        .filter((due): due is string => !!due)
+        .map((due) => new Date(due))
+        .filter((due) => due.getTime() > from.getTime() && due.getTime() <= to.getTime());
+}
+
 /** Directions that are due but waiting for tomorrow, because the card's other direction was studied today. */
 export function heldUntilTomorrow(cards: Flashcard[], now = new Date()): number {
     return cards.flatMap(itemsOf).filter((i) => isDue(i.card, now, i.reverse) && isBuried(i, now)).length;

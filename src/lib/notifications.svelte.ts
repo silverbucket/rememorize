@@ -15,8 +15,18 @@
  * the server it subscribed with until it is next opened, so each device's
  * reminders go to the server in its own record.
  */
-import { type Device, listDevices, normalizeDevice, planReminders, reminderMessage, testMessage } from "./reminders";
+import {
+    type Device,
+    listDevices,
+    normalizeDevice,
+    planReminders,
+    REMINDER_DAYS,
+    reminderMessage,
+    SOON_MS,
+    testMessage,
+} from "./reminders";
 import { rs } from "./rs";
+import { dueBetween } from "./scheduler";
 import { parseReminderServer } from "./settings";
 import { discover, type PushServer, schedulePushes, sendPush } from "./sockethub";
 import { library } from "./state";
@@ -528,7 +538,15 @@ export class Reminders {
     async #schedule(force: boolean): Promise<void> {
         const devices = await this.#devices();
         if (devices.length === 0) return;
-        const plan = planReminders(new Date(), library.reminderTime, (at) => library.todayIn(library.cards, at).length);
+        const now = new Date();
+        const soon = dueBetween(library.cards, now, new Date(now.getTime() + SOON_MS));
+        const plan = planReminders(
+            now,
+            library.reminderTime,
+            (at) => library.todayIn(library.cards, at).length,
+            REMINDER_DAYS,
+            soon,
+        );
         const signature = JSON.stringify([
             plan.map((r) => [r.at.getTime(), r.count]),
             devices.map((d) => [d.endpoint, d.server]),

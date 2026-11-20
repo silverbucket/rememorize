@@ -25,6 +25,8 @@ const GAP_MS = 6 * 60 * 60 * 1000;
  * which keeps the whole list within what the server holds for a device (60).
  */
 const DETAILED_DAYS = 10;
+/** Cards coming back within this long (after a Hard or Again) get a reminder of their own, right when they're due. */
+export const SOON_MS = 60 * 60 * 1000;
 /** A device not seen for this long is taken off the list. It puts itself back when it is next opened. */
 export const STALE_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -100,6 +102,7 @@ export function planReminders(
     time: string,
     countAt: (at: Date) => number,
     days = REMINDER_DAYS,
+    soon: Date[] = [],
 ): Reminder[] {
     const [hours, minutes] = time.split(":").map(Number);
     // Built from local date parts, so a clock change doesn't move a reminder.
@@ -107,6 +110,15 @@ export function planReminders(
         new Date(now.getFullYear(), now.getMonth(), now.getDate() + day, hours + hour, minutes);
     const plan: Reminder[] = [];
     let shown: number | undefined;
+    // A card answered Hard or Again comes back in minutes: say so when it does, not on the next hour.
+    for (const at of [...soon].sort((a, b) => a.getTime() - b.getTime())) {
+        if (at.getTime() <= now.getTime() || at.getTime() - now.getTime() > SOON_MS) continue;
+        const count = countAt(at);
+        shown ??= countAt(now);
+        if (count <= shown) continue;
+        plan.push({ at, count, last: false });
+        shown = count;
+    }
     // From yesterday: when its first reminder was late in the day, its last hours are still ahead.
     for (let day = -1, ahead = 0; ahead < days; day++) {
         const begun = slot(day, 0).getTime() <= now.getTime();
@@ -126,6 +138,7 @@ export function planReminders(
             previous = at.getTime();
         }
     }
+    plan.sort((a, b) => a.at.getTime() - b.at.getTime());
     const last = plan.at(-1);
     if (last) last.last = true;
     return plan;

@@ -25,6 +25,17 @@ describe("planReminders", () => {
         expect(plan.map((r) => r.at.getDate())).toEqual([21, 23]);
     });
 
+    it("tells about a card that comes back within the hour when it does", () => {
+        // 3 due now; a card answered Hard comes back at 12:08.
+        const soon = at(20, 12, 8);
+        const count = (when: Date) => (when.getTime() >= soon.getTime() ? 4 : 3);
+        const plan = planReminders(at(20, 12), "09:00", count, 1, [soon, at(20, 18)]);
+        expect(plan.map((r) => [r.at, r.count])).toEqual([
+            [soon, 4],
+            [at(21, 9), 4],
+        ]);
+    });
+
     it("marks only the last one as last", () => {
         expect(planReminders(at(20, 12), "09:00", () => 1, 3).map((r) => r.last)).toEqual([false, false, true]);
     });

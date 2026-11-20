@@ -2,6 +2,7 @@
     import type { Flashcard } from "remotestorage-module-flashcards";
     import { onMount, untrack } from "svelte";
     import { fromNow, plural } from "../lib/format";
+    import { reminders } from "../lib/notifications.svelte";
     import { href } from "../lib/router.svelte";
     import {
         GRADES,
@@ -19,7 +20,7 @@
 
     let { group, show }: { group?: string; show?: ViewId } = $props();
 
-    /** Cards rated "Again" (or still in learning steps) come back this session. */
+    /** Cards rated "Again" (or still in learning steps) come back this session, once their time is up. */
     const REQUEUE_WITHIN_MS = 20 * 60 * 1000;
 
     const within = $derived(group ? library.cardsIn(group) : library.cards);
@@ -28,6 +29,8 @@
     const title = $derived([group, show && labelOf(show)].filter(Boolean).join(" · "));
 
     let queue: ReviewItem[] = $state([]);
+    /** Cards that come back in this review once they are due again (after a Hard or Again), soonest first. */
+    let later: ReviewItem[] = $state([]);
     let started = $state(false);
     // Reveal and hint state belong to one card, so they reset if sync swaps it.
     let revealedFor = $state("");
@@ -40,7 +43,9 @@
     /** False once this review has been left: a rating still being saved must not act on the page that replaced it. */
     let mounted = true;
     /** The most recent rating, so it can be undone. */
-    let last: { before: Flashcard; reverse: boolean; grade: Grade; queue: ReviewItem[] } | undefined = $state();
+    let last:
+        | { before: Flashcard; reverse: boolean; grade: Grade; queue: ReviewItem[]; later: ReviewItem[] }
+        | undefined = $state();
 
     // Read queued cards from the library so sync edits apply and deleted or
     // moved cards drop out instead of being written back.
@@ -66,6 +71,24 @@
     const waiting = $derived(live.length === 0 ? library.todayIn(scope, library.now).length : 0);
     /** How far through the session: ratings given, out of those plus what is left. */
     const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
+    const dueAt = (i: ReviewItem) => new Date(stateOf(i.card, i.reverse)?.due ?? 0).getTime();
+    /** When the next card waiting in `later` comes back. */
+    const comesBack = $derived(later.length > 0 ? new Date(dueAt(later[0])).toISOString() : undefined);
+
+    const comingBack = $derived(
+        comesBack &&
+            `${plural(later.length, "card")} ${later.length === 1 ? "comes" : "come"} back ${fromNow(comesBack, library.now)}` +
+                (reminders.state === "on" ? ", and you'll get a notification." : "."),
+    );
+
+    /** Bring back the cards in `later` whose time is up. */
+    function bringBack() {
+        const now = Date.now();
+        const ready = later.filter((i) => dueAt(i) <= now);
+        if (ready.length === 0) return;
+        later = later.filter((i) => dueAt(i) > now);
+        queue = [...queue, ...ready.filter((r) => !queue.some((q) => itemKey(q) === itemKey(r)))];
+    }
 
     /** Short answers are set large, like a word on an index card; long ones step down so they fit. */
     const sizeOf = (text = "") => (text.length <= 14 ? "xl" : text.length <= 48 ? "lg" : text.length <= 140 ? "md" : "sm");
@@ -77,6 +100,8 @@
         const cards = scope;
         untrack(() => {
             queue = library.dueIn(cards, new Date());
+            // A card already back in the queue isn't also waiting to come back.
+            later = later.filter((l) => !queue.some((q) => itemKey(q) === itemKey(l)));
             started = true;
         });
     });
@@ -101,17 +126,20 @@
         const { card, reverse } = item;
         const key = itemKey(item);
         const queueBefore = [...queue];
+        const laterBefore = [...later];
         try {
             // Same time as the previewed intervals, so the rating matches its label.
             const now = revealedAt;
             const updated = await library.review(card, g, now, reverse);
             reviewed += 1;
             tally[g] += 1;
-            last = { before: card, reverse, grade: g, queue: queueBefore };
-            const rest = live.filter((i) => itemKey(i) !== key);
-            const due = stateOf(updated, reverse)?.due;
-            const dueSoon = due && new Date(due).getTime() - now.getTime() <= REQUEUE_WITHIN_MS;
-            queue = dueSoon ? [...rest, { card: updated, reverse }] : rest;
+            last = { before: card, reverse, grade: g, queue: queueBefore, later: laterBefore };
+            queue = live.filter((i) => itemKey(i) !== key);
+            const back = { card: updated, reverse };
+            // It waits out its time, Hard longer than Again, instead of coming straight back.
+            if (dueAt(back) - now.getTime() <= REQUEUE_WITHIN_MS) {
+                later = [...later, back].sort((a, b) => dueAt(a) - dueAt(b));
+            }
             revealedFor = "";
             hintFor = "";
             // A long answer may have been scrolled down to reach the buttons; the next card starts at the top.
@@ -127,10 +155,11 @@
         if (!last || busy) return;
         busy = true;
         error = "";
-        const { before, grade: g, queue: previous } = last;
+        const { before, grade: g, queue: previous, later: previousLater } = last;
         try {
             await library.undoReview(before, last.reverse);
             queue = previous;
+            later = previousLater;
             reviewed -= 1;
             tally[g] -= 1;
             last = undefined;
@@ -168,7 +197,9 @@
             }
         };
         window.addEventListener("keydown", onKey);
+        const ticking = setInterval(bringBack, 5_000);
         return () => {
+            clearInterval(ticking);
             mounted = false;
             window.removeEventListener("keydown", onKey);
         };
@@ -274,6 +305,9 @@
             {:else}
                 <h2>Nothing due</h2>
             {/if}
+            {#if comesBack}
+                <p>{comingBack}</p>
+            {/if}
             {#if waiting > 0}
                 <p>{plural(waiting, "more card")} {waiting === 1 ? "is" : "are"} due.</p>
                 <p class="muted">
@@ -292,7 +326,7 @@
                     {plural(held, "card")} held until tomorrow: the other direction of a card you studied today.
                 </p>
             {/if}
-            {#if nextDue(scope, library.now) && library.newWaiting === 0 && waiting === 0 && held === 0}
+            {#if nextDue(scope, library.now) && library.newWaiting === 0 && waiting === 0 && held === 0 && !comesBack}
                 <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
             {/if}
             <div class="done-actions">
