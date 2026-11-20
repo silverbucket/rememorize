@@ -33,6 +33,8 @@
     let error = $state("");
     let reviewed = $state(0);
     let tally = $state<Record<Grade, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
+    /** False once this review has been left: a rating still being saved must not act on the page that replaced it. */
+    let mounted = true;
     /** The most recent rating, so it can be undone. */
     let last: { before: Flashcard; reverse: boolean; grade: Grade; queue: ReviewItem[] } | undefined = $state();
 
@@ -99,7 +101,7 @@
             revealedFor = "";
             hintFor = "";
             // A long answer may have been scrolled down to reach the buttons; the next card starts at the top.
-            window.scrollTo(0, 0);
+            if (mounted) window.scrollTo(0, 0);
         } catch (e) {
             error = `Could not save your answer: ${e instanceof Error ? e.message : String(e)}`;
         } finally {
@@ -152,7 +154,10 @@
             }
         };
         window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        return () => {
+            mounted = false;
+            window.removeEventListener("keydown", onKey);
+        };
     });
 </script>
 
