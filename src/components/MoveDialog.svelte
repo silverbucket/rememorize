@@ -5,7 +5,7 @@
 
 <script lang="ts">
     import type { Flashcard } from "remotestorage-module-flashcards";
-    import { onMount, tick } from "svelte";
+    import { onMount } from "svelte";
     import { plural } from "../lib/format";
     import { library } from "../lib/state";
     import Icon from "./Icon.svelte";
@@ -54,15 +54,15 @@
         } catch (e) {
             error = e instanceof Error ? e.message : String(e);
             moving = false;
-            await tick();
         }
     }
 
     function submit(event: SubmitEvent) {
         event.preventDefault();
         if (typed === "" || nameError) return;
-        // Enter picks the group that was typed, or the only one left in the list.
-        move(exact || matching.length !== 1 ? typed : matching[0].name);
+        // Enter takes the group named, else the first choice shown: the new group, or the only match.
+        if (offerNew || groups.some((g) => g.name === typed)) move(typed);
+        else if (matching.length === 1) move(matching[0].name);
     }
 </script>
 

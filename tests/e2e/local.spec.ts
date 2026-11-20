@@ -126,10 +126,23 @@ test("cards can be picked and moved to another group, a new one, and back", asyn
     await page.getByRole("button", { name: "Undo" }).click();
     await expect(page.locator(".cards li")).toHaveCount(3);
 
-    // To a new group, named in the dialog, after picking them all.
+    // Select all, then none, then a range with shift-click.
     await page.getByRole("button", { name: "Select", exact: true }).click();
     await bar.getByRole("button", { name: "Select all" }).click();
     await expect(bar).toContainText("3 selected");
+    await bar.getByRole("button", { name: "Select none" }).click();
+    await expect(bar).toContainText("Pick cards to move");
+    await page.locator(".cards li").filter({ hasText: "chléb" }).click();
+    await page
+        .locator(".cards li")
+        .filter({ hasText: "voda" })
+        .click({ modifiers: ["Shift"] });
+    await expect(page.locator(".cards li").filter({ hasText: "pivo" }).getByRole("button")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+    await expect(bar).toContainText("3 selected");
+    // To a new group, named in the dialog.
     await bar.getByRole("button", { name: "Move to…" }).click();
     await page.getByLabel("Move to group").fill("Food");
     await page.getByRole("button", { name: "New group “Food”" }).click();
@@ -138,6 +151,17 @@ test("cards can be picked and moved to another group, a new one, and back", asyn
     await expect(page.getByRole("heading", { name: "Food" })).toBeVisible();
     await expect(page.locator(".cards li")).toHaveCount(3);
     await expect(page.locator(".cards li .when").filter({ hasText: /^in / })).toHaveCount(1);
+    // The note came along, and can still undo; then the move is made again.
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByText("No cards in this group.")).toBeVisible();
+    await page.goBack();
+    await expect(page.locator(".cards li")).toHaveCount(3);
+    await page.getByRole("button", { name: "Select", exact: true }).click();
+    await bar.getByRole("button", { name: "Select all" }).click();
+    await bar.getByRole("button", { name: "Move to…" }).click();
+    await page.getByLabel("Move to group").fill("Food");
+    await page.getByLabel("Move to group").press("Enter");
+    await expect(page.getByRole("status").filter({ hasText: "Moved 3 cards to Food" })).toBeVisible();
 
     // From the page of every card, picked across groups; Enter takes the group typed.
     await page.goto("/#/cards");
@@ -168,6 +192,8 @@ test("Escape leaves picking, and closes the move dialog first", async ({ page })
     await expect(page.getByRole("toolbar", { name: "Selected cards" })).toContainText("1 selected");
     await page.keyboard.press("Escape");
     await expect(page.getByRole("toolbar", { name: "Selected cards" })).toBeHidden();
+    // Focus goes back to the button that started picking.
+    await expect(page.getByRole("button", { name: "Select", exact: true })).toBeFocused();
     await page.locator(".cards li").first().click();
     await expect(page.getByRole("heading", { name: "Edit card" })).toBeVisible();
 });

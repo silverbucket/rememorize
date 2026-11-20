@@ -1,13 +1,23 @@
+<script lang="ts" module>
+    import type { Moved } from "./MoveDialog.svelte";
+
+    /**
+     * The last move, for its note and its undo. Kept outside the page, so
+     * following the note's link to where the cards went keeps it.
+     */
+    let moved: Moved | undefined = $state();
+</script>
+
 <script lang="ts">
     import type { Flashcard } from "remotestorage-module-flashcards";
-    import { tick } from "svelte";
+    import { onDestroy, tick } from "svelte";
     import { fromNow, plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { isBuried, isDue, isNew, itemsOf, nextDue, stateOf } from "../lib/scheduler";
     import { library } from "../lib/state";
     import { inView, labelOf, type ViewId } from "../lib/views";
     import Icon from "./Icon.svelte";
-    import MoveDialog, { type Moved } from "./MoveDialog.svelte";
+    import MoveDialog from "./MoveDialog.svelte";
     import ViewChips from "./ViewChips.svelte";
 
     /** One group's cards, or every card when there is no group. `show` keeps to one view of them. */
@@ -70,6 +80,8 @@
     const pickedCards = $derived(all.filter((c) => picked.has(keyOf(c))));
     const allShownPicked = $derived(shown.length > 0 && shown.every((c) => picked.has(keyOf(c))));
 
+    let selectButton: HTMLButtonElement | undefined = $state();
+
     function startSelecting() {
         picked = new Set();
         anchor = undefined;
@@ -77,10 +89,12 @@
         selecting = true;
     }
 
+    /** The rows turn back into links, so focus goes to the button that started it. */
     function stopSelecting() {
         selecting = false;
         choosing = false;
         picked = new Set();
+        selectButton?.focus();
     }
 
     function toggle(card: Flashcard, event: MouseEvent) {
@@ -103,17 +117,13 @@
         picked = next;
     }
 
+    /** Select none clears the pick, cards hidden by a search too. */
     function toggleAll() {
-        const next = new Set(picked);
-        for (const c of shown) {
-            if (allShownPicked) next.delete(keyOf(c));
-            else next.add(keyOf(c));
-        }
+        const next = new Set(allShownPicked ? [] : picked);
+        if (!allShownPicked) for (const c of shown) next.add(keyOf(c));
         picked = next;
     }
 
-    /** The last move, for its note and its undo. */
-    let moved: Moved | undefined = $state();
     let undoing = $state(false);
 
     function done(move: Moved) {
@@ -141,13 +151,12 @@
         }
     }
 
-    $effect(() => {
-        if (!moved) return;
-        const note = moved;
-        const timer = setTimeout(() => {
-            if (moved === note) moved = undefined;
-        }, 10_000);
-        return () => clearTimeout(timer);
+    // The note lasts while you look through cards, and goes once you leave them.
+    onDestroy(() => {
+        queueMicrotask(() => {
+            const name = router.route.name;
+            if (name !== "group" && name !== "cards") moved = undefined;
+        });
     });
 
     let renaming = $state(false);
@@ -300,15 +309,17 @@
             active={show ?? "all"}
             link={(view) => (group === undefined ? href.cards(view) : href.group(group, view))}
         />
-        {#if selecting}
-            <button class="select on" type="button" onclick={stopSelecting}>
-                <Icon name="check" size={17} /><span class="label">Done</span>
-            </button>
-        {:else}
-            <button class="select" type="button" onclick={startSelecting} disabled={moving || deleting}>
-                <Icon name="select" size={17} /><span class="label">Select</span>
-            </button>
-        {/if}
+        <!-- One button that stays put, so focus stays on it. -->
+        <button
+            class="select"
+            class:on={selecting}
+            type="button"
+            bind:this={selectButton}
+            onclick={selecting ? stopSelecting : startSelecting}
+            disabled={!selecting && (moving || deleting)}
+        >
+            <Icon name={selecting ? "check" : "select"} size={17} /><span class="label">{selecting ? "Done" : "Select"}</span>
+        </button>
     </div>
 
     {#if all.length >= SEARCH_FROM}
