@@ -121,9 +121,12 @@
                         <span class="month" style:grid-column={w + 2}>{monthName.format(week.at(-1)?.date)}</span>
                     {/if}
                 {/each}
-                <span class="weekday" style:grid-row="2">Mon</span>
-                <span class="weekday" style:grid-row="4">Wed</span>
-                <span class="weekday" style:grid-row="6">Fri</span>
+                <!-- Pinned to the left edge: on a phone the weeks scroll underneath it. -->
+                <div class="rail">
+                    <span style:grid-row="2">Mon</span>
+                    <span style:grid-row="4">Wed</span>
+                    <span style:grid-row="6">Fri</span>
+                </div>
                 {#each weeks as week, w (w)}
                     {#each week as day, d (day.key)}
                         <div
@@ -257,14 +260,14 @@
         overflow-x: auto;
         margin-top: 1rem;
         /* Room for the outline around today. */
-        padding: 3px;
+        padding: 3px 3px 3px 0;
     }
 
     .calendar {
         flex: none;
         display: grid;
         grid-template-columns: 1.75rem repeat(var(--weeks), minmax(0, 1fr));
-        grid-template-rows: 1rem;
+        grid-template-rows: 1rem repeat(7, auto);
         gap: 2px;
         width: 100%;
         /* Squares stay about 9px or wider; below that the calendar scrolls. */
@@ -273,7 +276,7 @@
     }
 
     .month,
-    .weekday {
+    .rail {
         font-size: 0.72rem;
         line-height: 1;
         color: var(--text-muted);
@@ -287,9 +290,18 @@
         width: 0;
     }
 
-    .weekday {
+    .rail {
+        position: sticky;
+        left: 0;
+        z-index: 1;
         grid-column: 1;
-        align-self: center;
+        grid-row: 1 / -1;
+        display: grid;
+        grid-template-rows: subgrid;
+        align-items: center;
+        /* Covers the gap to the first week too, so nothing shows through beside the names. */
+        margin-right: -2px;
+        background: var(--surface);
     }
 
     .day {
@@ -429,12 +441,8 @@
         font-size: 0.8rem;
     }
 
-    /* Where the year doesn't fit, its older weeks fade out at the edge they scroll in from. */
+    /* Where the year doesn't fit, say that it scrolls. */
     @media (max-width: 760px) {
-        .scroller {
-            mask-image: linear-gradient(to right, transparent, #000 1.75rem);
-        }
-
         .swipe {
             display: block;
         }

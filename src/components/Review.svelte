@@ -346,31 +346,36 @@
         background: var(--accent);
     }
 
-    /* The card sits on the rest of the queue: one or two edges show beneath it while more cards wait. */
+    /*
+     * The card sits on the rest of the queue: the next card, and the one after,
+     * show beneath it, each a step lower, narrower and dimmer.
+     */
     .stage {
         position: relative;
         display: flex;
-        margin: 0.5rem 0 1rem;
+        margin: 0.5rem 0 1.75rem;
     }
 
     .stage::before,
     .stage::after {
         content: "";
         position: absolute;
-        height: 3rem;
+        height: 5rem;
         border: 1px solid var(--border);
         border-radius: var(--radius-xl);
-        background: var(--surface);
+        box-shadow: var(--shadow-sm);
         opacity: 0;
         transition: opacity 200ms;
     }
 
-    .stage::before {
-        inset: auto 1.75rem -0.9rem;
+    .stage::after {
+        inset: auto 1rem -0.625rem;
+        background: color-mix(in oklab, var(--surface) 70%, var(--bg));
     }
 
-    .stage::after {
-        inset: auto 0.9rem -0.45rem;
+    .stage::before {
+        inset: auto 2rem -1.25rem;
+        background: color-mix(in oklab, var(--surface) 40%, var(--bg));
     }
 
     .stage.two::after,
@@ -537,12 +542,12 @@
         min-height: 4rem;
         padding: 0.5rem 0.25rem;
         border-radius: 12px;
-        border-color: color-mix(in oklab, var(--tone) 45%, var(--border));
-        background: color-mix(in oklab, var(--tone) 9%, var(--surface));
+        border-color: color-mix(in oklab, var(--tone) 22%, var(--border));
+        background: color-mix(in oklab, var(--tone) 10%, var(--surface));
     }
 
     .grade:hover:not(:disabled) {
-        border-color: var(--tone);
+        border-color: color-mix(in oklab, var(--tone) 60%, var(--border));
         background: color-mix(in oklab, var(--tone) 17%, var(--surface));
     }
 
@@ -646,6 +651,18 @@
         margin-top: 0.5rem;
     }
 
+    /* On a wide screen the card grows into the window, up to a comfortable height. */
+    @media (min-width: 880px) {
+        .review {
+            min-height: calc(100dvh - 6.75rem);
+        }
+
+        .stage {
+            flex: 1;
+            max-height: 34rem;
+        }
+    }
+
     /* On a phone the card takes the screen and the answer buttons sit at the bottom, under the thumb. */
     @media (max-width: 879.98px) {
         .review {
@@ -661,12 +678,19 @@
             padding: 1.5rem 1.25rem;
         }
 
+        /* Like the card, the summary takes the screen, with its buttons at the bottom. */
         .done {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
             padding: 1.5rem 1.25rem;
         }
 
         .done-actions {
             width: 100%;
+            margin-top: auto;
+            padding-top: 1.5rem;
         }
 
         .done-actions .btn {

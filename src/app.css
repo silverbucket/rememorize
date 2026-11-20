@@ -25,10 +25,12 @@
     --text-muted: oklch(0.45 0.025 156);
     --text-faint: oklch(0.53 0.022 152);
     --accent: oklch(0.49 0.13 150);
-    --accent-hover: oklch(0.44 0.12 150);
     --accent-text: oklch(0.43 0.12 150);
-    --accent-ink: oklch(0.99 0.01 130);
     --accent-subtle: oklch(0.49 0.13 150 / 0.1);
+    /* Filled buttons. */
+    --primary: oklch(0.49 0.13 150);
+    --primary-hover: oklch(0.44 0.12 150);
+    --primary-ink: oklch(0.99 0.01 130);
     --danger: oklch(0.5 0.17 27);
     --again: oklch(0.52 0.17 27);
     --hard: oklch(0.54 0.12 68);
@@ -72,10 +74,12 @@
         --text-muted: oklch(0.74 0.02 155);
         --text-faint: oklch(0.62 0.02 155);
         --accent: oklch(0.82 0.14 152);
-        --accent-hover: oklch(0.87 0.13 152);
         --accent-text: oklch(0.82 0.14 152);
-        --accent-ink: oklch(0.22 0.03 160);
         --accent-subtle: oklch(0.82 0.14 152 / 0.13);
+        /* Deeper than the accent: a slab of mint would be the brightest thing on the board. */
+        --primary: oklch(0.5 0.115 152);
+        --primary-hover: oklch(0.55 0.12 152);
+        --primary-ink: oklch(0.97 0.025 150);
         --danger: oklch(0.76 0.13 25);
         --again: oklch(0.76 0.13 25);
         --hard: oklch(0.82 0.11 80);
@@ -98,10 +102,11 @@
     --text-muted: oklch(0.74 0.02 155);
     --text-faint: oklch(0.62 0.02 155);
     --accent: oklch(0.82 0.14 152);
-    --accent-hover: oklch(0.87 0.13 152);
     --accent-text: oklch(0.82 0.14 152);
-    --accent-ink: oklch(0.22 0.03 160);
     --accent-subtle: oklch(0.82 0.14 152 / 0.13);
+    --primary: oklch(0.5 0.115 152);
+    --primary-hover: oklch(0.55 0.12 152);
+    --primary-ink: oklch(0.97 0.025 150);
     --danger: oklch(0.76 0.13 25);
     --again: oklch(0.76 0.13 25);
     --hard: oklch(0.82 0.11 80);
@@ -311,14 +316,14 @@ input[type="file"].field::file-selector-button {
 }
 
 .btn.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--accent-ink);
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-ink);
 }
 
 .btn.primary:hover:not(:disabled) {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
 }
 
 .btn.danger {

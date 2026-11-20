@@ -265,9 +265,9 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.goto("/#/group/Drinks");
     await page.reload();
     await page.getByText("voda").click();
-    await expect(page.getByText("Next review (front → back)")).toBeVisible();
-    await expect(page.getByText("Next review (back → front)")).toBeVisible();
-    await expect(page.locator(".stats")).toContainText("not reviewed yet");
+    // Its schedule has a row for each direction: one studied today, one not yet.
+    await expect(page.getByRole("row", { name: /Front → back/ })).toContainText(/in \d+/);
+    await expect(page.getByRole("row", { name: /Back → front/ })).toContainText("not reviewed yet");
 });
 
 test("statistics follow reviews", async ({ page }) => {

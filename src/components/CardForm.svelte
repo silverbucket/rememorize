@@ -82,11 +82,11 @@
     <div class="pair">
         <label>
             <span>Hint <span class="optional">(optional)</span></span>
-            <input class="field" bind:value={hint} />
+            <input class="field content" bind:value={hint} />
         </label>
         <label>
             <span>Group</span>
-            <input class="field" bind:value={group} list="group-names" placeholder="default" />
+            <input class="field content" bind:value={group} list="group-names" placeholder="default" />
             <datalist id="group-names">
                 {#each library.groupNames() as name (name)}
                     <option value={name}></option>
@@ -125,18 +125,35 @@
 </form>
 
 {#if initial}
-    <dl class="panel stats">
-        {#each itemsOf(initial) as item (item.reverse)}
-            {@const review = stateOf(initial, item.reverse)}
-            {@const which = initial.direction === "both" ? (item.reverse ? " (back → front)" : " (front → back)") : ""}
-            <div><dt>Next review{which}</dt><dd>{review ? fromNow(review.due, library.now) : "not reviewed yet"}</dd></div>
-            <div><dt>Reviews{which}</dt><dd>{review?.reps ?? 0}</dd></div>
-            <div><dt>Lapses{which}</dt><dd>{review?.lapses ?? 0}</dd></div>
-        {/each}
-        <div><dt>Last reviewed</dt><dd>{formatDateTime(initial.reviewedAt ?? initial.review?.lastReview)}</dd></div>
-        <div><dt>Created</dt><dd>{formatDateTime(initial.createdAt)}</dd></div>
-        <div><dt>Updated</dt><dd>{formatDateTime(initial.updatedAt)}</dd></div>
-    </dl>
+    <section class="panel stats" aria-label="Schedule">
+        <!-- One row for each direction the card is studied in. -->
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Direction</th>
+                    <th scope="col">Next review</th>
+                    <th scope="col" class="num">Reviews</th>
+                    <th scope="col" class="num">Lapses</th>
+                </tr>
+            </thead>
+            <tbody>
+                {#each itemsOf(initial) as item (item.reverse)}
+                    {@const review = stateOf(initial, item.reverse)}
+                    <tr>
+                        <th scope="row">{item.reverse ? "Back → front" : "Front → back"}</th>
+                        <td>{review ? fromNow(review.due, library.now) : "not reviewed yet"}</td>
+                        <td class="num">{review?.reps ?? 0}</td>
+                        <td class="num">{review?.lapses ?? 0}</td>
+                    </tr>
+                {/each}
+            </tbody>
+        </table>
+        <dl>
+            <div><dt>Last reviewed</dt><dd>{formatDateTime(initial.reviewedAt ?? initial.review?.lastReview)}</dd></div>
+            <div><dt>Created</dt><dd>{formatDateTime(initial.createdAt)}</dd></div>
+            <div><dt>Updated</dt><dd>{formatDateTime(initial.updatedAt)}</dd></div>
+        </dl>
+    </section>
 
     <div class="danger-zone">
         <button class="btn danger" type="button" onclick={remove} disabled={saving}>
@@ -178,12 +195,23 @@
         font-size: 0.875rem;
     }
 
+    .field.content {
+        font-size: 1.125rem;
+        font-weight: 400;
+    }
+
     /* Two lines to start with, growing with what is typed where the browser can do that. */
     textarea.content {
         min-height: 4.4rem;
         font-size: 1.2rem;
-        font-weight: 400;
         field-sizing: content;
+    }
+
+    /* A box that grows by itself needs no handle to drag. */
+    @supports (field-sizing: content) {
+        textarea.content {
+            resize: none;
+        }
     }
 
     .buttons {
@@ -200,14 +228,51 @@
         margin-top: 2rem;
     }
 
-    /* The card's schedule: a row of three for each direction, then its dates. */
+    /* The card's schedule: a row for each direction, then its dates. */
     .stats {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1rem 1.5rem;
+        gap: 1.1rem;
         margin: 1rem 0 0;
         padding: 1.25rem 1.5rem;
         font-size: 0.925rem;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        padding: 0.45rem 1rem 0.45rem 0;
+        text-align: left;
+        font-weight: 400;
+    }
+
+    thead th {
+        padding-top: 0;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+    }
+
+    tbody tr {
+        border-top: 1px solid var(--border);
+    }
+
+    .num {
+        padding-right: 0;
+        padding-left: 1rem;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    dl {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem 1.5rem;
+        margin: 0;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
     }
 
     dt {
@@ -229,29 +294,32 @@
             grid-template-columns: 1fr;
         }
 
-        /* One fact per line, name on the left and value on the right. */
         .stats {
-            grid-template-columns: 1fr;
-            gap: 0;
-            padding: 0.4rem 1.1rem;
+            padding: 1.1rem;
         }
 
-        .stats div {
+        th,
+        td {
+            padding-right: 0.5rem;
+        }
+
+        /* One date per line, name on the left and value on the right. */
+        dl {
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+        }
+
+        dl div {
             display: flex;
             justify-content: space-between;
             gap: 1rem;
-            padding: 0.6rem 0;
         }
 
-        .stats div + div {
-            border-top: 1px solid var(--border);
-        }
-
-        .stats dt {
+        dt {
             font-size: inherit;
         }
 
-        .stats dd {
+        dd {
             margin: 0;
             text-align: right;
         }

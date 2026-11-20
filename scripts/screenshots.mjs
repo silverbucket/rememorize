@@ -525,10 +525,14 @@ const browserWindow = (shot, style) =>
 const phone = (shot, style) => `<div class="phone" style="${style}"><img src="${dataUrl(shot)}"></div>`;
 
 const LAYOUTS = {
-    /** The stats page in a browser window, with a review in progress on a phone in front of it. */
+    /**
+     * The stats page in a browser window, with a review in progress on a phone in front of it.
+     * The phone stands over the lower part of the sidebar, which is empty, and ends on the
+     * sidebar's edge, so it covers nothing and cuts through no text.
+     */
     hero: (scheme) => `
-        ${browserWindow(`desktop-stats-${scheme}`, "width: 760px; margin-right: 96px;")}
-        ${phone(`phone-review-${scheme}`, "width: 232px; position: absolute; right: 22px; bottom: 16px;")}`,
+        ${browserWindow(`desktop-stats-${scheme}`, "width: 780px; margin-left: 34px;")}
+        ${phone(`phone-review-${scheme}`, "width: 214px; position: absolute; left: 44px; bottom: 22px;")}`,
     /** Three phones side by side: groups, a group's cards, the forecast. */
     tour: (scheme) => `
         <div style="display: flex; gap: 34px;">

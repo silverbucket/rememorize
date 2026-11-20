@@ -89,9 +89,6 @@
                         <span class="name content">{group.name}</span>
                         <span class="count muted">{plural(group.total, "card")}</span>
                     </span>
-                    <span class="progress" title="{group.started} of {group.total} started" aria-hidden="true">
-                        <span style:width="{(group.started / group.total) * 100}%"></span>
-                    </span>
                     <!-- Due counts only reviews, so the groups add up to the total above; new cards are counted apart. -->
                     <span class="due">
                         {#if group.reviews > 0}
@@ -218,7 +215,7 @@
 
     .group {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 5rem minmax(7.5rem, auto) auto;
+        grid-template-columns: minmax(0, 1fr) auto auto;
         align-items: center;
         gap: 1rem;
         min-height: 4.25rem;
@@ -238,21 +235,6 @@
 
     .count {
         font-size: 0.875rem;
-    }
-
-    /* How much of the group has been started. */
-    .progress {
-        height: 6px;
-        border-radius: 3px;
-        background: var(--surface-3);
-        overflow: hidden;
-    }
-
-    .progress span {
-        display: block;
-        height: 100%;
-        border-radius: 3px;
-        background: var(--accent);
     }
 
     .due {
@@ -287,13 +269,13 @@
         }
 
         .group {
-            grid-template-columns: minmax(0, 1fr) auto auto;
             gap: 0.6rem;
             padding-left: 1rem;
         }
 
-        .progress {
-            display: none;
+        /* Under the title, the bordered button comes first so the row starts on the page's left edge. */
+        .page-head .ghost {
+            order: 1;
         }
     }
 </style>
