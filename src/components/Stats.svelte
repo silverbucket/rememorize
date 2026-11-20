@@ -431,6 +431,7 @@
     }
 
     .num {
+        padding-right: 0;
         padding-left: 0.75rem;
         text-align: right;
         white-space: nowrap;

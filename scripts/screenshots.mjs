@@ -448,6 +448,8 @@ async function capture(page) {
         stats: async () => {
             await page.goto(`${BASE}/?t=${now}#/stats`);
             await page.locator(".calendar").waitFor();
+            // Text reflows when the fonts arrive, which would move anything scrolled to before then.
+            await page.evaluate(() => document.fonts.ready);
         },
         // Further down the same page: the forecast.
         forecast: async () => {
@@ -457,14 +459,25 @@ async function capture(page) {
                 window.scrollTo(0, heading.closest("section").getBoundingClientRect().top + window.scrollY - 66);
             });
         },
+        // One card into the session, so the progress line has something to show.
+        // Returns the way back: the rating is undone, leaving the library as it was.
         question: async () => {
             await page.goto(`${BASE}/?t=${now}#${reviewHash}`);
-            await page.getByRole("button", { name: /Show answer/ }).waitFor();
+            const first = await page.locator(".side.front").textContent();
+            await page.getByRole("button", { name: /Show answer/ }).click();
+            await page.getByRole("button", { name: /Good/ }).click();
+            await page.locator(".side.front").filter({ hasNotText: first }).waitFor();
+            return async () => {
+                await page.getByRole("button", { name: /Undo/ }).click();
+                await page.locator(".side.front", { hasText: first }).waitFor();
+                await synced(page);
+            };
         },
         review: async () => {
-            await pages.question();
+            const undo = await pages.question();
             await page.getByRole("button", { name: /Show answer/ }).click();
             await page.locator(".grades").waitFor();
+            return undo;
         },
         group: async () => {
             await page.goto(`${BASE}/?t=${now}#/group/Spanish`);
@@ -485,11 +498,12 @@ async function capture(page) {
         await page.setViewportSize(viewport);
         await devtools.send("Emulation.setTouchEmulationEnabled", { enabled: device === "phone", maxTouchPoints: 5 });
         for (const [name, open] of Object.entries(pages)) {
-            await open();
+            const restore = await open();
             await page.mouse.move(0, 0);
             // Let the card's entrance and the answer's reveal finish.
             await page.waitForTimeout(350);
             await shoot(`${device}-${name}`);
+            await restore?.();
         }
     }
 }
@@ -616,9 +630,10 @@ try {
             const total = await seed(page, today.getTime());
             console.log(`Replayed ${total} reviews over ${DAYS} days in ${Math.round((Date.now() - started) / 1000)}s`);
             console.log(`Synced ${await connect(page, files)} documents to ${ADDRESS}`);
-            keepStorage(files);
         }
         await capture(page);
+        // After the captures: one of them rates a card and takes it back, which the storage saw.
+        keepStorage(files);
         await context.close();
     }
     await frame(browser);

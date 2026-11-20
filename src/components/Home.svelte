@@ -139,31 +139,35 @@
         margin-top: 0.5rem;
     }
 
-    /* Three blank cards, fanned: the deck that isn't there yet. */
+    /* A blank card on two more: the review card's stack in small, for the deck that isn't there yet. */
     .deck {
         position: relative;
-        width: 5.5rem;
-        height: 4.25rem;
-        margin-bottom: 0.75rem;
+        width: 7.5rem;
+        height: 5rem;
+        margin-bottom: 1.5rem;
     }
 
     .deck span {
         position: absolute;
-        inset: 0.5rem 0 0;
-        border: 1.5px solid var(--border-strong);
-        border-radius: 10px;
-        background: var(--surface);
-        transform-origin: 50% 120%;
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        box-shadow: var(--shadow-sm);
     }
 
     .deck span:nth-child(1) {
-        transform: rotate(-9deg);
-        background: var(--surface-2);
+        inset: 1rem 1rem -0.75rem;
+        background: color-mix(in oklab, var(--surface) 40%, var(--bg));
     }
 
     .deck span:nth-child(2) {
-        transform: rotate(7deg);
-        background: var(--surface-2);
+        inset: 0.5rem 0.5rem -0.375rem;
+        background: color-mix(in oklab, var(--surface) 70%, var(--bg));
+    }
+
+    .deck span:nth-child(3) {
+        inset: 0;
+        background: var(--surface);
+        box-shadow: var(--shadow);
     }
 
     .today {
@@ -278,6 +282,12 @@
         .group {
             gap: 0.6rem;
             padding-left: 1rem;
+        }
+
+        /* Both ways to start, one above the other at full width. */
+        .empty-actions {
+            flex-direction: column;
+            align-self: stretch;
         }
 
         /* The title and New card share one row; importing is in Settings too. */
