@@ -343,6 +343,16 @@ export class Library {
         return run;
     }
 
+    /** Rename a group. Onto the name of a group that exists, its cards join the ones there. */
+    async renameGroup(from: string, to: string): Promise<void> {
+        if (to === from) return;
+        const cards = this.cardsIn(from);
+        // A card is stored under its id, so one with the same id in the other group would be overwritten.
+        const clash = cards.find((c) => this.find(to, c["@id"]));
+        if (clash) throw new Error(`"${to}" already has a card with the same id as "${clash.frontText}".`);
+        for (const card of cards) await this.save({ ...card, group: to }, from);
+    }
+
     async remove(card: Flashcard): Promise<void> {
         await this.#rs.flashcards.remove(card.group, card["@id"]);
         const next = { ...this.#cards };

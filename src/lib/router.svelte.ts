@@ -4,20 +4,27 @@
  * restore the route via its `state` parameter.
  *
  *   #/                     home (groups)
+ *   #/cards                every card, whatever its group
  *   #/group/:group         cards in a group
  *   #/card/:group/:id      edit a card
  *   #/new?group=:group     new card
  *   #/review[/:group]      review due cards
+ *
+ * The card lists and the review take `?show=:view` to keep to one view (see `views.ts`).
+ *
  *   #/account              storage connection
  *   #/import[?from=settings]  import cards from a file (and where to go back to)
  *   #/stats                review statistics
  */
+import { parseView, type ViewId } from "./views";
+
 export type Route =
     | { name: "home" }
-    | { name: "group"; group: string }
+    | { name: "cards"; show?: ViewId }
+    | { name: "group"; group: string; show?: ViewId }
     | { name: "edit"; group: string; id: string }
     | { name: "new"; group?: string }
-    | { name: "review"; group?: string }
+    | { name: "review"; group?: string; show?: ViewId }
     | { name: "account" }
     | { name: "import"; from?: "settings" }
     | { name: "stats" };
@@ -33,9 +40,13 @@ export function parseHash(hash: string): Route {
         return { name: "home" };
     }
     const [page, a, b] = parts;
+    const view = parseView(params.get("show"));
+    const show = view ? { show: view } : {};
     switch (page) {
+        case "cards":
+            return { name: "cards", ...show };
         case "group":
-            return a ? { name: "group", group: a } : { name: "home" };
+            return a ? { name: "group", group: a, ...show } : { name: "home" };
         case "card":
             return a && b ? { name: "edit", group: a, id: b } : { name: "home" };
         case "new": {
@@ -43,7 +54,7 @@ export function parseHash(hash: string): Route {
             return group ? { name: "new", group } : { name: "new" };
         }
         case "review":
-            return a ? { name: "review", group: a } : { name: "review" };
+            return a ? { name: "review", group: a, ...show } : { name: "review", ...show };
         case "account":
             return { name: "account" };
         case "import":
@@ -56,13 +67,15 @@ export function parseHash(hash: string): Route {
 }
 
 const enc = encodeURIComponent;
+const shown = (show?: ViewId) => (show ? `?show=${show}` : "");
 
 export const href = {
     home: () => "#/",
-    group: (group: string) => `#/group/${enc(group)}`,
+    cards: (show?: ViewId) => `#/cards${shown(show)}`,
+    group: (group: string, show?: ViewId) => `#/group/${enc(group)}${shown(show)}`,
     card: (group: string, id: string) => `#/card/${enc(group)}/${enc(id)}`,
     newCard: (group?: string) => (group ? `#/new?group=${enc(group)}` : "#/new"),
-    review: (group?: string) => (group ? `#/review/${enc(group)}` : "#/review"),
+    review: (group?: string, show?: ViewId) => `${group ? `#/review/${enc(group)}` : "#/review"}${shown(show)}`,
     account: () => "#/account",
     import: (from?: "settings") => (from ? `#/import?from=${from}` : "#/import"),
     stats: () => "#/stats",

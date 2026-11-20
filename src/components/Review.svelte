@@ -14,14 +14,18 @@
         stateOf,
     } from "../lib/scheduler";
     import { library } from "../lib/state";
+    import { inView, labelOf, type ViewId } from "../lib/views";
     import Icon from "./Icon.svelte";
 
-    let { group }: { group?: string } = $props();
+    let { group, show }: { group?: string; show?: ViewId } = $props();
 
     /** Cards rated "Again" (or still in learning steps) come back this session. */
     const REQUEUE_WITHIN_MS = 20 * 60 * 1000;
 
-    const scope = $derived(group ? library.cardsIn(group) : library.cards);
+    const within = $derived(group ? library.cardsIn(group) : library.cards);
+    const scope = $derived(show ? within.filter((c) => inView(c, show, library.now)) : within);
+    /** What is being reviewed, for the heading: the group, the view, or both. */
+    const title = $derived([group, show && labelOf(show)].filter(Boolean).join(" · "));
 
     let queue: ReviewItem[] = $state([]);
     let started = $state(false);
@@ -56,7 +60,7 @@
     const revealed = $derived(currentKey !== "" && revealedFor === currentKey);
     const showHint = $derived(currentKey !== "" && hintFor === currentKey);
     const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt, reverse) : undefined);
-    const back = $derived(group ? href.group(group) : href.home());
+    const back = $derived(group ? href.group(group, show) : show ? href.cards(show) : href.home());
     const held = $derived(heldUntilTomorrow(scope, library.now));
     /** How far through the session: ratings given, out of those plus what is left. */
     const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
@@ -164,7 +168,7 @@
 <div class="review">
     <div class="session">
         <a class="btn ghost end" href={back} aria-label="End review" title="End review"><Icon name="close" /></a>
-        <h1>Review{group ? `: ${group}` : ""}</h1>
+        <h1>Review{title ? `: ${title}` : ""}</h1>
         <div class="head-side">
             {#if last}
                 <button class="btn ghost undo" type="button" onclick={undo} disabled={busy}>
@@ -254,7 +258,7 @@
                         </li>
                     {/each}
                 </ul>
-            {:else if scope.length === 0}
+            {:else if within.length === 0}
                 <h2>No cards to review</h2>
                 <p>Add some cards first.</p>
             {:else}
