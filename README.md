@@ -45,8 +45,8 @@ devices.
 
 **Smart scheduling**
 
-Rate each answer: Again, Hard, Good or Easy. Easy cards come back in months,
-hard ones in days. It uses
+Rate each answer: Again, Hard, Good or Easy. Cards you know come back less and
+less often. Cards you miss come back soon. It uses
 [FSRS](https://github.com/open-spaced-repetition/ts-fsrs), the same algorithm
 as Anki.
 
@@ -55,7 +55,8 @@ as Anki.
 
 **Works offline**
 
-Install it on your phone or desktop. Everything works without a connection.
+Install it on your phone or desktop. Study and edit your cards without a
+connection.
 
 </td>
 </tr>
@@ -88,8 +89,8 @@ A review calendar, your streak, how much you remember and what is due next.
 
 **Import and export**
 
-Bring in cards from CSV or Anki. A daily limit on new cards keeps a big deck
-manageable. Export whenever you like.
+Bring in cards from CSV or Anki's plain-text export. A daily limit on new
+cards keeps a big deck manageable. Export whenever you like.
 
 </td>
 </tr>
