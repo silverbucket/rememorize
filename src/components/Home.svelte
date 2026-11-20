@@ -287,7 +287,7 @@
         /* Both ways to start, one above the other at full width. */
         .empty-actions {
             flex-direction: column;
-            align-self: stretch;
+            justify-self: stretch;
         }
 
         /* The title and New card share one row; importing is in Settings too. */
