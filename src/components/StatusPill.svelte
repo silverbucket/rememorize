@@ -43,9 +43,11 @@
             color 120ms;
     }
 
-    .pill:hover {
-        border-color: var(--border-strong);
-        color: var(--text);
+    @media (hover: hover) {
+        .pill:hover {
+            border-color: var(--border-strong);
+            color: var(--text);
+        }
     }
 
     .text {

@@ -153,7 +153,7 @@
 
         {#if plan.add.length}
             <table>
-                <thead><tr><th>Front</th><th>Back</th><th>Group</th></tr></thead>
+                <thead><tr><th>Front</th><th>Back</th><th class="where">Group</th></tr></thead>
                 <tbody>
                     {#each plan.add.slice(0, 5) as card, i (i)}
                         <tr><td class="content">{card.frontText}</td><td class="content">{card.backText}</td><td>{card.group}</td></tr>
@@ -201,8 +201,10 @@
         cursor: pointer;
     }
 
-    summary:hover {
-        color: var(--text);
+    @media (hover: hover) {
+        summary:hover {
+            color: var(--text);
+        }
     }
 
     .formats {
@@ -267,6 +269,11 @@
         color: var(--text-muted);
         font-size: 0.85rem;
         font-weight: 600;
+    }
+
+    /* The group is short; the card's two sides get the room. */
+    .where {
+        width: 22%;
     }
 
     td.content {

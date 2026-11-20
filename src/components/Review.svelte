@@ -546,9 +546,11 @@
         background: color-mix(in oklab, var(--tone) 10%, var(--surface));
     }
 
-    .grade:hover:not(:disabled) {
-        border-color: color-mix(in oklab, var(--tone) 60%, var(--border));
-        background: color-mix(in oklab, var(--tone) 17%, var(--surface));
+    @media (hover: hover) {
+        .grade:hover:not(:disabled) {
+            border-color: color-mix(in oklab, var(--tone) 60%, var(--border));
+            background: color-mix(in oklab, var(--tone) 17%, var(--surface));
+        }
     }
 
     .grade small {
