@@ -5,6 +5,7 @@
     import { href, router } from "../lib/router.svelte";
     import { itemsOf, stateOf } from "../lib/scheduler";
     import { library } from "../lib/state";
+    import Icon from "./Icon.svelte";
 
     let { card, initialGroup }: { card?: Flashcard; initialGroup?: string } = $props();
 
@@ -68,28 +69,32 @@
 </script>
 
 <form class="panel form" onsubmit={save}>
-    <label>
-        <span>Front</span>
-        <textarea id="front" class="field" bind:value={frontText} required rows="2"></textarea>
-    </label>
-    <label>
-        <span>Back</span>
-        <textarea class="field" bind:value={backText} required rows="2"></textarea>
-    </label>
-    <label>
-        <span>Hint <span class="muted">(optional)</span></span>
-        <input class="field" bind:value={hint} />
-    </label>
-    <label>
-        <span>Group</span>
-        <input class="field" bind:value={group} list="group-names" placeholder="default" />
-        <datalist id="group-names">
-            {#each library.groupNames() as name (name)}
-                <option value={name}></option>
-            {/each}
-        </datalist>
-        {#if groupError}<small class="error">{groupError}</small>{/if}
-    </label>
+    <div class="faces">
+        <label>
+            <span>Front</span>
+            <textarea id="front" class="field content" bind:value={frontText} required rows="3"></textarea>
+        </label>
+        <label>
+            <span>Back</span>
+            <textarea class="field content" bind:value={backText} required rows="3"></textarea>
+        </label>
+    </div>
+    <div class="pair">
+        <label>
+            <span>Hint <span class="optional">(optional)</span></span>
+            <input class="field" bind:value={hint} />
+        </label>
+        <label>
+            <span>Group</span>
+            <input class="field" bind:value={group} list="group-names" placeholder="default" />
+            <datalist id="group-names">
+                {#each library.groupNames() as name (name)}
+                    <option value={name}></option>
+                {/each}
+            </datalist>
+            {#if groupError}<small class="error">{groupError}</small>{/if}
+        </label>
+    </div>
 
     <!-- Not wrapped in the label: the options would become part of its name. -->
     <div class="labelled">
@@ -107,7 +112,9 @@
 
     <div class="buttons">
         {#if initial}
-            <button class="btn danger" type="button" onclick={remove} disabled={saving}>Delete</button>
+            <button class="btn danger" type="button" onclick={remove} disabled={saving}>
+                <Icon name="trash" size={18} />Delete
+            </button>
         {/if}
         <span class="spacer"></span>
         {#if !initial}
@@ -120,7 +127,7 @@
 </form>
 
 {#if initial}
-    <dl class="stats">
+    <dl class="panel stats">
         {#each itemsOf(initial) as item (item.reverse)}
             {@const review = stateOf(initial, item.reverse)}
             {@const which = initial.direction === "both" ? (item.reverse ? " (back → front)" : " (front → back)") : ""}
@@ -137,40 +144,109 @@
 <style>
     .form {
         display: grid;
-        gap: 1rem;
+        gap: 1.1rem;
+        padding: 1.5rem;
+    }
+
+    .faces,
+    .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.1rem 1rem;
     }
 
     label,
     .labelled {
         display: grid;
-        gap: 0.35rem;
+        align-content: start;
+        gap: 0.4rem;
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.925rem;
+    }
+
+    .optional {
+        color: var(--text-muted);
+        font-weight: 400;
+    }
+
+    textarea.content {
+        font-size: 1.2rem;
+        font-weight: 400;
     }
 
     .buttons {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
+        padding-top: 0.25rem;
     }
 
     .spacer {
         flex: 1;
     }
 
+    /* The card's schedule: a row of three for each direction, then its dates. */
     .stats {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-        gap: 0.75rem;
-        margin: 1.25rem 0 0;
-        font-size: 0.85rem;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem 1.5rem;
+        margin: 1rem 0 0;
+        padding: 1.25rem 1.5rem;
+        font-size: 0.925rem;
     }
 
     dt {
         color: var(--text-muted);
+        font-size: 0.85rem;
     }
 
     dd {
-        margin: 0;
+        margin: 0.1rem 0 0;
+    }
+
+    @media (max-width: 560px) {
+        .form {
+            padding: 1.1rem;
+        }
+
+        .faces,
+        .pair {
+            grid-template-columns: 1fr;
+        }
+
+        .buttons .btn {
+            flex: 1 1 auto;
+        }
+
+        /* One fact per line, name on the left and value on the right. */
+        .stats {
+            grid-template-columns: 1fr;
+            gap: 0;
+            padding: 0.4rem 1.1rem;
+        }
+
+        .stats div {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.6rem 0;
+        }
+
+        .stats div + div {
+            border-top: 1px solid var(--border);
+        }
+
+        .stats dt {
+            font-size: inherit;
+        }
+
+        .stats dd {
+            margin: 0;
+            text-align: right;
+        }
+
+        .spacer {
+            display: none;
+        }
     }
 </style>

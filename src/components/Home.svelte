@@ -1,18 +1,30 @@
 <script lang="ts">
-    import { plural } from "../lib/format";
+    import { fromNow, plural } from "../lib/format";
     import { href } from "../lib/router.svelte";
+    import { isNew, nextDue } from "../lib/scheduler";
     import { library } from "../lib/state";
+    import { lastDays, streak } from "../lib/stats";
+    import Icon from "./Icon.svelte";
+
+    const queue = $derived(library.dueIn(library.cards));
+    const fresh = $derived(queue.filter((i) => isNew(i.card, i.reverse)).length);
+    const next = $derived(nextDue(library.cards, library.now));
+    const days = $derived(streak(library.log, library.now));
+    const reviewedToday = $derived(lastDays(library.log, library.now, 1)[0].reviews);
+
+    /** "6 to review and 4 new", leaving out whichever is zero. */
+    const breakdown = $derived(
+        [queue.length - fresh > 0 ? `${queue.length - fresh} to review` : "", fresh > 0 ? `${fresh} new` : ""]
+            .filter(Boolean)
+            .join(" and "),
+    );
 </script>
 
 <div class="page-head">
     <h1>Your cards</h1>
     <div class="actions">
-        <a class="btn ghost" href={href.stats()}>Stats</a>
-        <a class="btn ghost" href={href.import()}>Import</a>
-        <a class="btn" href={href.newCard()}>New card</a>
-        {#if library.dueCount > 0}
-            <a class="btn primary" href={href.review()}>Review {library.dueCount} due</a>
-        {/if}
+        <a class="btn ghost" href={href.import()}><Icon name="import" />Import</a>
+        <a class="btn" href={href.newCard()}><Icon name="plus" />New card</a>
     </div>
 </div>
 
@@ -24,6 +36,7 @@
     <p class="muted">Loading…</p>
 {:else if library.groups.length === 0}
     <div class="panel empty">
+        <div class="deck" aria-hidden="true"><span></span><span></span><span></span></div>
         <h2>No cards yet</h2>
         <p>
             Add a card to get started. Cards are grouped by topic, and Rememorize schedules each one for review just
@@ -35,18 +48,58 @@
                 <a href={href.account()}>Connect a remoteStorage account</a> to sync them across devices.
             {/if}
         </p>
-        <a class="btn primary" href={href.newCard()}>Add your first card</a>
+        <div class="empty-actions">
+            <a class="btn primary" href={href.newCard()}>Add your first card</a>
+        </div>
     </div>
 {:else}
-    <ul class="groups">
+    <section class="panel today" aria-label="Today">
+        <div class="today-text">
+            {#if queue.length > 0}
+                <p class="headline">{plural(queue.length, "card")} due today</p>
+                <p class="muted">{breakdown}</p>
+            {:else}
+                <p class="headline">You're all caught up</p>
+                <p class="muted">
+                    {#if library.newWaiting > 0}
+                        {plural(library.newWaiting, "new card")} waiting for tomorrow.
+                    {:else if next}
+                        The next card is due {fromNow(next.toISOString(), library.now)}.
+                    {:else}
+                        Nothing is scheduled yet.
+                    {/if}
+                </p>
+            {/if}
+        </div>
+        {#if queue.length > 0}
+            <a class="btn primary large" href={href.review()}>Review {queue.length} due</a>
+        {/if}
+        <ul class="facts">
+            <li class:lit={days > 0}><Icon name="flame" size={18} />{plural(days, "day")} in a row</li>
+            <li class:lit={reviewedToday > 0}><Icon name="check" size={18} />{reviewedToday} reviewed today</li>
+        </ul>
+    </section>
+
+    <h2 class="section">Groups</h2>
+    <ul class="groups rows">
         {#each library.groups as group (group.name)}
             <li>
-                <a class="panel group" href={href.group(group.name)}>
-                    <span class="name">{group.name}</span>
-                    <span class="muted">{plural(group.total, "card")}</span>
-                    {#if group.due > 0}
-                        <span class="badge" title="Due for review">{group.due} due</span>
-                    {/if}
+                <a class="group" href={href.group(group.name)}>
+                    <span class="about">
+                        <span class="name content">{group.name}</span>
+                        <span class="count muted">
+                            {plural(group.total, "card")}{#if group.started < group.total}, {group.started} started{/if}
+                        </span>
+                    </span>
+                    <span class="progress" aria-hidden="true">
+                        <span style:width="{(group.started / group.total) * 100}%"></span>
+                    </span>
+                    <span class="due">
+                        {#if group.due > 0}
+                            <span class="badge" title="Due for review">{group.due} due</span>
+                        {/if}
+                    </span>
+                    <span class="go"><Icon name="chevron" size={18} /></span>
                 </a>
             </li>
         {/each}
@@ -61,42 +114,177 @@
 <style>
     .empty {
         display: grid;
-        gap: 0.5rem;
+        gap: 0.75rem;
         justify-items: start;
+        padding: 2rem 1.5rem;
+    }
+
+    .empty h2 {
+        font-family: var(--font-content);
+        font-size: 1.5rem;
+        font-weight: 560;
     }
 
     .empty p {
-        margin: 0;
+        max-width: 34rem;
     }
 
-    .groups {
+    .empty-actions {
+        margin-top: 0.5rem;
+    }
+
+    /* Three blank cards, fanned: the deck that isn't there yet. */
+    .deck {
+        position: relative;
+        width: 5.5rem;
+        height: 4.25rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .deck span {
+        position: absolute;
+        inset: 0.5rem 0 0;
+        border: 1.5px solid var(--border-strong);
+        border-radius: 10px;
+        background: var(--surface);
+        transform-origin: 50% 120%;
+    }
+
+    .deck span:nth-child(1) {
+        transform: rotate(-9deg);
+        background: var(--surface-2);
+    }
+
+    .deck span:nth-child(2) {
+        transform: rotate(7deg);
+        background: var(--surface-2);
+    }
+
+    .today {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 1rem 1.5rem;
+        padding: 1.5rem;
+    }
+
+    .headline {
+        font-family: var(--font-content);
+        font-size: clamp(1.5rem, 1.25rem + 1vw, 1.85rem);
+        font-weight: 540;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+    }
+
+    .today-text .muted {
+        margin-top: 0.3rem;
+    }
+
+    .facts {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1.5rem;
         list-style: none;
         margin: 0;
-        padding: 0;
-        display: grid;
-        gap: 0.6rem;
+        padding: 0.9rem 0 0;
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 0.925rem;
+    }
+
+    .facts li {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .facts li :global(.icon) {
+        color: var(--text-faint);
+    }
+
+    .facts .lit :global(.icon) {
+        color: var(--accent-text);
+    }
+
+    .section {
+        margin: 2rem 0 0.75rem;
+        color: var(--text-muted);
+        font-size: 0.925rem;
+        font-weight: 600;
     }
 
     .group {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 5rem minmax(4.25rem, auto) auto;
         align-items: center;
-        gap: 0.75rem;
-        color: var(--text);
-        text-decoration: none;
+        gap: 1rem;
+        min-height: 4.25rem;
+        padding: 0.75rem 0.75rem 0.75rem 1.25rem;
     }
 
-    .group:hover {
-        border-color: var(--text-muted);
+    .about {
+        display: grid;
+        gap: 0.1rem;
     }
 
     .name {
-        flex: 1;
-        font-weight: 600;
+        font-size: 1.2rem;
+        font-weight: 560;
         overflow-wrap: anywhere;
     }
 
+    .count {
+        font-size: 0.875rem;
+    }
+
+    /* How much of the group has been started. */
+    .progress {
+        height: 6px;
+        border-radius: 3px;
+        background: var(--surface-3);
+        overflow: hidden;
+    }
+
+    .progress span {
+        display: block;
+        height: 100%;
+        border-radius: 3px;
+        background: var(--accent);
+    }
+
+    .due {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .go {
+        color: var(--text-faint);
+    }
+
     .hint {
-        margin-top: 1.5rem;
-        font-size: 0.9rem;
+        margin-top: 1.25rem;
+        font-size: 0.925rem;
+    }
+
+    @media (max-width: 560px) {
+        .today {
+            grid-template-columns: 1fr;
+            padding: 1.25rem;
+        }
+
+        .today .btn {
+            width: 100%;
+        }
+
+        .group {
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 0.6rem;
+            padding-left: 1rem;
+        }
+
+        .progress {
+            display: none;
+        }
     }
 </style>

@@ -18,7 +18,7 @@ import {
     type Settings,
 } from "remotestorage-module-flashcards";
 import type { RSWithModules } from "./rs";
-import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
+import { dueItems, type Grade, isNew, itemsOf, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
 import { DEFAULT_NEW_PER_DAY, parseNewPerDay, saveNewPerDay } from "./settings";
 
 export type ConnectionStatus = "local" | "connecting" | "connected" | "unauthorized";
@@ -27,6 +27,8 @@ export interface GroupSummary {
     name: string;
     total: number;
     due: number;
+    /** Cards reviewed at least once, in either direction. */
+    started: number;
 }
 
 type ChangeEvent = { relativePath?: string; newValue?: unknown; origin?: string };
@@ -80,7 +82,12 @@ export class Library {
             byName.set(card.group, list);
         }
         return [...byName.entries()]
-            .map(([name, cards]) => ({ name, total: cards.length, due: this.dueIn(cards).length }))
+            .map(([name, cards]) => ({
+                name,
+                total: cards.length,
+                due: this.dueIn(cards).length,
+                started: cards.filter((c) => itemsOf(c).some((i) => !isNew(c, i.reverse))).length,
+            }))
             .sort((a, b) => a.name.localeCompare(b.name));
     });
 

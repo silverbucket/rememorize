@@ -3,7 +3,9 @@
     import { href } from "../lib/router.svelte";
     import { MAX_NEW_PER_DAY, parseNewPerDay } from "../lib/settings";
     import { library } from "../lib/state";
+    import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from "../lib/theme";
     import { exportCsv, exportJson } from "../lib/transfer";
+    import Icon from "./Icon.svelte";
 
     const ADDRESS_KEY = "rememorize:userAddress";
 
@@ -54,6 +56,14 @@
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
+    let theme: Theme = $state(untrack(loadTheme));
+
+    function setTheme(value: Theme) {
+        theme = value;
+        saveTheme(value);
+        applyTheme(value);
+    }
+
     function disconnect() {
         if (
             !confirm(
@@ -66,7 +76,6 @@
     }
 </script>
 
-<a class="crumb" href={href.home()}>← All groups</a>
 <div class="page-head">
     <h1>Settings</h1>
 </div>
@@ -75,14 +84,16 @@
     <p class="error" role="alert">{library.error}</p>
 {/if}
 
-<div class="panel">
+<section class="panel">
     {#if library.status === "connected" || library.status === "unauthorized"}
-        <p>
-            Connected as <strong>{library.userAddress}</strong>.
-            {#if library.offline}
-                <span class="muted">You're offline; changes will sync when you're back.</span>
-            {/if}
+        <h2>Storage</h2>
+        <p class="account">
+            <span class="dot" class:warn={library.status === "unauthorized"} aria-hidden="true"></span>
+            <span>Connected as <strong>{library.userAddress}</strong>.</span>
         </p>
+        {#if library.offline}
+            <p class="muted">You're offline; changes will sync when you're back.</p>
+        {/if}
         <p class="muted">
             Your cards live on your own <a href="https://remotestorage.io" target="_blank" rel="noreferrer"
                 >remoteStorage</a
@@ -96,7 +107,7 @@
         </div>
     {:else}
         <form class="connect" onsubmit={connect}>
-            <label for="address">Connect your storage</label>
+            <label class="title" for="address">Connect your storage</label>
             <p class="muted">
                 Your cards are currently saved in this browser only. Connect a
                 <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> account to back them
@@ -121,10 +132,10 @@
             </div>
         </form>
     {/if}
-</div>
+</section>
 
-<div class="panel review-settings">
-    <label for="new-per-day">New cards per day</label>
+<section class="panel">
+    <label class="title" for="new-per-day">New cards per day</label>
     <p class="muted">
         How many unseen cards to introduce each day, across all groups. Reviews of cards you've already started aren't
         limited. This setting is saved with your cards, so it's the same on every device you connect.
@@ -143,9 +154,28 @@
         <span class="muted">Started today: {library.startedToday}</span>
     </div>
     {#if settingsError}<p class="error" role="alert">{settingsError}</p>{/if}
-</div>
+</section>
 
-<div class="panel data">
+<section class="panel">
+    <h2 id="appearance">Appearance</h2>
+    <p class="muted">Light is tinted like ledger paper, dark like a chalkboard. This applies to this browser only.</p>
+    <div class="segments" role="radiogroup" aria-labelledby="appearance">
+        {#each THEMES as option (option.value)}
+            <label>
+                <input
+                    type="radio"
+                    name="theme"
+                    value={option.value}
+                    checked={theme === option.value}
+                    onchange={() => setTheme(option.value)}
+                />
+                <span>{option.label}</span>
+            </label>
+        {/each}
+    </div>
+</section>
+
+<section class="panel">
     <h2>Your cards</h2>
     <p class="muted">
         Export a full backup (JSON, including review progress), or a spreadsheet of fronts, backs, hints and groups (CSV).
@@ -156,73 +186,158 @@
             class="btn"
             type="button"
             disabled={library.cards.length === 0}
-            onclick={() => download(exportJson(library.cards), "application/json", "json")}>Export backup (JSON)</button
+            onclick={() => download(exportJson(library.cards), "application/json", "json")}
+            ><Icon name="export" size={18} />Export backup (JSON)</button
         >
         <button
             class="btn"
             type="button"
             disabled={library.cards.length === 0}
-            onclick={() => download(exportCsv(library.cards), "text/csv", "csv")}>Export CSV</button
+            onclick={() => download(exportCsv(library.cards), "text/csv", "csv")}
+            ><Icon name="export" size={18} />Export CSV</button
         >
-        <a class="btn" href={href.import()}>Import…</a>
+        <a class="btn" href={href.import()}><Icon name="import" size={18} />Import…</a>
     </div>
-</div>
+</section>
 
 <p class="muted version">Rememorize {__APP_VERSION__}</p>
 
 <style>
-    .panel > p {
-        margin-top: 0;
+    section {
+        display: grid;
+        gap: 0.75rem;
+        padding: 1.5rem;
+    }
+
+    section + section {
+        margin-top: 1rem;
+    }
+
+    .connect {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    /* A label that also heads its section. */
+    .title {
+        font-size: 1.0625rem;
+        font-weight: 650;
+        letter-spacing: -0.005em;
+        line-height: 1.15;
+    }
+
+    section p {
+        max-width: 38rem;
+    }
+
+    .account {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+        overflow-wrap: anywhere;
+    }
+
+    .dot {
+        flex: none;
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-subtle);
+        transform: translateY(-0.05rem);
+    }
+
+    .dot.warn {
+        background: var(--hard);
+        box-shadow: none;
     }
 
     .buttons {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
+        margin-top: 0.25rem;
     }
 
-    .data {
-        margin-top: 1rem;
-    }
-
-    .data h2 {
-        font-size: 1.1rem;
-    }
-
-    .data p {
-        margin: 0.25rem 0 0.75rem;
-    }
-
-    .review-settings {
-        margin-top: 1rem;
-    }
-
-    .review-settings p {
-        margin: 0.25rem 0 0.75rem;
+    .row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 0.25rem;
     }
 
     .number {
         width: 7rem;
     }
 
-    .row {
-        align-items: center;
+    /* Three choices, one of them always on. */
+    .segments {
+        display: inline-grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        justify-self: start;
+        gap: 3px;
+        margin-top: 0.25rem;
+        padding: 3px;
+        border-radius: 12px;
+        background: var(--surface-3);
     }
 
-    .review-settings label,
-    .connect label {
-        font-weight: 700;
-        font-size: 1.1rem;
+    .segments label {
+        position: relative;
+        cursor: pointer;
     }
 
-    .row {
-        display: flex;
-        gap: 0.5rem;
+    .segments input {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .segments span {
+        display: block;
+        min-width: 5.25rem;
+        padding: 0.5rem 1rem;
+        border-radius: 9px;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-align: center;
+        transition:
+            background-color 120ms,
+            color 120ms;
+    }
+
+    .segments input:checked + span {
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .segments input:focus-visible + span {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
     }
 
     .version {
         margin-top: 2rem;
-        font-size: 0.8rem;
+        font-size: 0.85rem;
         text-align: center;
+        color: var(--text-faint);
+    }
+
+    @media (max-width: 560px) {
+        section {
+            padding: 1.1rem;
+        }
+
+        .segments {
+            justify-self: stretch;
+        }
+
+        .segments span {
+            min-width: 0;
+        }
     }
 </style>

@@ -2,7 +2,6 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/rememorize-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/rememorize-light.svg">
   <img alt="Rememorize" src="docs/assets/rememorize.svg" width="340">
 </picture>
 
@@ -12,8 +11,8 @@ Works offline. No account needed.<br>
 Sync through your own remoteStorage.
 
 [![CI](https://github.com/silverbucket/rememorize/actions/workflows/ci.yml/badge.svg)](https://github.com/silverbucket/rememorize/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/silverbucket/rememorize?color=2f8f0a)](https://github.com/silverbucket/rememorize/releases)
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-2f8f0a)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/silverbucket/rememorize?color=158f44)](https://github.com/silverbucket/rememorize/releases)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-158f44)](LICENSE)
 [![remoteStorage](https://img.shields.io/badge/storage-remoteStorage-FF4B03)](https://remotestorage.io)
 
 **[Open Rememorize →](https://rememorize.5apps.com)**
@@ -56,7 +55,8 @@ as Anki.
 **Works offline**
 
 Install it on your phone or desktop. Study and edit your cards without a
-connection.
+connection. On a phone, a review fills the screen and the answer buttons sit
+under your thumb.
 
 </td>
 </tr>
@@ -83,6 +83,7 @@ Study a card front to back, back to front, or both.
 **Progress you can see**
 
 A review calendar, your streak, how much you remember and what is due next.
+Each group shows how many of its cards you have started.
 
 </td>
 <td width="50%" valign="top">
@@ -91,6 +92,23 @@ A review calendar, your streak, how much you remember and what is due next.
 
 Bring in cards from CSV or Anki's plain-text export. A daily limit on new
 cards keeps a big deck manageable. Export whenever you like.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**Easy on the eyes**
+
+Light is tinted like ledger paper, dark like a chalkboard. It follows your
+system, or you choose.
+
+</td>
+<td width="50%" valign="top">
+
+**Quick with a keyboard**
+
+Space shows the answer, 1 to 4 rate it, and U takes the last rating back.
 
 </td>
 </tr>
@@ -111,16 +129,17 @@ cards keeps a big deck manageable. Export whenever you like.
 1. Open **[rememorize.5apps.com](https://rememorize.5apps.com)**.
 2. Add a card, or import a deck.
 3. Press **Review** when cards are due. A few minutes a day is enough.
+4. Tap a card to see its answer, then say how well you knew it.
 
 To install it, use your browser's _Install_ or _Add to Home Screen_.
 
 ### Keyboard
 
-| Key                                                 | Action                       |
-| --------------------------------------------------- | ---------------------------- |
-| <kbd>Space</kbd> or <kbd>Enter</kbd>                | Show the answer              |
-| <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> | Rate Again, Hard, Good, Easy |
-| <kbd>U</kbd>                                        | Undo the last rating         |
+| Key                                                   | Action                       |
+| ----------------------------------------------------- | ---------------------------- |
+| <kbd>Space</kbd> or <kbd>Enter</kbd>, or tap the card | Show the answer              |
+| <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd>   | Rate Again, Hard, Good, Easy |
+| <kbd>U</kbd>                                          | Undo the last rating         |
 
 ## Your cards, your storage
 
@@ -128,12 +147,13 @@ To install it, use your browser's _Install_ or _Add to Home Screen_.
 belongs to you. You sign up with a storage provider, not with the app, or you
 run your own server.
 
-To link yours, tap the status pill in the top right and enter your address
-(`user@host`). No account yet? [Get one](https://remotestorage.io/get).
+To link yours, open **Settings** and enter your address (`user@host`). No
+account yet? [Get one](https://remotestorage.io/get).
 
 - **No backend.** Your cards go from your browser to your storage, and nowhere
   else.
-- **No trackers.** No analytics and no third-party scripts.
+- **No trackers.** No analytics and no third-party scripts. Even the fonts
+  are served by the app itself.
 - **Open format.** Cards use
   [remotestorage-module-flashcards](https://github.com/silverbucket/remotestorage-module-flashcards),
   so other apps can use them too.
@@ -163,7 +183,6 @@ screenshots and releases.
 <a href="https://remotestorage.io">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/remotestorage-text-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/remotestorage-text-light.svg">
     <img alt="remoteStorage" src="docs/assets/remotestorage-text.svg" height="48">
   </picture>
 </a>

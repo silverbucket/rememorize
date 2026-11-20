@@ -28,7 +28,7 @@ describe("Library", () => {
     it("shows a new card in its group immediately", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
         expect(library.find("food", card["@id"])).toEqual(card);
-        expect(library.groups).toEqual([{ name: "food", total: 1, due: 1 }]);
+        expect(library.groups).toEqual([{ name: "food", total: 1, due: 1, started: 0 }]);
         expect(library.dueCount).toBe(1);
     });
 
@@ -60,10 +60,12 @@ describe("Library", () => {
         expect(library.newWaiting).toBe(1);
         // Each group can still show up to the remaining limit.
         expect(library.groups).toEqual([
-            { name: "one", total: 2, due: 2 },
-            { name: "two", total: 1, due: 1 },
+            { name: "one", total: 2, due: 2, started: 0 },
+            { name: "two", total: 1, due: 1, started: 0 },
         ]);
         await library.review(a, 4);
+        // A group counts the cards that have been reviewed at least once.
+        expect(library.groups.map((g) => g.started)).toEqual([1, 0]);
         expect(library.startedToday).toBe(1);
         expect(library.newRemaining).toBe(1);
         expect(library.dueCount).toBe(1);

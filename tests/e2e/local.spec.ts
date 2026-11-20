@@ -382,3 +382,108 @@ test("invalid import files show an error", async ({ page }) => {
         .setInputFiles({ name: "x.json", mimeType: "application/json", buffer: Buffer.from("{oops") });
     await expect(page.getByRole("alert")).toContainText("isn't valid JSON");
 });
+
+test("the navigation reaches each part of the app and marks where you are", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Main" });
+    await expect(nav.getByRole("link", { name: "Cards" })).toHaveAttribute("aria-current", "page");
+
+    await nav.getByRole("link", { name: "Stats" }).click();
+    await expect(page.getByRole("heading", { name: "Statistics" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Stats" })).toHaveAttribute("aria-current", "page");
+
+    await nav.getByRole("link", { name: "Settings" }).click();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    // Importing is reached from Settings, so it stays marked there.
+    await page.getByRole("link", { name: "Import…" }).click();
+    await expect(nav.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+});
+
+test("the home page says what is due and what was done today", async ({ page }) => {
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
+    await page.goto("/");
+    await expect(page.getByText("2 cards due today")).toBeVisible();
+    await expect(page.getByText("0 days in a row")).toBeVisible();
+    await expect(page.locator(".groups li")).toContainText("2 cards, 0 started");
+
+    await page.getByRole("link", { name: "Review 2 due" }).click();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await page.getByRole("link", { name: "End review" }).click();
+
+    await expect(page.getByText("1 card due today")).toBeVisible();
+    await expect(page.getByText("1 day in a row")).toBeVisible();
+    await expect(page.getByText("1 reviewed today")).toBeVisible();
+    await expect(page.locator(".groups li")).toContainText("2 cards, 1 started");
+
+    await page.getByRole("link", { name: "Review 1 due" }).click();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await page.getByRole("link", { name: "Back to your cards" }).click();
+    await expect(page.getByText("You're all caught up")).toBeVisible();
+    await expect(page.getByText(/The next card is due in /)).toBeVisible();
+});
+
+test("tapping the card shows the answer, but its hint button only shows the hint", async ({ page }) => {
+    await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks" });
+    await page.goto("/#/review");
+    await page.getByRole("button", { name: "Show hint" }).click();
+    await expect(page.getByText("barks")).toBeVisible();
+    await expect(page.locator(".side.back")).toHaveCount(0);
+
+    await page.locator(".side.front").click();
+    await expect(page.locator(".side.back")).toHaveText("dog");
+    // A second tap changes nothing; the rating buttons answer.
+    await page.locator(".side.front").click();
+    await expect(page.getByRole("button", { name: /Good/ })).toBeVisible();
+});
+
+test("a long group can be searched by front, back or hint", async ({ page }) => {
+    const rows = [
+        "front,back,hint",
+        ...Array.from({ length: 9 }, (_, i) => `word ${i},meaning ${i},`),
+        "pes,dog,barks",
+    ];
+    const file = { name: "Animals.csv", mimeType: "text/csv", buffer: Buffer.from(rows.join("\n")) };
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles(file);
+    await page.getByRole("button", { name: "Import 10 cards" }).click();
+    await expect(page.locator(".cards li")).toHaveCount(10);
+
+    await page.getByLabel("Find a card").fill("MEANING 3");
+    await expect(page.locator(".cards li")).toHaveCount(1);
+    await expect(page.locator(".cards li")).toContainText("word 3");
+    await page.getByLabel("Find a card").fill("barks");
+    await expect(page.locator(".cards li")).toContainText("pes");
+    await page.getByLabel("Find a card").fill("nothing like this");
+    await expect(page.getByText("No cards match “nothing like this”.")).toBeVisible();
+
+    // A short group has no search box.
+    await addCard(page, { front: "voda", back: "water", group: "Drinks" });
+    await expect(page.getByLabel("Find a card")).toHaveCount(0);
+});
+
+test("appearance follows the system until one is chosen, and the choice is remembered", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto("/#/account");
+    const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const light = await background();
+    await expect(page.getByRole("radio", { name: "System" })).toBeChecked();
+
+    await page.getByRole("radio", { name: "Dark" }).check();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    const dark = await background();
+    expect(dark).not.toBe(light);
+
+    await page.reload();
+    await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
+    expect(await background()).toBe(dark);
+
+    // Back to the system's choice, which here is light.
+    await page.getByRole("radio", { name: "System" }).check();
+    await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
+    expect(await background()).toBe(light);
+    await page.emulateMedia({ colorScheme: "dark" });
+    expect(await background()).toBe(dark);
+});
