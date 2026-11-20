@@ -8,8 +8,8 @@
 
 ### Flashcards that come back just before you forget them.
 
-Spaced repetition that works offline, needs no account,<br>
-and keeps your cards on storage you control.
+Works offline. No account needed.<br>
+Sync through your own remoteStorage.
 
 [![CI](https://github.com/silverbucket/rememorize/actions/workflows/ci.yml/badge.svg)](https://github.com/silverbucket/rememorize/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/silverbucket/rememorize?color=2f8f0a)](https://github.com/silverbucket/rememorize/releases)
@@ -30,13 +30,12 @@ and keeps your cards on storage you control.
 
 <br>
 
-Rememorize is a flashcard app for anything you want to keep in your head: a
-language, the periodic table, the commands you look up every time. You write
-the cards; it decides when to show each one, so that time goes to the cards
-you are about to lose and not the ones you already know.
+Rememorize is a flashcard app. You write the cards, and it shows each one
+again just before you would forget it.
 
-It runs entirely in your browser. There is nothing to sign up for, and no
-server of ours that your cards pass through.
+It works offline, in your browser or installed on your phone. Link your own
+[remoteStorage](https://remotestorage.io) and your cards sync across all your
+devices.
 
 ## What it does
 
@@ -44,60 +43,53 @@ server of ours that your cards pass through.
 <tr>
 <td width="50%" valign="top">
 
-**Schedules every card on its own**
+**Smart scheduling**
 
-Reveal the answer, then say how it went: Again, Hard, Good or Easy. Each
-button shows when you would see the card next. Scheduling is
-[FSRS](https://github.com/open-spaced-repetition/ts-fsrs), the open algorithm
-Anki also uses, so easy cards drift out to months and hard ones stay close.
+Rate each answer: Again, Hard, Good or Easy. Easy cards come back in months,
+hard ones in days. It uses
+[FSRS](https://github.com/open-spaced-repetition/ts-fsrs), the same algorithm
+as Anki.
 
 </td>
 <td width="50%" valign="top">
 
-**Works both ways**
+**Works offline**
 
-Study a card front to back, back to front, or both. Each direction keeps its
-own schedule, and only one direction of a card comes up per day, so one never
-gives the other away.
+Install it on your phone or desktop. Everything works without a connection.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-**Shows you it's working**
+**Your own storage**
 
-A year of reviews on a calendar, your current streak, how much you retain
-overall and per group, and how many cards are coming due over the next month.
+Link a remoteStorage account and your cards sync across all your devices.
+Without one, they stay in your browser.
 
 </td>
 <td width="50%" valign="top">
 
-**Keeps a steady pace**
+**Both directions**
 
-A daily limit on new cards stops a big import from burying you. Hints help
-without giving the answer away, and Undo takes back a slip of the finger.
+Study a card front to back, back to front, or both.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-**Is yours**
+**Progress you can see**
 
-Cards are saved in your browser, and the app installs to your phone or
-desktop and works offline. Connect a
-[remoteStorage](https://remotestorage.io) account and they sync to every
-device you use, through a server you choose.
+A review calendar, your streak, how much you remember and what is due next.
 
 </td>
 <td width="50%" valign="top">
 
-**Lets you leave**
+**Import and export**
 
-Import CSV, tab-separated text or Anki's “Notes in Plain Text” export. Export
-a spreadsheet of your cards, or a full backup with review progress, whenever
-you like.
+Bring in cards from CSV or Anki. A daily limit on new cards keeps a big deck
+manageable. Export whenever you like.
 
 </td>
 </tr>
@@ -115,18 +107,11 @@ you like.
 
 ## Getting started
 
-1. Open **[rememorize.5apps.com](https://rememorize.5apps.com)**. To keep it
-   on your home screen or dock, use your browser's _Install_ or _Add to Home
-   Screen_.
-2. Add a card, or import a deck you already have. Every card belongs to a
-   group: a topic, a deck, a chapter.
-3. Press **Review** whenever cards are due. A few minutes a day is the whole
-   method.
+1. Open **[rememorize.5apps.com](https://rememorize.5apps.com)**.
+2. Add a card, or import a deck.
+3. Press **Review** when cards are due. A few minutes a day is enough.
 
-To sync between devices, tap the status pill in the top right and enter your
-remoteStorage address (`user@host`). Don't have one?
-[Get a storage account](https://remotestorage.io/get/), or host your own.
-Disconnecting removes the copy in that browser; your server keeps everything.
+To install it, use your browser's _Install_ or _Add to Home Screen_.
 
 ### Keyboard
 
@@ -136,36 +121,37 @@ Disconnecting removes the copy in that browser; your server keeps everything.
 | <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> | Rate Again, Hard, Good, Easy |
 | <kbd>U</kbd>                                        | Undo the last rating         |
 
-## Your data
+## Your cards, your storage
 
-- **No backend.** The app is static files. Your cards go from your browser to
-  your storage server and nowhere else.
-- **No third-party code.** No analytics, no trackers, no fonts or scripts from
-  other sites; a Content Security Policy enforces it.
-- **An open format.** Cards are stored with
+[remoteStorage](https://remotestorage.io) is an open protocol for storage that
+belongs to you. You sign up with a storage provider, not with the app, or you
+run your own server.
+
+To link yours, tap the status pill in the top right and enter your address
+(`user@host`). No account yet? [Get one](https://remotestorage.io/get).
+
+- **No backend.** Your cards go from your browser to your storage, and nowhere
+  else.
+- **No trackers.** No analytics and no third-party scripts.
+- **Open format.** Cards use
   [remotestorage-module-flashcards](https://github.com/silverbucket/remotestorage-module-flashcards),
-  so other apps can read and write the same cards.
+  so other apps can use them too.
+
+Disconnecting removes the cards from that browser, not from your storage.
 
 ## Development
-
-Rememorize is a Svelte 5 + TypeScript app built with Vite.
 
 ```sh
 bun install
 bun run dev    # http://localhost:5173
 ```
 
-**[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** covers the tests, the project
-layout, how these screenshots are made, and how releases are cut.
+See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** for tests, project layout,
+screenshots and releases.
 
 ## License
 
-[GPL-3.0-or-later](LICENSE) — © 2026 Nick Jennings.
-
-This program is free software: you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the Free
-Software Foundation, either version 3 of the License, or (at your option)
-any later version.
+[GPL-3.0-or-later](LICENSE) © 2026 Nick Jennings
 
 ---
 
