@@ -16,10 +16,10 @@
     );
     const queue = $derived(library.dueIn(cards));
     const due = $derived(queue.length);
-    /** Reviews that are due, and cards never studied: counted apart, as on the home page. */
+    /** Reviews that are due, and new cards that could be started: counted apart, as on the home page. */
     const reviews = $derived(queue.filter((i) => !isNew(i.card, i.reverse)).length);
-    const fresh = $derived(cards.filter((c) => itemsOf(c).every((i) => isNew(c, i.reverse))).length);
-    /** New cards a review would start now. Fewer than `fresh` when the daily limit is in the way. */
+    const fresh = $derived(library.freshIn(cards));
+    /** New cards a review would start now. Fewer than `fresh` only when the daily limit is in the way. */
     const starting = $derived(due - reviews);
 
     let query = $state("");

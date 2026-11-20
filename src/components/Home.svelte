@@ -98,8 +98,8 @@
                         {#if group.reviews > 0}
                             <span class="badge" title="Due for review">{group.reviews} due</span>
                         {/if}
-                        {#if group.started < group.total}
-                            <span class="badge fresh" title="Not started yet">{group.total - group.started} new</span>
+                        {#if group.fresh > 0}
+                            <span class="badge fresh" title="Not started yet">{group.fresh} new</span>
                         {/if}
                     </span>
                     <span class="go"><Icon name="chevron" size={18} /></span>

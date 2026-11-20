@@ -36,9 +36,13 @@
         { section: "settings", label: "Settings", icon: "settings", href: href.account() },
     ];
     /** The part of the app a page belongs to. Importing belongs to whichever page led to it. */
-    const sectionOf = (name: Route["name"], from?: Route["name"]): Section =>
-        name === "stats" ? "stats" : name === "account" || (name === "import" && from === "account") ? "settings" : "cards";
-    const section = $derived(sectionOf(route.name, router.previous?.name));
+    const sectionOf = (route: Route): Section =>
+        route.name === "stats"
+            ? "stats"
+            : route.name === "account" || (route.name === "import" && route.from === "settings")
+              ? "settings"
+              : "cards";
+    const section = $derived(sectionOf(route));
     /** A review fills a phone's screen: the bars step aside until it ends. */
     const focused = $derived(route.name === "review");
     /** Writing a card puts its Save button where a phone's tab bar is. */
@@ -211,6 +215,11 @@
         .focused main {
             padding-top: max(0.75rem, env(safe-area-inset-top));
             padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+        }
+
+        /* A field that takes focus scrolls clear of the Save bar, not behind it. */
+        :global(html:has(.writing)) {
+            scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
         }
     }
 

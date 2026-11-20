@@ -186,7 +186,7 @@
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
             <div class="panel card" class:revealed onclick={() => !revealed && reveal()}>
                 {#key currentKey}
-                    <!-- The question sits above the middle and the answer below it, so showing the answer moves nothing. -->
+                    <!-- The question ends at a fixed line and the answer starts below it, so showing the answer moves nothing. -->
                     <div class="faces">
                         <div class="asked">
                             {#if reverse}<span class="direction">Back → front</span>{/if}
@@ -388,7 +388,7 @@
         z-index: 1;
         flex: 1;
         display: flex;
-        min-height: 20rem;
+        min-height: var(--card);
         padding: 2rem 1.5rem;
         border-radius: var(--radius-xl);
         box-shadow: var(--shadow);
@@ -402,7 +402,12 @@
     .faces {
         flex: 1;
         display: grid;
-        grid-template-rows: 1fr auto 1fr;
+        /*
+         * The question's row is as tall as half of an ordinary card, whatever the
+         * answer's length: a long answer makes the card longer below the line and
+         * leaves the question where it was.
+         */
+        grid-template-rows: minmax(var(--question), auto) auto 1fr;
         justify-items: center;
         gap: 1rem;
         min-width: 0;
@@ -570,6 +575,13 @@
         opacity: 0.55;
     }
 
+    /* Four buttons across a narrow window leave the hint no room beside the label. */
+    @media (max-width: 560px) {
+        .grade kbd {
+            display: none;
+        }
+    }
+
     .g1 {
         --tone: var(--again);
     }
@@ -653,21 +665,25 @@
         margin-top: 0.5rem;
     }
 
-    /* On a wide screen the card grows into the window, up to a comfortable height. */
+    /*
+     * --card is the card's height with a short answer: what is left of the window
+     * after the bars above and below it. --question is half of that, less the
+     * card's padding and half of the gap and rule between the two sides.
+     */
+
+    /* On a wide screen the card grows with the window, up to a comfortable height. */
     @media (min-width: 880px) {
         .review {
-            min-height: calc(100dvh - 6.75rem);
-        }
-
-        .stage {
-            flex: 1;
-            max-height: 34rem;
+            --card: clamp(20rem, calc(100dvh - 18.5rem), 34rem);
+            --question: calc(var(--card) / 2 - 3.25rem);
         }
     }
 
     /* On a phone the card takes the screen and the answer buttons sit at the bottom, under the thumb. */
     @media (max-width: 879.98px) {
         .review {
+            --card: max(14rem, calc(100dvh - 13.25rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+            --question: calc(var(--card) / 2 - 2.8rem);
             min-height: calc(100dvh - 1.75rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
         }
 
@@ -676,7 +692,6 @@
         }
 
         .card {
-            min-height: 14rem;
             padding: 1.5rem 1.25rem;
         }
 

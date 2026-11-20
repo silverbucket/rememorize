@@ -408,6 +408,10 @@ test("the navigation reaches each part of the app and marks where you are", asyn
     await page.getByRole("link", { name: "Import…" }).click();
     await expect(nav.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
     await expect(page.locator(".crumb")).toHaveText("Settings");
+    // The page's address says where it was opened from, so a reload leads back the same way.
+    await page.reload();
+    await expect(nav.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".crumb")).toHaveText("Settings");
 
     // Reached from the home page instead, it belongs to Cards and leads back there.
     await nav.getByRole("link", { name: "Cards" }).click();
@@ -521,4 +525,37 @@ test("saving a card is in reach without scrolling, and deleting is kept apart fr
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
     await page.getByRole("button", { name: "Delete card" }).click();
     await expect(page.getByText("No cards in this group.")).toBeVisible();
+});
+
+test("a long answer leaves the question where it was and stays clear of the rating buttons", async ({ page }) => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n");
+    await addCard(page, { front: "pes", back: lines, group: "Animals" });
+    // Without the card's entrance, so its position can be read straight away.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/#/review");
+    const front = page.locator(".side.front");
+    const before = (await front.boundingBox())?.y;
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await expect(page.locator(".side.back")).toContainText("line 20");
+    expect((await front.boundingBox())?.y).toBe(before);
+
+    const answer = await page.locator(".side.back").boundingBox();
+    const buttons = await page.locator(".grades").boundingBox();
+    expect((answer?.y ?? 0) + (answer?.height ?? 0)).toBeLessThanOrEqual(buttons?.y ?? 0);
+});
+
+test("on a small phone, a field that takes focus scrolls clear of the Save bar", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 430 });
+    await page.goto("/#/new");
+    await page.getByLabel("Front").focus();
+    for (const label of ["Back", "Hint", "Group", "Study direction"]) {
+        await page.keyboard.press("Tab");
+        const field = page.getByLabel(label);
+        await expect(field).toBeFocused();
+        // The line being typed on: a tall text box may run on under the bar below it.
+        const box = await field.boundingBox();
+        const bar = await page.locator("form .buttons").boundingBox();
+        const line = (box?.y ?? 0) + Math.min(box?.height ?? 0, 44);
+        expect(line, `${label} is above the Save bar`).toBeLessThanOrEqual(bar?.y ?? 0);
+    }
 });

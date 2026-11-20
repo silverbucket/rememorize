@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { untrack } from "svelte";
     import { plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { library } from "../lib/state";
@@ -7,8 +6,8 @@
     import Icon from "./Icon.svelte";
 
     /** Importing is offered on the home page and in Settings: go back to whichever led here. */
-    const back = untrack(() =>
-        router.previous?.name === "account"
+    const back = $derived(
+        router.route.name === "import" && router.route.from === "settings"
             ? { href: href.account(), label: "Settings" }
             : { href: href.home(), label: "All groups" },
     );

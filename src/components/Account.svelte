@@ -196,7 +196,7 @@
             onclick={() => download(exportCsv(library.cards), "text/csv", "csv")}
             ><Icon name="export" size={18} />Export CSV</button
         >
-        <a class="btn" href={href.import()}><Icon name="import" size={18} />Import…</a>
+        <a class="btn" href={href.import("settings")}><Icon name="import" size={18} />Import…</a>
     </div>
 </section>
 

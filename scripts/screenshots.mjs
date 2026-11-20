@@ -437,7 +437,7 @@ async function capture(page) {
     // Review Spanish if any of it is due today; otherwise everything.
     await page.goto(`${BASE}/?t=${now}#/`);
     await page.locator(".groups li").first().waitFor();
-    const due = await page.locator(".groups li:has(.badge) .name").allTextContents();
+    const due = await page.locator(".groups li:has(.badge:not(.fresh)) .name").allTextContents();
     const reviewHash = due.includes("Spanish") ? "/review/Spanish" : "/review";
 
     const pages = {

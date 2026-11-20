@@ -18,7 +18,7 @@ import {
     type Settings,
 } from "remotestorage-module-flashcards";
 import type { RSWithModules } from "./rs";
-import { dueItems, type Grade, isNew, itemsOf, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
+import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
 import { DEFAULT_NEW_PER_DAY, parseNewPerDay, saveNewPerDay } from "./settings";
 
 export type ConnectionStatus = "local" | "connecting" | "connected" | "unauthorized";
@@ -30,8 +30,8 @@ export interface GroupSummary {
     due: number;
     /** The part of `due` that is reviews of cards already started. */
     reviews: number;
-    /** Cards reviewed at least once, in either direction. */
-    started: number;
+    /** New cards a review could start now if there were no daily limit. `due - reviews` of them fit under it. */
+    fresh: number;
 }
 
 type ChangeEvent = { relativePath?: string; newValue?: unknown; origin?: string };
@@ -92,7 +92,7 @@ export class Library {
                     total: cards.length,
                     due: queue.length,
                     reviews: queue.filter((i) => !isNew(i.card, i.reverse)).length,
-                    started: cards.filter((c) => itemsOf(c).some((i) => !isNew(c, i.reverse))).length,
+                    fresh: this.freshIn(cards),
                 };
             })
             .sort((a, b) => a.name.localeCompare(b.name));
@@ -189,6 +189,15 @@ export class Library {
         // Today's allowance at `now`, not at the last clock tick (matters just after midnight).
         const remaining = Math.max(0, this.newPerDay - startedOn(this.cards, now));
         return dueItems(cards, now, remaining);
+    }
+
+    /**
+     * New cards a review of these could start now, ignoring the daily limit.
+     * Counted the way the queue counts: a card studied both ways is one, and
+     * a direction waiting for tomorrow isn't one yet.
+     */
+    freshIn(cards: Flashcard[], now = this.now): number {
+        return dueItems(cards, now).filter((i) => isNew(i.card, i.reverse)).length;
     }
 
     find(group: string, id: string): Flashcard | undefined {
