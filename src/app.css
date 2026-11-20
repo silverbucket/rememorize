@@ -59,6 +59,8 @@
     font-family: var(--font-ui);
     font-size: 100%;
     line-height: 1.5;
+    /* Where scrollbars take up room, keep it reserved: a page that grows must not get narrower and re-wrap. */
+    scrollbar-gutter: stable;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
 }

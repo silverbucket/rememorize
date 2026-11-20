@@ -217,8 +217,9 @@
             padding-bottom: calc(1rem + env(safe-area-inset-bottom));
         }
 
-        /* A field that takes focus scrolls clear of the Save bar, not behind it. */
+        /* A field that takes focus scrolls clear of the header and the Save bar, not behind them. */
         :global(html:has(.writing)) {
+            scroll-padding-top: calc(4.5rem + env(safe-area-inset-top));
             scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
         }
     }

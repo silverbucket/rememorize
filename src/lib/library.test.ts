@@ -81,7 +81,8 @@ describe("Library", () => {
 
     it("counts the unstudied side of a two-way card as new, in the queue's units", async () => {
         library.newPerDay = 1;
-        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const yesterday = new Date(2026, 4, 1, 12);
+        library.now = new Date(2026, 4, 2, 12);
         const both = await library.save({ frontText: "a", backText: "a", group: "one", direction: "both" });
         await library.save({ frontText: "b", backText: "b", group: "one" });
         // Front → back was started yesterday and isn't due; back → front has never been studied.

@@ -530,6 +530,7 @@ test("saving a card is in reach without scrolling, and deleting is kept apart fr
 test("a long answer leaves the question where it was and stays clear of the rating buttons", async ({ page }) => {
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n");
     await addCard(page, { front: "pes", back: lines, group: "Animals" });
+    await addCard(page, { front: lines, back: "kočka", group: "Animals" });
     // Without the card's entrance, so its position can be read straight away.
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/#/review");
@@ -542,6 +543,11 @@ test("a long answer leaves the question where it was and stays clear of the rati
     const answer = await page.locator(".side.back").boundingBox();
     const buttons = await page.locator(".grades").boundingBox();
     expect((answer?.y ?? 0) + (answer?.height ?? 0)).toBeLessThanOrEqual(buttons?.y ?? 0);
+
+    // Rating it, from wherever the buttons were scrolled to, starts the next card (a long one) at the top.
+    await page.getByRole("button", { name: /Again/ }).click();
+    await expect(front).toContainText("line 20");
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
 test("on a small phone, a field that takes focus scrolls clear of the Save bar", async ({ page }) => {
@@ -557,5 +563,17 @@ test("on a small phone, a field that takes focus scrolls clear of the Save bar",
         const bar = await page.locator("form .buttons").boundingBox();
         const line = (box?.y ?? 0) + Math.min(box?.height ?? 0, 44);
         expect(line, `${label} is above the Save bar`).toBeLessThanOrEqual(bar?.y ?? 0);
+    }
+
+    // And back up the form: clear of the header at the top.
+    const header = await page.locator("header").boundingBox();
+    for (const label of ["Group", "Hint", "Back", "Front"]) {
+        await page.keyboard.press("Shift+Tab");
+        const field = page.getByLabel(label);
+        await expect(field).toBeFocused();
+        const box = await field.boundingBox();
+        expect(box?.y ?? 0, `${label} is below the header`).toBeGreaterThanOrEqual(
+            (header?.y ?? 0) + (header?.height ?? 0),
+        );
     }
 });

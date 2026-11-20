@@ -98,6 +98,8 @@
             queue = dueSoon ? [...rest, { card: updated, reverse }] : rest;
             revealedFor = "";
             hintFor = "";
+            // A long answer may have been scrolled down to reach the buttons; the next card starts at the top.
+            window.scrollTo(0, 0);
         } catch (e) {
             error = `Could not save your answer: ${e instanceof Error ? e.message : String(e)}`;
         } finally {
