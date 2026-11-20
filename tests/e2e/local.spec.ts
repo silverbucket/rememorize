@@ -224,8 +224,8 @@ test("daily limit on all cards, and the home page counts new cards apart", async
         await addCard(page, { front, back, group: "Numbers" });
     }
     await page.goto("/");
+    await expect(page.locator(".today .headline")).toHaveText("3 new");
     await expect(page.getByText("3 cards to study today")).toBeVisible();
-    await expect(page.locator(".today .muted")).toHaveText("3 new");
 
     await page.goto("/#/account");
     await expect(page.getByLabel("Most cards per day")).toHaveValue("");
@@ -235,7 +235,7 @@ test("daily limit on all cards, and the home page counts new cards apart", async
     await page.goto("/#/group/Numbers");
     await expect(page.getByText("Today's review takes 2 of them: the daily card limit is 2.")).toBeVisible();
     await page.goto("/");
-    await expect(page.locator(".today .muted")).toHaveText("2 new");
+    await expect(page.locator(".today .headline")).toHaveText("2 new");
     await page.getByRole("link", { name: "Review 2 cards" }).click();
     for (let i = 0; i < 2; i++) {
         await page.getByRole("button", { name: /Show answer/ }).click();
@@ -465,6 +465,7 @@ test("the home page says what is due and what was done today", async ({ page }) 
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
     await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
     await page.goto("/");
+    await expect(page.locator(".today .headline")).toHaveText("2 new");
     await expect(page.getByText("2 cards to study today")).toBeVisible();
     await expect(page.getByText("0 days in a row")).toBeVisible();
     await expect(page.locator(".groups li")).toContainText("2 new");

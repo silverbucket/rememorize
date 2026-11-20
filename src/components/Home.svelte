@@ -60,8 +60,9 @@
     <section class="panel today" aria-label="Today">
         <div class="today-text">
             {#if queue.length > 0}
-                <p class="headline">{plural(queue.length, "card")} to study today</p>
-                <p class="muted">{breakdown}</p>
+                <!-- The split leads: a total of new plus reviews read as if the new-card limit were ignored. -->
+                <p class="headline">{breakdown}</p>
+                <p class="muted">{plural(queue.length, "card")} to study today</p>
             {:else}
                 <p class="headline">You're all caught up</p>
                 <p class="muted">
