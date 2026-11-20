@@ -258,6 +258,30 @@ describe("Library", () => {
         expect(library.newPerDay).toBe(9);
     });
 
+    it("keeps both limits when they are saved at the same time", async () => {
+        await Promise.all([library.setNewPerDay(5), library.setCardsPerDay(30)]);
+        expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
+            newCardsPerDay: 5,
+            cardsPerDay: 30,
+        });
+    });
+
+    it("moves an older version's limit that arrives by sync", async () => {
+        // Arrived after the first load, as on a device that has just connected.
+        await rs.flashcards.setSettings({ newCardsPerDay: 6 });
+        (rs as unknown as { _emit(n: string): void })._emit("sync-done");
+        await expect
+            .poll(() => rs.scope("/rememorize/").getObject("settings", false))
+            .toMatchObject({ newCardsPerDay: 6 });
+        expect(library.newPerDay).toBe(6);
+        // A limit the app already has of its own is left alone.
+        await library.setNewPerDay(8);
+        await rs.flashcards.setSettings({ newCardsPerDay: 2 });
+        (rs as unknown as { _emit(n: string): void })._emit("sync-done");
+        await library.load();
+        expect(library.newPerDay).toBe(8);
+    });
+
     it("caps the day's cards, reviews and new together", async () => {
         library.cardsPerDay = 2;
         const long = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);

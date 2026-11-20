@@ -61,6 +61,8 @@ export class Library {
      * the one older versions kept in `/flashcards/.settings` applies.
      */
     #ownNewPerDay = false;
+    /** Settings writes, one after another, so each reads what the last one wrote. */
+    #settingsWrite: Promise<unknown> = Promise.resolve();
     #cards: Record<string, Flashcard> = $state({});
     /** The review log as stored: one list of reviews per UTC day. */
     #log: Record<string, ReviewLogEntry[]> = $state({});
@@ -187,6 +189,8 @@ export class Library {
         });
         rs.on("sync-done", () => {
             this.syncing = false;
+            // An older version's limit may only just have arrived; both folders have synced by now.
+            void this.#migrateSettings().catch(() => {});
         });
         rs.on("error", (e: unknown) => this.#onError(e));
         rs.flashcards.on("change", (e) => this.#applyChange(e as ChangeEvent));
@@ -205,19 +209,14 @@ export class Library {
     async load(): Promise<void> {
         const generation = ++this.#loadGeneration;
         try {
-            const [cards, settings, legacy, log] = await Promise.all([
+            const [cards, settings, log] = await Promise.all([
                 this.#rs.flashcards.getAll(false),
                 this.#app.getObject(SETTINGS_FILE, false),
-                this.#rs.flashcards.getSettings(false),
                 this.#rs.flashcards.getReviewLog(false),
             ]);
             if (generation !== this.#loadGeneration) return;
             this.#applySettings(normalizeAppSettings(settings));
-            if (!this.#ownNewPerDay && legacy.newCardsPerDay !== undefined) {
-                // Saved by an older version, next to the cards: move it into the app's folder.
-                this.#applyLegacySettings(legacy.newCardsPerDay);
-                void this.#saveSettings({ newCardsPerDay: this.newPerDay }).catch(() => {});
-            }
+            await this.#migrateSettings().catch(() => {});
             const days: Record<string, ReviewLogEntry[]> = {};
             for (const entry of log) days[logDay(entry)] = [...(days[logDay(entry)] ?? []), entry];
             this.#log = days;
@@ -289,7 +288,10 @@ export class Library {
     }
 
     async #changeSettings(changes: AppSettings): Promise<void> {
-        const previous = { newCardsPerDay: this.newPerDay, cardsPerDay: this.cardsPerDay };
+        // Only what this call changes is put back if it fails, not a setting saved alongside it.
+        const previous: AppSettings = {};
+        if ("newCardsPerDay" in changes) previous.newCardsPerDay = this.newPerDay;
+        if ("cardsPerDay" in changes) previous.cardsPerDay = this.cardsPerDay;
         const hadOwn = this.#ownNewPerDay;
         // Applied before the write finishes, so it holds even if the page is left straight away.
         this.#applySettings(changes);
@@ -303,15 +305,41 @@ export class Library {
     }
 
     /** Write some settings, keeping the others as stored. */
-    async #saveSettings(changes: AppSettings): Promise<void> {
-        const stored = await this.#app.getObject(SETTINGS_FILE, false);
-        // Fields this version doesn't know (from a newer app) are kept as they are.
-        const base = typeof stored === "object" && stored !== null ? stored : {};
-        await this.#app.storeObject("settings", SETTINGS_FILE, {
-            ...base,
-            ...changes,
-            updatedAt: new Date().toISOString(),
+    #saveSettings(changes: AppSettings): Promise<void> {
+        return this.#queueSettings(async () => changes);
+    }
+
+    /**
+     * Move the new-card limit an older version saved next to the cards into
+     * the app's folder, unless the app has one of its own by then.
+     */
+    #migrateSettings(): Promise<void> {
+        return this.#queueSettings(async (stored) => {
+            if (normalizeAppSettings(stored).newCardsPerDay !== undefined) return undefined;
+            const legacy = (await this.#rs.flashcards.getSettings(false)).newCardsPerDay;
+            if (legacy === undefined) return undefined;
+            this.#applyLegacySettings(legacy);
+            this.#ownNewPerDay = true;
+            return { newCardsPerDay: parseNewPerDay(legacy) };
         });
+    }
+
+    /** Read the stored settings, then write `change(stored)` over them (nothing if undefined), after earlier writes. */
+    #queueSettings(change: (stored: unknown) => Promise<AppSettings | undefined>): Promise<void> {
+        const run = this.#settingsWrite.then(async () => {
+            const stored = await this.#app.getObject(SETTINGS_FILE, false);
+            const changes = await change(stored);
+            if (!changes) return;
+            // Fields this version doesn't know (from a newer app) are kept as they are.
+            const base = typeof stored === "object" && stored !== null ? stored : {};
+            await this.#app.storeObject("settings", SETTINGS_FILE, {
+                ...base,
+                ...changes,
+                updatedAt: new Date().toISOString(),
+            });
+        });
+        this.#settingsWrite = run.catch(() => {});
+        return run;
     }
 
     async remove(card: Flashcard): Promise<void> {
