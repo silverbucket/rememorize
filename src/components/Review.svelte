@@ -9,6 +9,7 @@
         type Grade,
         heldUntilTomorrow,
         itemKey,
+        itemsOf,
         nextDue,
         previewIntervals,
         type ReviewItem,
@@ -79,7 +80,10 @@
         later
             .flatMap((item) => {
                 const card = library.find(item.card.group, item.card["@id"]);
-                return card ? [{ card, reverse: item.reverse }] : [];
+                // Gone if the card was deleted, or no longer studied in this direction.
+                return card && itemsOf(card).some((i) => i.reverse === item.reverse)
+                    ? [{ card, reverse: item.reverse }]
+                    : [];
             })
             .sort((a, b) => dueAt(a) - dueAt(b)),
     );
@@ -88,8 +92,9 @@
 
     const comingBack = $derived(
         comesBack &&
-            `Next card comes back ${fromNow(comesBack, new Date(clock))}` +
-                (reminders.state === "on" ? ", and you'll get a notification." : "."),
+            // Rounded up: it isn't back until the time is up, and "now" would say it was.
+            `Next card comes back in ${plural(Math.max(1, Math.ceil((Date.parse(comesBack) - clock) / 60_000)), "minute")}.` +
+                (reminders.state === "on" ? " Reminders will tell you when cards are due." : ""),
     );
 
     /** Bring back the cards in `later` whose time is up. */

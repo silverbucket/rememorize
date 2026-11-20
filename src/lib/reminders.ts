@@ -116,15 +116,15 @@ export function planReminders(
     let shown: number | undefined;
     // A card answered Hard or Again comes back in minutes: say so when it does, not on the next hour.
     const early: Reminder[] = [];
+    let said = soon.length > 0 ? countAt(now) : 0;
     for (const at of [...soon].sort((a, b) => a.getTime() - b.getTime())) {
         if (at.getTime() <= now.getTime() || at.getTime() - now.getTime() > SOON_MS) continue;
         const previous = early.at(-1);
         if (previous && at.getTime() - previous.at.getTime() < SOON_GAP_MS) continue;
         const count = countAt(at);
-        shown ??= countAt(now);
-        if (count <= shown) continue;
+        if (count <= said) continue;
         early.push({ at, count, last: false });
-        shown = count;
+        said = count;
     }
     /** The most cards those early reminders have told of by `at`. */
     const toldEarly = (at: Date) =>

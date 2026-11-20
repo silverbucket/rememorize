@@ -101,6 +101,18 @@ describe("later reminders in a day", () => {
         ]);
     });
 
+    it("still says on the hour what came due after the early reminders", () => {
+        // At 14:50, cards come back at 14:52, 14:59 and 15:10.
+        const due = dueFrom(at(20, 14, 52), at(20, 14, 59), at(20, 15, 10));
+        const plan = planReminders(at(20, 14, 50), "09:00", due, 1, [at(20, 14, 52), at(20, 14, 59), at(20, 15, 10)]);
+        expect(times(plan)).toEqual([
+            [at(20, 14, 52), 1],
+            [at(20, 14, 59), 2],
+            [at(20, 15, 10), 3],
+            [at(21, 9), 3],
+        ]);
+    });
+
     it("keeps reminders for cards coming back a few minutes apart, and the list within what a server holds", () => {
         const soon = Array.from({ length: 40 }, (_, i) => at(20, 12, i + 1));
         const plan = planReminders(
