@@ -102,12 +102,12 @@ describe("later reminders in a day", () => {
     });
 
     it("still says on the hour what came due after the early reminders", () => {
-        // At 14:50, cards come back at 14:52, 14:59 and 15:10.
-        const due = dueFrom(at(20, 14, 52), at(20, 14, 59), at(20, 15, 10));
-        const plan = planReminders(at(20, 14, 50), "09:00", due, 1, [at(20, 14, 52), at(20, 14, 59), at(20, 15, 10)]);
+        // At 14:50, cards come back at 14:52, 14:54 (too soon after for a reminder of its own) and 15:10.
+        const due = dueFrom(at(20, 14, 52), at(20, 14, 54), at(20, 15, 10));
+        const plan = planReminders(at(20, 14, 50), "09:00", due, 1, [at(20, 14, 52), at(20, 14, 54), at(20, 15, 10)]);
         expect(times(plan)).toEqual([
             [at(20, 14, 52), 1],
-            [at(20, 14, 59), 2],
+            [at(20, 15), 2],
             [at(20, 15, 10), 3],
             [at(21, 9), 3],
         ]);

@@ -156,6 +156,7 @@
             // It waits out its time, Hard longer than Again, instead of coming straight back.
             if (dueAt(back) - now.getTime() <= REQUEUE_WITHIN_MS) {
                 later = [...later, back].sort((a, b) => dueAt(a) - dueAt(b));
+                clock = Date.now();
             }
             revealedFor = "";
             hintFor = "";
