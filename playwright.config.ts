@@ -16,8 +16,9 @@ import { defineConfig, devices } from "@playwright/test";
 // Override with E2E_PORT to run alongside another checkout's suite.
 const PORT = Number(process.env.E2E_PORT || 4317);
 /**
- * The reminder server the build is told about. Nothing listens there: the
- * reminder tests answer for it in the browser (see reminders.spec.ts).
+ * The reminder server the build uses unless Settings names another. Nothing
+ * listens there: the reminder tests answer for it in the browser (see
+ * reminders.spec.ts), so no test reaches the real one.
  */
 export const SOCKETHUB_URL = process.env.VITE_SOCKETHUB_URL || "http://localhost:10550";
 

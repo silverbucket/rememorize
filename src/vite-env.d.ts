@@ -5,6 +5,6 @@
 declare const __APP_VERSION__: string;
 
 interface ImportMetaEnv {
-    /** The Sockethub server that sends reminders. Without it the app offers none. */
+    /** The Sockethub server that sends reminders, when it isn't the app's usual one (see settings.ts). */
     readonly VITE_SOCKETHUB_URL?: string;
 }

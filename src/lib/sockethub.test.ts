@@ -67,6 +67,13 @@ describe("discover", () => {
     it("reports a server that is down", async () => {
         await expect(discover(BASE, fake("", 502).fetcher)).rejects.toThrow("502");
     });
+
+    it("says which address couldn't be reached", async () => {
+        const unreachable = (() => Promise.reject(new TypeError("Failed to fetch"))) as unknown as typeof fetch;
+        await expect(discover(BASE, unreachable)).rejects.toThrow(
+            `Couldn't reach a reminder server at ${BASE}. It may be down, or it may not allow requests from this app.`,
+        );
+    });
 });
 
 describe("sendPush", () => {

@@ -48,6 +48,11 @@ export async function discover(base: string, fetcher: Fetch = fetch): Promise<Pu
     const response = await fetcher(base, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(TIMEOUT_MS),
+    }).catch(() => {
+        // From a browser, a server that is down and one that doesn't allow this app look the same.
+        throw new Error(
+            `Couldn't reach a reminder server at ${base}. It may be down, or it may not allow requests from this app.`,
+        );
     });
     if (!response.ok) throw new Error(`The reminder server answered ${response.status}.`);
     const descriptor = (await response.json()) as {

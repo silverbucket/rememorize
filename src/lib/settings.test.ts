@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
     DEFAULT_NEW_PER_DAY,
+    DEFAULT_REMINDER_SERVER,
     MAX_NEW_PER_DAY,
     normalizeAppSettings,
     parseCardsPerReview,
     parseNewPerDay,
+    parseReminderServer,
     parseReminderTime,
 } from "./settings";
 
@@ -57,6 +59,33 @@ describe("parseReminderTime", () => {
     });
 });
 
+describe("parseReminderServer", () => {
+    it("is Sockethub's own server unless another is named", () => {
+        expect(DEFAULT_REMINDER_SERVER).toBe("https://sockethub.silverbucket.net");
+    });
+
+    it.each([
+        ["https://hub.example", "https://hub.example"],
+        [" https://hub.example/ ", "https://hub.example"],
+        ["hub.example", "https://hub.example"],
+        ["hub.example:8443/sockethub/", "https://hub.example:8443/sockethub"],
+        ["HTTPS://Hub.Example", "https://hub.example"],
+        ["http://localhost:10550", "http://localhost:10550"],
+        ["https://hub.example/?token=1#top", "https://hub.example"],
+        ["", DEFAULT_REMINDER_SERVER],
+        ["  ", DEFAULT_REMINDER_SERVER],
+        [undefined, DEFAULT_REMINDER_SERVER],
+        ["ftp://hub.example", undefined],
+        ["javascript://alert(1)", undefined],
+        ["not a server", undefined],
+        ["not%20a%20server", undefined],
+        ["[::1]:10550", "https://[::1]:10550"],
+        ["https://", undefined],
+    ])("%s → %s", (input, expected) => {
+        expect(parseReminderServer(input)).toBe(expected);
+    });
+});
+
 describe("normalizeAppSettings", () => {
     it("keeps valid limits and drops the rest", () => {
         expect(normalizeAppSettings({ newCardsPerDay: 5, cardsPerReview: null, other: 1 })).toEqual({
@@ -66,6 +95,13 @@ describe("normalizeAppSettings", () => {
         expect(normalizeAppSettings({ newCardsPerDay: -1, cardsPerReview: "x" })).toEqual({});
         expect(normalizeAppSettings({ reminderTime: "18:15" })).toEqual({ reminderTime: "18:15" });
         expect(normalizeAppSettings({ reminderTime: "6pm" })).toEqual({});
+        expect(normalizeAppSettings({ reminderServer: "https://hub.example/" })).toEqual({
+            reminderServer: "https://hub.example",
+        });
+        // Empty is a choice too: the app's usual server.
+        expect(normalizeAppSettings({ reminderServer: "" })).toEqual({ reminderServer: "" });
+        expect(normalizeAppSettings({ reminderServer: "not a server" })).toEqual({});
+        expect(normalizeAppSettings({ reminderServer: 7 })).toEqual({});
         expect(normalizeAppSettings(undefined)).toEqual({});
     });
 

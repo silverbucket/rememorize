@@ -34,7 +34,7 @@
 
     $effect(() => {
         // Everything a reminder is worked out from. Reading them is what makes this run again.
-        void [library.loaded, library.cards, library.newPerDay, library.reminderTime];
+        void [library.loaded, library.cards, library.newPerDay, library.reminderTime, library.reminderServer];
         reminders.changed();
     });
 

@@ -101,23 +101,25 @@ time: a [Sockethub](https://github.com/sockethub/sockethub) instance with its
 [Web Push platform](https://github.com/sockethub/sockethub/tree/master/packages/platform-webpush)
 and scheduled delivery turned on, reached over its HTTP actions endpoint.
 
-The build is told where it is:
+Which server is a setting (`reminderServer` in `/rememorize/settings`), the
+same on every device. It is `https://sockethub.silverbucket.net` until the
+user enters another address under _Settings → Reminders_. A new address is
+only saved once a server has answered there. A build can have another default:
 
 ```sh
-VITE_SOCKETHUB_URL=https://sockethub.example bun run dev
+VITE_SOCKETHUB_URL=https://sockethub.example bun run build
 ```
 
-Without `VITE_SOCKETHUB_URL` the Reminders panel isn't shown and nothing else
-changes. The server has to allow the app's origin (`sockethub.cors.origin`),
-and its `scheduledDelivery` limits have to leave room for 60 messages a
-device, up to 31 days ahead. Its defaults do.
+Any server used has to allow the app's origin (`sockethub.cors.origin`), and
+its `scheduledDelivery` limits have to leave room for 60 messages a device, up
+to 31 days ahead. Its defaults do.
 
 How it fits together:
 
 1. Turning reminders on subscribes the browser with the server's public key
-   and saves the subscription in `/rememorize/devices/`, so the user's other
-   devices can find it.
-2. Whenever the cards, the limits or the reminder time change, the app works
+   and saves the subscription in `/rememorize/devices/`, with the server's
+   address, so the user's other devices can find it.
+2. Whenever the cards, the new-card limit or the reminder time change, the app works
    out the reminders for the next 30 days ("12 cards due"), encrypts each one
    for each device, and replaces the list the server holds. It waits until
    the cards have been left alone for 20 seconds, or the app is put away, so
@@ -139,9 +141,14 @@ so a card that comes back after a review is announced on the next hour. Only
 the nearest ten days get later reminders: the server holds 60 messages for a
 device. `planReminders` in `src/lib/reminders.ts` has the rules.
 
+A subscription only takes messages from the server it was made for. So when
+the setting changes, each device subscribes again with the new server the
+next time it is open, and tells the old one to drop its list. Until then its
+reminders keep going to the server in its own record.
+
 The server sees a delivery address, times and ciphertext. It never sees what a
-reminder says, the cards, or the subscription's keys, and it isn't contacted
-at all until reminders are on.
+reminder says, the cards, or the subscription's keys. It isn't contacted
+until reminders are on, except to check an address when one is entered.
 
 The service worker is not active under `bun run dev`. To try reminders by
 hand, use `bun run build && bun run preview`.
@@ -235,10 +242,6 @@ or _Actions → Release & Deploy → Run workflow_ on GitHub.
 The version lives in `package.json` and follows [semver](https://semver.org).
 The app shows it at the bottom of Settings. Don't bump it by hand; the
 workflow does it:
-
-The build reads the reminder server's address from the repository variable
-`SOCKETHUB_URL` (_Settings → Secrets and variables → Actions → Variables_).
-While it is unset, the released app has no Reminders panel.
 
 1. Bumps `package.json` (`patch`, `minor` or `major`).
 2. Lints, type-checks, tests and builds with the new version.

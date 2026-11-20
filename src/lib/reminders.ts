@@ -28,21 +28,27 @@ const DETAILED_DAYS = 10;
 /** A device not seen for this long is taken off the list. It puts itself back when it is next opened. */
 export const STALE_MS = 90 * 24 * 60 * 60 * 1000;
 
-/** A device with reminders on: its push subscription, and when it last said it was still in use. */
+/**
+ * A device with reminders on: its push subscription, the server it subscribed
+ * with, and when it last said it was still in use.
+ */
 export interface Device extends PushKeys {
     endpoint: string;
+    /** A subscription only takes messages from the server it was made for, whichever one is chosen now. */
+    server: string;
     updatedAt: string;
 }
 
 /** Turn a stored device record into a `Device`, or nothing if it isn't one. */
 export function normalizeDevice(value: unknown): Device | undefined {
     if (typeof value !== "object" || value === null) return undefined;
-    const { endpoint, p256dh, auth, updatedAt } = value as Record<string, unknown>;
-    if (![endpoint, p256dh, auth, updatedAt].every((field) => typeof field === "string" && field !== "")) {
+    const { endpoint, server, p256dh, auth, updatedAt } = value as Record<string, unknown>;
+    if (![endpoint, server, p256dh, auth, updatedAt].every((field) => typeof field === "string" && field !== "")) {
         return undefined;
     }
+    if (!/^https?:\/\//.test(server as string)) return undefined;
     if (Number.isNaN(Date.parse(updatedAt as string))) return undefined;
-    return { endpoint, p256dh, auth, updatedAt } as Device;
+    return { endpoint, server, p256dh, auth, updatedAt } as Device;
 }
 
 /**

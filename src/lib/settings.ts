@@ -1,7 +1,7 @@
 /**
- * The review limits and the time of a day's first reminder. They are stored in
- * the app's own folder (see Library), so they sync; localStorage only remembers
- * the last limits this browser used.
+ * The review limits, the time of a day's first reminder and the server that
+ * sends reminders. They are stored in the app's own folder (see Library), so
+ * they sync; localStorage only remembers the last limits this browser used.
  */
 
 export const DEFAULT_NEW_PER_DAY = 20;
@@ -11,6 +11,26 @@ export const DEFAULT_CARDS_PER_REVIEW = null;
 /** When a day's first reminder goes out, in the local time of the device that schedules it. */
 export const DEFAULT_REMINDER_TIME = "09:00";
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** A web address as it is kept: no trailing slash, and https unless it says otherwise. Nothing if it isn't one. */
+function webAddress(text: string): string | undefined {
+    try {
+        const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(text) ? text : `https://${text}`);
+        if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
+        // Browsers take almost anything for a host name, spaces included.
+        if (!/^([a-z\d.-]+|\[[\da-f:.]+\])$/i.test(url.hostname)) return undefined;
+        return (url.origin + url.pathname).replace(/\/+$/, "");
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * The Sockethub server that sends reminders unless the user names their own
+ * in Settings. A build can name another with `VITE_SOCKETHUB_URL`.
+ */
+export const DEFAULT_REMINDER_SERVER =
+    webAddress((import.meta.env.VITE_SOCKETHUB_URL ?? "").trim()) ?? "https://sockethub.silverbucket.net";
 const NEW_PER_DAY_KEY = "rememorize:newPerDay";
 const CARDS_PER_REVIEW_KEY = "rememorize:cardsPerReview";
 /** Where older versions kept their daily card limit, now read as the review size. */
@@ -22,6 +42,8 @@ export interface AppSettings {
     cardsPerReview?: number | null;
     /** "HH:MM", 24-hour. */
     reminderTime?: string;
+    /** The address of the user's own reminder server. Empty for the app's usual one. */
+    reminderServer?: string;
     updatedAt?: string;
 }
 
@@ -35,6 +57,7 @@ export const appSettingsSchema = {
         /** Older versions' daily card limit; read as the review size if there's none yet. */
         cardsPerDay: { type: ["integer", "null"], minimum: 0 },
         reminderTime: { type: "string", pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+        reminderServer: { type: "string" },
         updatedAt: { type: "string", format: "date-time" },
     },
 };
@@ -53,6 +76,10 @@ export function normalizeAppSettings(value: unknown): AppSettings {
         settings.cardsPerReview = parseCardsPerReview(perReview);
     }
     if (typeof v.reminderTime === "string" && TIME.test(v.reminderTime)) settings.reminderTime = v.reminderTime;
+    if (typeof v.reminderServer === "string") {
+        const server = v.reminderServer.trim() && webAddress(v.reminderServer.trim());
+        if (server !== undefined) settings.reminderServer = server;
+    }
     if (typeof v.updatedAt === "string") settings.updatedAt = v.updatedAt;
     return settings;
 }
@@ -82,6 +109,12 @@ export function parseCardsPerReview(value: unknown): number | null {
 export function parseReminderTime(value: unknown): string {
     const text = String(value ?? "").trim();
     return TIME.test(text) ? text : DEFAULT_REMINDER_TIME;
+}
+
+/** A reminder server's address. Blank gives the usual one; nothing if it isn't a web address. */
+export function parseReminderServer(value: unknown): string | undefined {
+    const text = String(value ?? "").trim();
+    return text ? webAddress(text) : DEFAULT_REMINDER_SERVER;
 }
 
 function load<T>(key: string, parse: (value: unknown) => T, fallback: T): T {

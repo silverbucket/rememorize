@@ -189,6 +189,7 @@ describe("device list", () => {
     const NOW = Date.parse("2026-11-20T12:00:00Z");
     const device = (endpoint: string, updatedAt = "2026-11-19T12:00:00Z") => ({
         endpoint,
+        server: "https://hub.example",
         p256dh: "key",
         auth: "secret",
         updatedAt,
@@ -199,6 +200,9 @@ describe("device list", () => {
             device("https://push.example/a"),
         );
         expect(normalizeDevice({ ...device("https://push.example/a"), auth: "" })).toBeUndefined();
+        // Without the server it subscribed with, there is nowhere its reminders could be sent from.
+        expect(normalizeDevice({ ...device("https://push.example/a"), server: undefined })).toBeUndefined();
+        expect(normalizeDevice({ ...device("https://push.example/a"), server: "hub.example" })).toBeUndefined();
         expect(normalizeDevice({ ...device("https://push.example/a"), updatedAt: "last week" })).toBeUndefined();
         expect(normalizeDevice({ endpoint: "https://push.example/a" })).toBeUndefined();
         expect(normalizeDevice(true)).toBeUndefined();

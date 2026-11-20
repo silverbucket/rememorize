@@ -33,6 +33,8 @@ interface Hub {
     publicKey: string;
     /** When true, the server can't be reached at all. */
     down: boolean;
+    /** Whether the server holds reminders to send later. */
+    scheduling: boolean;
     /** What the push service makes of a message sent now. */
     delivery: "accepted" | "gone" | "retry" | "rejected";
     /** When set, the server refuses to hold a list, with this reason. */
@@ -43,6 +45,8 @@ interface Hub {
 test.use({ channel: process.env.PW_CHANNEL || "chromium" });
 
 const PUSH = "https://push.example/phone";
+/** A reminder server of the user's own, entered in Settings. */
+const OWN = "https://reminders.example";
 /** The delivery address of the page's nth subscription: a browser gives a new one each time it subscribes. */
 const address = (n: number, base = PUSH) => `${base}/${n}`;
 
@@ -51,8 +55,8 @@ const read = (device: TestDevice, content: string | undefined) =>
     content ? JSON.parse(device.read(Buffer.from(content, "base64url"))) : { notification: {} };
 
 /**
- * Give the page a browser that can subscribe for `device`, and a reminder
- * server. Returns the server, with everything the app posts to it.
+ * Give the page a browser that can subscribe for `device`, and the app's
+ * usual reminder server. Returns the server, with everything the app posts to it.
  */
 async function standIn(page: Page, device: TestDevice, base = PUSH): Promise<Hub> {
     await page.context().grantPermissions(["notifications"]);
@@ -94,14 +98,20 @@ async function standIn(page: Page, device: TestDevice, base = PUSH): Promise<Hub
         },
         { base, keys: device.keys },
     );
+    return serve(page, SOCKETHUB_URL);
+}
+
+/** Answer for the reminder server at `url`. Returns it, with everything the app posts to it. */
+async function serve(page: Page, url: string): Promise<Hub> {
     const hub: Hub = {
         posted: [],
         publicKey: createDevice().keys.p256dh,
         down: false,
+        scheduling: true,
         delivery: "accepted",
         refusal: "",
     };
-    await page.route(`${SOCKETHUB_URL}/**`, async (route) => {
+    await page.route(`${url}/**`, async (route) => {
         if (hub.down) return route.abort("connectionrefused");
         const request = route.request();
         const headers = { "Access-Control-Allow-Origin": "*" };
@@ -113,7 +123,7 @@ async function standIn(page: Page, device: TestDevice, base = PUSH): Promise<Hub
                     apiVersion: 5,
                     endpoints: { socketIO: "/sockethub", httpActions: "/sockethub-http" },
                     platforms: [{ id: "webpush", apiVersion: 1 }],
-                    webpush: { publicKey: hub.publicKey, scheduling: true },
+                    webpush: { publicKey: hub.publicKey, scheduling: hub.scheduling },
                 },
             });
         }
@@ -262,6 +272,17 @@ test("turning reminders on shows a notification and schedules a month of them", 
     await expect(page.getByText("Done for now")).toBeVisible();
     await putAway(page);
     expect(posted).toHaveLength(after);
+});
+
+test("a reminder counts everything due, not one review's worth", async ({ page }) => {
+    const device = createDevice();
+    const hub = await standIn(page, device);
+    for (const front of ["pes", "kočka", "kůň"]) await addCard(page, { front, back: "animal", group: "Animals" });
+    await page.goto("/#/account");
+    await page.getByLabel("Most cards per review").fill("2");
+    await page.getByLabel("Most cards per review").blur();
+    await turnOn(page);
+    expect(nextTitle(hub, device, address(1))).toBe("3 cards due");
 });
 
 test("nothing is sent to the reminder server until reminders are on", async ({ page }) => {
@@ -516,9 +537,127 @@ test("a list the server can't take is reported, and sent once it can", async ({ 
     expect(nextTitle(hub, device, address(1))).toBe("1 card due");
 });
 
+test("a reminder server of the user's own takes over from the usual one", async ({ page }) => {
+    const device = createDevice();
+    const usual = await standIn(page, device);
+    const own = await serve(page, OWN);
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await page.goto("/#/account");
+    await turnOn(page);
+    expect(scheduled(usual, address(1))).toHaveLength(30);
+    expect(own.posted).toEqual([]);
+
+    // A name is enough for an address.
+    const field = page.getByLabel("Reminder server");
+    await expect(field).toHaveValue(SOCKETHUB_URL);
+    await field.fill("reminders.example/");
+    await field.blur();
+    await expect(field).toHaveValue(OWN);
+
+    // This browser subscribes again, with the new server's key, and its reminders go there.
+    await expect.poll(() => nextTitle(own, device, address(2))).toBe("1 card due");
+    const madeWith = await page.evaluate(() => JSON.parse(localStorage.getItem("test:subscription") ?? "{}").key);
+    expect(Buffer.from(madeWith, "base64").toString("base64url")).toBe(own.publicKey);
+    // The usual server is told to drop what it held, and hears nothing more.
+    expect(scheduled(usual, address(1))).toEqual([]);
+    const before = usual.posted.length;
+    await page.getByRole("button", { name: "Send a test" }).click();
+    await expect.poll(() => own.posted.filter((m) => m.type === "send")).toHaveLength(1);
+    const sent = own.posted.length;
+    await page.reload();
+    await expect(field).toHaveValue(OWN);
+    await expect.poll(() => own.posted.slice(sent).some((m) => m.type === "schedule")).toBe(true);
+    expect(own.posted.every((m) => m.target.id === address(2))).toBe(true);
+    expect(usual.posted).toHaveLength(before);
+
+    // An empty field goes back to the usual server.
+    await field.fill("");
+    await field.blur();
+    await expect(field).toHaveValue(SOCKETHUB_URL);
+    await expect.poll(() => nextTitle(usual, device, address(3))).toBe("1 card due");
+    expect(scheduled(own, address(2))).toEqual([]);
+
+    // A server is asked again each time it is entered: that it answered earlier doesn't count.
+    own.down = true;
+    const before2 = usual.posted.length;
+    await field.fill(OWN);
+    await field.blur();
+    await expect(page.getByRole("alert")).toContainText(`Couldn't reach a reminder server at ${OWN}.`);
+    await expect(page.getByText("Reminders are on for this device.")).toBeVisible();
+    expect(usual.posted).toHaveLength(before2);
+});
+
+test("a move to another server that fails halfway is finished without opening the app again", async ({ page }) => {
+    test.setTimeout(120_000);
+    const device = createDevice();
+    await standIn(page, device);
+    const own = await serve(page, OWN);
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await page.goto("/#/account");
+    await turnOn(page);
+    // Past the app's first half minute, when it brings the reminders up to date once regardless.
+    await page.waitForTimeout(31_000);
+
+    // The browser's notification service fails just as this browser subscribes for the new server,
+    // with its subscription for the old one already given up.
+    await page.evaluate(() => localStorage.setItem("test:refuse-subscription", "1"));
+    await page.getByLabel("Reminder server").fill(OWN);
+    await page.getByLabel("Reminder server").blur();
+    await expect(page.getByText("Reminders have stopped on this device.")).toBeVisible();
+
+    await page.evaluate(() => localStorage.removeItem("test:refuse-subscription"));
+    await expect(page.getByText("Reminders are on for this device.")).toBeVisible({ timeout: 50_000 });
+    await expect.poll(() => nextTitle(own, device, address(2))).toBe("1 card due");
+});
+
+test("an address that can't send reminders is refused, and nothing changes", async ({ page }) => {
+    const device = createDevice();
+    const usual = await standIn(page, device);
+    const other = await serve(page, OWN);
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await page.goto("/#/account");
+    await turnOn(page);
+    const before = usual.posted.length;
+    const field = page.getByLabel("Reminder server");
+    const enter = async (value: string) => {
+        await field.fill(value);
+        await field.blur();
+    };
+
+    // Nothing answers there.
+    other.down = true;
+    await enter(OWN);
+    await expect(page.getByRole("alert")).toHaveText(
+        `Couldn't reach a reminder server at ${OWN}. It may be down, or it may not allow requests from this app. Nothing was changed.`,
+    );
+    // What was typed stays, to be corrected.
+    await expect(field).toHaveValue(OWN);
+
+    // Something answers, but it doesn't hold reminders.
+    other.down = false;
+    other.scheduling = false;
+    await enter(`${OWN}/`);
+    await expect(page.getByRole("alert")).toContainText("isn't holding reminders at the moment. Nothing was changed.");
+
+    // Not an address at all.
+    await enter("not a server");
+    await expect(page.getByRole("alert")).toHaveText("That isn't a web address.");
+
+    // Through all of it the usual server kept the reminders, and still has them after a reload.
+    expect(other.posted).toEqual([]);
+    expect(usual.posted).toHaveLength(before);
+    await page.reload();
+    await expect(field).toHaveValue(SOCKETHUB_URL);
+    await expect(page.getByText("Reminders are on for this device.")).toBeVisible();
+    await expect.poll(() => usual.posted.slice(before).some((m) => m.type === "schedule")).toBe(true);
+    expect(usual.posted.every((m) => m.target.id === address(1))).toBe(true);
+});
+
 test("the service worker shows a reminder that arrives while the app is closed", async ({ page }, testInfo) => {
     // Notifications on screen are shared by every browser on the machine, so two runs at once close each
     // other's. This is the only test that shows any, and a service worker is the same at any screen size.
+    // Any other test opening the app clears them too, as opening the app should, so a push is sent again
+    // until its notification is seen.
     test.skip(testInfo.project.name !== "desktop", "runs once, in the desktop project");
     await page.context().grantPermissions(["notifications"]);
     await page.goto("/");
@@ -539,29 +678,35 @@ test("the service worker shows a reminder that arrives while the app is closed",
             return (await registration.getNotifications()).map((n) => ({ title: n.title, body: n.body, tag: n.tag }));
         });
     const reminder = { title: "12 cards due", body: "Open Rememorize to review them.", tag: "rememorize" };
+    const arrives = (data: string, expected: typeof reminder, then: () => Promise<unknown> = async () => {}) =>
+        expect(async () => {
+            await push(data);
+            await expect.poll(shown, { timeout: 2_000 }).toEqual([expected]);
+            await then();
+        }).toPass({ timeout: 20_000 });
 
-    await push(JSON.stringify({ web_push: 8030, notification: { ...reminder, navigate: `${origin}/` } }));
-    await expect.poll(shown).toEqual([reminder]);
+    await arrives(JSON.stringify({ web_push: 8030, notification: { ...reminder, navigate: `${origin}/` } }), reminder);
 
     // A newer reminder takes the place of the one on screen.
-    await push(JSON.stringify({ web_push: 8030, notification: { ...reminder, title: "14 cards due" } }));
-    await expect.poll(shown).toEqual([{ ...reminder, title: "14 cards due" }]);
+    await arrives(JSON.stringify({ web_push: 8030, notification: { ...reminder, title: "14 cards due" } }), {
+        ...reminder,
+        title: "14 cards due",
+    });
 
     // Something that isn't a reminder still shows a notification: a silent push can cost the permission.
-    await push("?");
-    await expect.poll(shown).toEqual([{ title: "Rememorize", body: "You have cards to review.", tag: "rememorize" }]);
+    await arrives("?", { title: "Rememorize", body: "You have cards to review.", tag: "rememorize" });
 
     // Opening the app answers the reminder.
     await page.reload();
     await expect.poll(shown).toEqual([]);
 
     // So does tapping it.
-    await push(JSON.stringify({ web_push: 8030, notification: reminder }));
-    await expect.poll(shown).toEqual([reminder]);
     const [worker] = page.context().serviceWorkers();
-    // As text: the test's own types are a page's, not a service worker's.
-    await worker.evaluate(`self.registration.getNotifications().then(([notification]) =>
-        self.dispatchEvent(new NotificationEvent("notificationclick", { notification })))`);
+    await arrives(JSON.stringify({ web_push: 8030, notification: reminder }), reminder, () =>
+        // As text: the test's own types are a page's, not a service worker's.
+        worker.evaluate(`self.registration.getNotifications().then(([notification]) =>
+            self.dispatchEvent(new NotificationEvent("notificationclick", { notification })))`),
+    );
     await expect.poll(shown).toEqual([]);
 });
 
@@ -658,4 +803,63 @@ test("a review on one device corrects the reminders of another", async ({ browse
     await putAway(laptop);
     await laptop.waitForTimeout(3_000);
     expect(fromLaptop.posted.slice(afterOff)).toEqual([]);
+});
+
+test("a reminder server chosen on one device is taken up by the others", async ({ browser }) => {
+    test.setTimeout(300_000);
+    const user = await createUser();
+    const phoneDevice = createDevice();
+
+    // The phone has reminders on, through the usual server.
+    const phone = await (await browser.newContext()).newPage();
+    const usualFromPhone = await standIn(phone, phoneDevice);
+    const ownFromPhone = await serve(phone, OWN);
+    await addCard(phone, { front: "mít", back: "to have", group: "Verbs" });
+    await addCard(phone, { front: "být", back: "to be", group: "Verbs" });
+    await addCard(phone, { front: "jít", back: "to go", group: "Verbs" });
+    await connect(phone, user);
+    await turnOn(phone);
+    expect(nextTitle(usualFromPhone, phoneDevice, address(1))).toBe("3 cards due");
+    // For now the new server can't be reached from where the phone is.
+    ownFromPhone.down = true;
+
+    // The server is changed on the laptop, which has no reminders of its own.
+    const laptop = await (await browser.newContext()).newPage();
+    const usualFromLaptop = await standIn(laptop, createDevice(), "https://push.example/laptop");
+    const ownFromLaptop = await serve(laptop, OWN);
+    await connect(laptop, user);
+    await laptop.goto("/");
+    await expect(laptop.getByText("Verbs")).toBeVisible({ timeout: 30_000 });
+    await laptop.goto("/#/account");
+    await laptop.getByLabel("Reminder server").fill(OWN);
+    await laptop.getByLabel("Reminder server").blur();
+    await expect(laptop.getByLabel("Reminder server")).toHaveValue(OWN);
+
+    // The phone hears of it through storage. Until it can move, its reminders are kept up to date
+    // through the server it has.
+    await phone.goto("/#/account");
+    await expect(phone.getByLabel("Reminder server")).toHaveValue(OWN, { timeout: 30_000 });
+    await reviewOne(phone, "Verbs");
+    await expect
+        .poll(() => nextTitle(usualFromPhone, phoneDevice, address(1)), { timeout: 60_000 })
+        .toBe("2 cards due");
+    expect(ownFromPhone.posted).toEqual([]);
+
+    // Once the new server can be reached, the phone moves over by itself.
+    ownFromPhone.down = false;
+    await phone.reload();
+    await expect.poll(() => nextTitle(ownFromPhone, phoneDevice, address(2)), { timeout: 60_000 }).toBe("2 cards due");
+    expect(scheduled(usualFromPhone, address(1))).toEqual([]);
+    await phone.goto("/#/account");
+    await expect(phone.getByLabel("Reminder server")).toHaveValue(OWN);
+    await expect(phone.getByText("Reminders are on for this device.")).toBeVisible();
+    // Long enough for the phone's new subscription to reach storage, and the laptop.
+    await phone.waitForTimeout(25_000);
+
+    // From then on the laptop's reviews reach the phone through the new server.
+    await reviewOne(laptop, "Verbs");
+    await expect.poll(() => nextTitle(ownFromLaptop, phoneDevice, address(2)), { timeout: 45_000 }).toBe("1 card due");
+    // A subscription only takes messages from the server it was made for, and each was only ever sent there.
+    expect(usualFromLaptop.posted.every((m) => m.target.id === address(1))).toBe(true);
+    expect(ownFromLaptop.posted.every((m) => m.target.id === address(2))).toBe(true);
 });

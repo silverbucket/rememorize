@@ -127,9 +127,13 @@ for that, an open-source gateway between web apps and messaging protocols.
   before it leaves the browser. The server passes it on and can't read it.
 - **No account, no cards.** The server is given a delivery address, a time and
   the encrypted reminder. Your cards are never sent to it.
-- **Off until you ask.** Nothing reaches the server unless reminders are on.
+- **Off until you ask.** The server isn't contacted until you turn reminders
+  on, or enter a server's address, which is checked before it is saved.
 - **In step across devices.** A review on your laptop corrects the reminder
   your phone will show.
+- **Your server, if you like.** Reminders go through
+  `sockethub.silverbucket.net` unless you enter the address of your own
+  Sockethub server in Settings.
 
 Reminders are planned a month ahead and renewed each time you open the app.
 
