@@ -48,6 +48,21 @@ describe("rate", () => {
         expect(new Date(c.review?.due ?? 0).getTime() - at.getTime()).toBeLessThan(24 * 60 * 60 * 1000);
     });
 
+    it("keeps scheduling a card after it lapses", () => {
+        // Easy graduates a new card to review; forgetting it then makes it a relearning card.
+        let c = rate(card(), 4, NOW);
+        expect(c.review?.state).toBe(2);
+        let at = new Date(c.review?.due ?? 0);
+        c = rate(c, 1, at);
+        expect(c.review?.state).toBe(3);
+
+        at = new Date(c.review?.due ?? 0);
+        expect(Object.keys(previewIntervals(c, at))).toHaveLength(4);
+        c = rate(c, 3, at);
+        expect(c.review?.reps).toBe(3);
+        expect(c.review?.state).toBe(2);
+    });
+
     it("restarts cards scheduled by another algorithm", () => {
         const c = card({
             review: {

@@ -1,77 +1,175 @@
-# Rememorize
+<div align="center">
 
-Flashcards with spaced repetition. Cards are scheduled with
-[FSRS](https://github.com/open-spaced-repetition/ts-fsrs) so each one comes up
-for review shortly before you'd otherwise forget it.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/rememorize-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/rememorize-light.svg">
+  <img alt="Rememorize" src="docs/assets/rememorize.svg" width="340">
+</picture>
 
-Your cards belong to you. They are saved in the browser (so the app works
-offline and without an account) and sync to your own
-[remoteStorage](https://remotestorage.io) server once you connect one. Data is
-stored with
-[remotestorage-module-flashcards](https://github.com/silverbucket/remotestorage-module-flashcards),
-so other apps can use the same cards.
+### Flashcards that come back just before you forget them.
 
-## Using it
+Works offline. No account needed.<br>
+Sync through your own remoteStorage.
 
-- **Groups**: every card belongs to a group (a topic or deck).
-- **Review**: shows due cards one at a time. Reveal the answer (Space), then
-  rate how well you remembered it: Again, Hard, Good or Easy (keys 1–4). Each
-  button shows when you'd see the card next.
-- **Direction**: a card is normally shown front first. Set its study
-  direction to back → front, or to both ways, and each direction gets its own
-  schedule. Only one direction of a card comes up per day.
-- **Stats**: a calendar of reviews per day, your streak, retention (overall
-  and per group) and how many cards are coming due.
-- **Storage**: tap the status pill in the header to connect a remoteStorage
-  account (`user@host`). Disconnecting removes the local copy; your server
-  keeps everything.
+[![CI](https://github.com/silverbucket/rememorize/actions/workflows/ci.yml/badge.svg)](https://github.com/silverbucket/rememorize/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/silverbucket/rememorize?color=2f8f0a)](https://github.com/silverbucket/rememorize/releases)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-2f8f0a)](LICENSE)
+[![remoteStorage](https://img.shields.io/badge/storage-remoteStorage-FF4B03)](https://remotestorage.io)
+
+**[Open Rememorize →](https://rememorize.5apps.com)**
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.png">
+  <img alt="Rememorize's statistics page in a browser, and a review in progress on a phone" src="docs/assets/hero-light.png" width="880">
+</picture>
+
+</div>
+
+<br>
+
+Rememorize is a flashcard app. You write the cards, and it shows each one
+again just before you would forget it.
+
+It works offline, in your browser or installed on your phone. Link your own
+[remoteStorage](https://remotestorage.io) and your cards sync across all your
+devices.
+
+## What it does
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Smart scheduling**
+
+Rate each answer: Again, Hard, Good or Easy. Cards you know come back less and
+less often. Cards you miss come back soon. It uses
+[FSRS](https://github.com/open-spaced-repetition/ts-fsrs), the same algorithm
+as Anki.
+
+</td>
+<td width="50%" valign="top">
+
+**Works offline**
+
+Install it on your phone or desktop. Study and edit your cards without a
+connection.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**Your own storage**
+
+Link a remoteStorage account and your cards sync across all your devices.
+Without one, they stay in your browser.
+
+</td>
+<td width="50%" valign="top">
+
+**Both directions**
+
+Study a card front to back, back to front, or both.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**Progress you can see**
+
+A review calendar, your streak, how much you remember and what is due next.
+
+</td>
+<td width="50%" valign="top">
+
+**Import and export**
+
+Bring in cards from CSV or Anki's plain-text export. A daily limit on new
+cards keeps a big deck manageable. Export whenever you like.
+
+</td>
+</tr>
+</table>
+
+<br>
+
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/tour-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/tour-light.png">
+  <img alt="Three phone screens: the list of groups with cards due, the cards in a group, and the forecast of upcoming reviews" src="docs/assets/tour-light.png" width="880">
+</picture>
+</div>
+
+## Getting started
+
+1. Open **[rememorize.5apps.com](https://rememorize.5apps.com)**.
+2. Add a card, or import a deck.
+3. Press **Review** when cards are due. A few minutes a day is enough.
+
+To install it, use your browser's _Install_ or _Add to Home Screen_.
+
+### Keyboard
+
+| Key                                                 | Action                       |
+| --------------------------------------------------- | ---------------------------- |
+| <kbd>Space</kbd> or <kbd>Enter</kbd>                | Show the answer              |
+| <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> | Rate Again, Hard, Good, Easy |
+| <kbd>U</kbd>                                        | Undo the last rating         |
+
+## Your cards, your storage
+
+[remoteStorage](https://remotestorage.io) is an open protocol for storage that
+belongs to you. You sign up with a storage provider, not with the app, or you
+run your own server.
+
+To link yours, tap the status pill in the top right and enter your address
+(`user@host`). No account yet? [Get one](https://remotestorage.io/get).
+
+- **No backend.** Your cards go from your browser to your storage, and nowhere
+  else.
+- **No trackers.** No analytics and no third-party scripts.
+- **Open format.** Cards use
+  [remotestorage-module-flashcards](https://github.com/silverbucket/remotestorage-module-flashcards),
+  so other apps can use them too.
+
+Disconnecting removes the cards from that browser, not from your storage.
 
 ## Development
 
-Requires [Bun](https://bun.sh) and Node.js 24+.
-
 ```sh
 bun install
-bun run dev        # http://localhost:5173
-bun run test       # unit tests (Vitest)
-bun run check      # type-check (svelte-check)
-bun run lint       # Biome
-bun run build      # production build in dist/
-bun run preview    # serve the production build (service worker enabled)
+bun run dev    # http://localhost:5173
 ```
 
-End-to-end tests run the production build against a real remoteStorage
-server ([armadietto](https://github.com/remotestorage/armadietto)) in Docker:
+See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** for tests, project layout,
+screenshots and releases.
 
-```sh
-bunx playwright install chromium  # once
-bun run armadietto:up   # localhost:8100 (override with RS_PORT)
-bun run test:e2e        # PW_CHANNEL=chrome to use your installed Chrome
-bun run armadietto:down
-```
+## License
 
-Stack: Svelte 5, TypeScript, Vite, vite-plugin-pwa (Workbox),
-remoteStorage.js 2, ts-fsrs.
+[GPL-3.0-or-later](LICENSE) © 2026 Nick Jennings
 
-Add `localStorage.setItem("rememorize:debug", "1")` in the console to turn on
-remoteStorage.js logging.
+---
 
-### Layout
+<div align="center">
 
-```
-src/
-  App.svelte              shell, routing, update prompt
-  components/             pages (Home, GroupView, CardEditor, Review, Stats, Account)
-  lib/rs.ts               remoteStorage instance + OAuth state check
-  lib/library.svelte.ts   app state: cards, groups, connection status
-  lib/scheduler.ts        FSRS wrapper (ratings, due queue, intervals)
-  lib/stats.ts            statistics from the review log (streak, retention, forecast)
-  lib/router.svelte.ts    hash routes
-```
+**Built on open protocols**
 
-## Deploying
+<a href="https://remotestorage.io">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/remotestorage-text-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/remotestorage-text-light.svg">
+    <img alt="remoteStorage" src="docs/assets/remotestorage-text.svg" height="48">
+  </picture>
+</a>
 
-Run the **Deploy** workflow from the Actions tab (master only). It checks,
-tests and builds the app, then pushes `dist/` to 5apps, which serves it at
-https://rememorize.5apps.com. It uses the `FIVEAPPS_DEPLOY_KEY` repository
-secret.
+<br>
+
+<sub><a href="https://remotestorage.io">remoteStorage</a> keeps your data yours</sub>
+
+</div>

@@ -1,7 +1,8 @@
 {
     "name": "rememorize",
-    "version": "0.2.0",
+    "version": "1.0.0",
     "private": true,
+    "license": "GPL-3.0-or-later",
     "type": "module",
     "description": "Flashcards with FSRS spaced repetition, stored in your own remoteStorage",
     "scripts": {
@@ -14,6 +15,7 @@
         "lint": "biome check .",
         "lint:fix": "biome check --write .",
         "test:e2e": "playwright test",
+        "screenshots": "vite build && node scripts/screenshots.mjs",
         "armadietto:up": "docker compose up -d --build",
         "armadietto:down": "docker compose down"
     },

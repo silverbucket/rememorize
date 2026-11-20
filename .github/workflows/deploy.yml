@@ -1,17 +1,40 @@
-name: Deploy
+name: Release & Deploy
 
-# Publish master to https://rememorize.5apps.com.
+# Cut a release from master and publish it to https://rememorize.5apps.com.
+#
+#   gh workflow run deploy.yml -f bump=patch    # or minor / major / none
+#
+# The version lives in package.json (the app shows it under Settings). A
+# release bumps it, commits "release vX.Y.Z" to master, tags that commit,
+# deploys the build to 5apps and creates a GitHub Release with generated
+# notes. `bump: none` releases the version package.json already has: use it
+# for the first release, or to deploy a tagged release again.
 #
 # Needs the FIVEAPPS_DEPLOY_KEY secret: the private half of an SSH key that
 # is authorized on the 5apps account (the same key the other apps use).
-# The build output is pushed as the root of the 5apps repo, matching how the
-# app was deployed before (dist/ subtree).
+# See docs/DEVELOPMENT.md#releasing.
 
 on:
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump (none releases the version in package.json as it is)
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+          - none
 
 permissions:
-  contents: read
+  contents: write
+
+# One release at a time; a second run waits rather than racing the first to master.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -21,17 +44,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          # Tags, so an existing release can be recognised.
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
+
+      - name: Set the version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          if [ "$BUMP" != "none" ]; then
+            npm version "$BUMP" --no-git-tag-version
+          fi
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          # What is left to do for this version. A tag that is already there
+          # is only acceptable for `none`, and only while it is still the tip
+          # of master: otherwise this build would not be what the tag names,
+          # or (re-running an old run) it would replace a newer deployment.
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            if [ "$BUMP" != "none" ]; then
+              echo "::error::${TAG} already exists. package.json is behind the tags; fix its version on master first."
+              exit 1
+            fi
+            MASTER=$(git ls-remote origin refs/heads/master | cut -f1)
+            if [ "$(git rev-parse "${TAG}^{commit}")" != "$(git rev-parse HEAD)" ] || [ "$MASTER" != "$(git rev-parse HEAD)" ]; then
+              echo "::error::${TAG} is already released and master has moved on since. Choose patch, minor or major."
+              exit 1
+            fi
+            echo "tagged=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${TAG} is already tagged at this commit; deploying it again."
+          else
+            echo "tagged=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Releasing ${TAG}."
+          fi
+
+      # After the bump, so the build carries the new version.
       - run: bun run lint
       - run: bun run check
       - run: bun run test
       - run: bun run build
 
+      # Before the tag goes up, so a failure here leaves nothing released.
       - name: Setup SSH for 5apps
         env:
           FIVEAPPS_DEPLOY_KEY: ${{ secrets.FIVEAPPS_DEPLOY_KEY }}
@@ -42,12 +102,42 @@ jobs:
           ssh-keyscan -H 5apps.com >> ~/.ssh/known_hosts
           printf 'Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key\n  IdentitiesOnly yes\n' >> ~/.ssh/config
 
+      - name: Commit and tag the release
+        if: steps.version.outputs.tagged == 'false'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Nothing to commit for `none`: the tag goes on master as it is.
+          if ! git diff --quiet -- package.json; then
+            git commit -q -m "release ${TAG}" -- package.json
+          fi
+          git tag "${TAG}"
+          # Atomic, so the tag never lands without its commit. Fails, before
+          # anything is deployed, if master moved while this was running.
+          git push --atomic origin HEAD:master "refs/tags/${TAG}"
+
       - name: Deploy to 5apps
+        # The build output is pushed as the root of the 5apps repo.
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           cd dist
           git init -q -b master
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "deploy ${GITHUB_SHA::7}"
+          git commit -q -m "deploy ${TAG}"
           git push --force git@5apps.com:silverbucket_rememorize.git master
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::Release ${TAG} already exists."
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
+          fi
