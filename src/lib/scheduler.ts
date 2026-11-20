@@ -19,7 +19,9 @@ export const GRADES: { grade: Grade; label: string; key: string }[] = [
     { grade: Rating.Easy as Grade, label: "Easy", key: "4" },
 ];
 
-const STATUS = ["new", "learning", "review", "relearning"] as const;
+// ts-fsrs's scheduleStatus for each stored state. A lapsed card (state 3,
+// relearning) is "learning" to ts-fsrs, which rejects any other name for it.
+const STATUS = ["new", "learning", "review", "learning"] as const;
 
 const scheduler = await DefaultScheduler({ version: "FSRS-7", enableFuzz: true, desiredRetention: 0.9 });
 
