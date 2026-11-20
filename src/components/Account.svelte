@@ -1,7 +1,7 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import { href } from "../lib/router.svelte";
-    import { MAX_NEW_PER_DAY, parseCardsPerDay, parseNewPerDay } from "../lib/settings";
+    import { MAX_NEW_PER_DAY, parseCardsPerReview, parseNewPerDay } from "../lib/settings";
     import { library } from "../lib/state";
     import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from "../lib/theme";
     import { exportCsv, exportJson } from "../lib/transfer";
@@ -47,16 +47,16 @@
         }
     }
 
-    async function setCardsPerDay(event: Event) {
+    async function setCardsPerReview(event: Event) {
         const input = event.currentTarget as HTMLInputElement;
-        const value = parseCardsPerDay(input.value);
+        const value = parseCardsPerReview(input.value);
         input.value = value === null ? "" : String(value);
         settingsError = "";
         try {
-            await library.setCardsPerDay(value);
+            await library.setCardsPerReview(value);
         } catch (e) {
             settingsError = `Could not save the setting: ${e instanceof Error ? e.message : String(e)}`;
-            input.value = library.cardsPerDay === null ? "" : String(library.cardsPerDay);
+            input.value = library.cardsPerReview === null ? "" : String(library.cardsPerReview);
         }
     }
 
@@ -167,24 +167,24 @@
         <span class="muted">Started today: {library.startedToday}</span>
     </div>
 
-    <label class="title next" for="cards-per-day">Most cards per day</label>
+    <label class="title next" for="cards-per-review">Most cards per review</label>
     <p class="muted">
-        A cap on everything you study in a day, reviews and new cards together. Leave it empty for no limit. Reviews
-        held back by it come back the next day, later than planned, so you may remember them less well.
+        Splits what's due into reviews of this many cards, reviews and new cards together, so you never face a huge
+        pile in one sitting. When one ends you can start the next straight away, or come back later: nothing is
+        pushed back. Leave it empty to review everything due at once.
     </p>
     <div class="row">
         <input
-            id="cards-per-day"
+            id="cards-per-review"
             class="field number"
             type="number"
             inputmode="numeric"
-            min="0"
+            min="1"
             max={MAX_NEW_PER_DAY}
             placeholder="No limit"
-            value={library.cardsPerDay ?? ""}
-            onchange={setCardsPerDay}
+            value={library.cardsPerReview ?? ""}
+            onchange={setCardsPerReview}
         />
-        <span class="muted">Studied today: {library.studiedToday}</span>
     </div>
     <p class="muted">These settings are the same on every device you connect.</p>
     {#if settingsError}<p class="error" role="alert">{settingsError}</p>{/if}

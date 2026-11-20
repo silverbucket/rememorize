@@ -1,19 +1,21 @@
 /**
- * The daily limits. They are stored in the app's own folder (see Library),
+ * The review limits. They are stored in the app's own folder (see Library),
  * so they sync; localStorage only remembers the last values this browser used.
  */
 
 export const DEFAULT_NEW_PER_DAY = 20;
 export const MAX_NEW_PER_DAY = 9999;
-/** The most cards to study per day, reviews and new together; `null` is no limit. */
-export const DEFAULT_CARDS_PER_DAY = null;
+/** The most cards in one review, reviews and new together; `null` is no limit. */
+export const DEFAULT_CARDS_PER_REVIEW = null;
 const NEW_PER_DAY_KEY = "rememorize:newPerDay";
+const CARDS_PER_REVIEW_KEY = "rememorize:cardsPerReview";
+/** Where older versions kept their daily card limit, now read as the review size. */
 const CARDS_PER_DAY_KEY = "rememorize:cardsPerDay";
 
 /** Rememorize's settings, shared by every device, stored at `/rememorize/settings`. */
 export interface AppSettings {
     newCardsPerDay?: number;
-    cardsPerDay?: number | null;
+    cardsPerReview?: number | null;
     updatedAt?: string;
 }
 
@@ -23,6 +25,8 @@ export const appSettingsSchema = {
     type: "object",
     properties: {
         newCardsPerDay: { type: "integer", minimum: 0 },
+        cardsPerReview: { type: ["integer", "null"], minimum: 1 },
+        /** Older versions' daily card limit; read as the review size if there's none yet. */
         cardsPerDay: { type: ["integer", "null"], minimum: 0 },
         updatedAt: { type: "string", format: "date-time" },
     },
@@ -36,8 +40,10 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     if (Number.isInteger(v.newCardsPerDay) && (v.newCardsPerDay as number) >= 0) {
         settings.newCardsPerDay = v.newCardsPerDay as number;
     }
-    if (v.cardsPerDay === null || (Number.isInteger(v.cardsPerDay) && (v.cardsPerDay as number) >= 0)) {
-        settings.cardsPerDay = v.cardsPerDay as number | null;
+    // Older versions kept a daily card limit; it becomes the size of one review.
+    const perReview = "cardsPerReview" in v ? v.cardsPerReview : v.cardsPerDay;
+    if (perReview === null || (Number.isInteger(perReview) && (perReview as number) >= 0)) {
+        settings.cardsPerReview = parseCardsPerReview(perReview);
     }
     if (typeof v.updatedAt === "string") settings.updatedAt = v.updatedAt;
     return settings;
@@ -56,11 +62,12 @@ export function parseNewPerDay(value: unknown): number {
     return parseCount(text) ?? DEFAULT_NEW_PER_DAY;
 }
 
-/** Like parseNewPerDay, but blank (or anything that isn't a number) means no limit. */
-export function parseCardsPerDay(value: unknown): number | null {
+/** Like parseNewPerDay, but at least 1, and blank (or anything that isn't a number) means no limit. */
+export function parseCardsPerReview(value: unknown): number | null {
     if (value === null) return null;
     const text = typeof value === "number" ? String(value) : String(value ?? "").trim();
-    return parseCount(text) ?? null;
+    const n = parseCount(text);
+    return n === undefined ? null : Math.max(1, n);
 }
 
 function load<T>(key: string, parse: (value: unknown) => T, fallback: T): T {
@@ -82,6 +89,11 @@ function save(key: string, value: string): void {
 
 export const loadNewPerDay = (): number => load(NEW_PER_DAY_KEY, parseNewPerDay, DEFAULT_NEW_PER_DAY);
 export const saveNewPerDay = (value: number): void => save(NEW_PER_DAY_KEY, String(value));
-export const loadCardsPerDay = (): number | null => load(CARDS_PER_DAY_KEY, parseCardsPerDay, DEFAULT_CARDS_PER_DAY);
-export const saveCardsPerDay = (value: number | null): void =>
-    save(CARDS_PER_DAY_KEY, value === null ? "" : String(value));
+export const loadCardsPerReview = (): number | null =>
+    load(
+        CARDS_PER_REVIEW_KEY,
+        parseCardsPerReview,
+        load(CARDS_PER_DAY_KEY, parseCardsPerReview, DEFAULT_CARDS_PER_REVIEW),
+    );
+export const saveCardsPerReview = (value: number | null): void =>
+    save(CARDS_PER_REVIEW_KEY, value === null ? "" : String(value));

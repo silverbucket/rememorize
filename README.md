@@ -56,8 +56,8 @@ devices.
   with, the ones you are learning, know well, haven't started or added this
   week, in one group or across all of them.
 - **Import and export.** Bring in cards from CSV or Anki's plain-text export.
-  A daily limit on new cards keeps a big deck manageable. Export whenever you
-  like.
+  A daily limit on new cards keeps a big deck manageable, and reviews can
+  come a few cards at a time. Export whenever you like.
 - **Easy on the eyes.** Light is tinted like ledger paper, dark like a
   chalkboard. It follows your system, or you choose.
 - **Quick with a keyboard.** Space shows the answer, 1 to 4 rate it, and U

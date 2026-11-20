@@ -7,15 +7,17 @@
     import Icon from "./Icon.svelte";
     import ViewChips from "./ViewChips.svelte";
 
+    /** One review's worth; `today` is everything due, however many reviews it takes. */
     const queue = $derived(library.dueIn(library.cards));
-    const fresh = $derived(queue.filter((i) => isNew(i.card, i.reverse)).length);
+    const today = $derived(library.todayIn(library.cards));
+    const fresh = $derived(today.filter((i) => isNew(i.card, i.reverse)).length);
     const next = $derived(nextDue(library.cards, library.now));
     const days = $derived(streak(library.log, library.now));
     const reviewedToday = $derived(lastDays(library.log, library.now, 1)[0].reviews);
 
     /** "20 new · 10 reviews", leaving out whichever is zero. New first: that's the number the daily limit sets. */
     const breakdown = $derived(
-        [fresh > 0 ? `${fresh} new` : "", queue.length > fresh ? plural(queue.length - fresh, "review") : ""]
+        [fresh > 0 ? `${fresh} new` : "", today.length > fresh ? plural(today.length - fresh, "review") : ""]
             .filter(Boolean)
             .join(" · "),
     );
@@ -63,13 +65,14 @@
             {#if queue.length > 0}
                 <!-- The split leads: a total of new plus reviews read as if the new-card limit were ignored. -->
                 <p class="headline">{breakdown}</p>
-                <p class="muted">{plural(queue.length, "card")} to study today</p>
+                <p class="muted">
+                    {plural(today.length, "card")} to study today{#if queue.length < today.length}, {queue.length} at a
+                        time{/if}
+                </p>
             {:else}
                 <p class="headline">You're all caught up</p>
                 <p class="muted">
-                    {#if library.cardsWaiting > 0}
-                        Daily limit reached: {plural(library.cardsWaiting, "more card")} waiting for tomorrow.
-                    {:else if library.newWaiting > 0}
+                    {#if library.newWaiting > 0}
                         {plural(library.newWaiting, "new card")} waiting for tomorrow.
                     {:else if next}
                         The next card is due {fromNow(next.toISOString(), library.now)}.

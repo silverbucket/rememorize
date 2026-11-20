@@ -257,25 +257,25 @@ describe("Library", () => {
         expect(library.find("default", card["@id"])).toEqual(restored);
     });
 
-    it("saves the daily limits in the app's own folder", async () => {
+    it("saves the limits in the app's own folder", async () => {
         await library.setNewPerDay(7);
-        await library.setCardsPerDay(50);
+        await library.setCardsPerReview(50);
         expect(library.newPerDay).toBe(7);
-        expect(library.cardsPerDay).toBe(50);
+        expect(library.cardsPerReview).toBe(50);
         expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
             newCardsPerDay: 7,
-            cardsPerDay: 50,
+            cardsPerReview: 50,
         });
         expect(await rs.flashcards.getSettings(false)).toEqual({});
         // A second device (or a reload) reads them from storage.
-        const other = new Library(rs, { newPerDay: 3, cardsPerDay: 10 });
+        const other = new Library(rs, { newPerDay: 3, cardsPerReview: 10 });
         await other.load();
         expect(other.newPerDay).toBe(7);
-        expect(other.cardsPerDay).toBe(50);
-        // And the card limit can be turned off again.
-        await library.setCardsPerDay(null);
+        expect(other.cardsPerReview).toBe(50);
+        // And the review size can be turned off again.
+        await library.setCardsPerReview(null);
         await other.load();
-        expect(other.cardsPerDay).toBeNull();
+        expect(other.cardsPerReview).toBeNull();
         expect(other.newPerDay).toBe(7);
     });
 
@@ -293,10 +293,10 @@ describe("Library", () => {
     });
 
     it("keeps both limits when they are saved at the same time", async () => {
-        await Promise.all([library.setNewPerDay(5), library.setCardsPerDay(30)]);
+        await Promise.all([library.setNewPerDay(5), library.setCardsPerReview(30)]);
         expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
             newCardsPerDay: 5,
-            cardsPerDay: 30,
+            cardsPerReview: 30,
         });
     });
 
@@ -316,28 +316,27 @@ describe("Library", () => {
         expect(library.newPerDay).toBe(8);
     });
 
-    it("caps the day's cards, reviews and new together", async () => {
-        library.cardsPerDay = 2;
+    it("splits what's due into reviews of a few cards, without holding any back", async () => {
+        library.cardsPerReview = 2;
         const long = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
         const old = await library.save({ frontText: "r", backText: "r", group: "one" });
         await library.review(old, 3, long);
         await library.save({ frontText: "a", backText: "a", group: "one" });
         await library.save({ frontText: "b", backText: "b", group: "two" });
         expect(library.dueCount).toBe(2);
-        expect(library.cardsWaiting).toBe(1);
+        expect(library.todayIn(library.cards)).toHaveLength(3);
         expect(library.newWaiting).toBe(0);
         // The group still says how much is really due.
         expect(library.groups.map((g) => [g.reviews, g.fresh])).toEqual([
             [1, 1],
             [0, 1],
         ]);
-        const [first] = library.dueIn(library.cards);
-        await library.review(first.card, 4);
-        expect(library.studiedToday).toBe(1);
+        // Once one review is done, the next takes the rest: studying today doesn't use anything up.
+        for (const item of library.dueIn(library.cards)) await library.review(item.card, 4);
         expect(library.dueCount).toBe(1);
-        library.cardsPerDay = null;
-        expect(library.dueCount).toBe(2);
-        expect(library.cardsWaiting).toBe(0);
+        expect(library.todayIn(library.cards)).toHaveLength(1);
+        library.cardsPerReview = null;
+        expect(library.dueCount).toBe(1);
     });
 
     it("keeps this browser's limit until one has been saved to storage", async () => {
@@ -375,9 +374,9 @@ describe("Library", () => {
         appHandlers[0]({
             origin: "remote",
             relativePath: "settings",
-            newValue: { newCardsPerDay: 6, cardsPerDay: 40 },
+            newValue: { newCardsPerDay: 6, cardsPerReview: 40 },
         });
-        expect([lib.newPerDay, lib.cardsPerDay]).toEqual([6, 40]);
+        expect([lib.newPerDay, lib.cardsPerReview]).toEqual([6, 40]);
         handlers[0]({ origin: "remote", relativePath: ".settings", newValue: { newCardsPerDay: 4 } });
         expect(lib.newPerDay).toBe(6);
         expect(lib.cards).toEqual([]);

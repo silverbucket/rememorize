@@ -297,7 +297,7 @@ test("daily limit on new cards", async ({ page }) => {
     // The group says why its review is shorter than its count of new cards.
     await page.goto("/#/group/Numbers");
     await expect(page.getByText("3 cards, 3 new")).toBeVisible();
-    await expect(page.getByText("Today's review takes 2 of the 3 new cards: the daily limit is 2.")).toBeVisible();
+    await expect(page.getByText("You can start 2 of the 3 new cards today: the daily limit is 2.")).toBeVisible();
 
     await page.goto("/");
     await expect(page.getByRole("link", { name: "Review 2 cards" })).toBeVisible();
@@ -328,7 +328,7 @@ test("daily limit on new cards", async ({ page }) => {
     await expect(page.getByRole("link", { name: "Review 1 card" })).toBeVisible();
 });
 
-test("daily limit on all cards, and the home page counts new cards apart", async ({ page }) => {
+test("reviews of a few cards at a time, and the home page counts new cards apart", async ({ page }) => {
     for (const [front, back] of [
         ["jedna", "one"],
         ["dva", "two"],
@@ -341,32 +341,36 @@ test("daily limit on all cards, and the home page counts new cards apart", async
     await expect(page.getByText("3 cards to study today")).toBeVisible();
 
     await page.goto("/#/account");
-    await expect(page.getByLabel("Most cards per day")).toHaveValue("");
-    await page.getByLabel("Most cards per day").fill("2");
-    await page.getByLabel("Most cards per day").blur();
+    await expect(page.getByLabel("Most cards per review")).toHaveValue("");
+    await page.getByLabel("Most cards per review").fill("2");
+    await page.getByLabel("Most cards per review").blur();
 
     await page.goto("/#/group/Numbers");
-    await expect(page.getByText("Today's review takes 2 of them: the daily card limit is 2.")).toBeVisible();
+    await expect(page.getByText("3 to study today, 2 at a time: the review size is 2.")).toBeVisible();
     await page.goto("/");
-    await expect(page.locator(".today .headline")).toHaveText("2 new");
+    // Everything due is still counted; only the review is smaller.
+    await expect(page.locator(".today .headline")).toHaveText("3 new");
+    await expect(page.getByText("3 cards to study today, 2 at a time")).toBeVisible();
     await page.getByRole("link", { name: "Review 2 cards" }).click();
     for (let i = 0; i < 2; i++) {
         await page.getByRole("button", { name: /Show answer/ }).click();
         await page.getByRole("button", { name: /Easy/ }).click();
     }
-    await expect(page.getByText("1 more card waiting: you've studied 2 of 2 cards for today.")).toBeVisible();
-    await page.getByRole("link", { name: "Back to your cards" }).click();
-    await expect(page.getByText("Daily limit reached: 1 more card waiting for tomorrow.")).toBeVisible();
+    await expect(page.getByText("1 more card is due.")).toBeVisible();
+    // The next review starts straight away.
+    await page.getByRole("button", { name: "Review 1 more card" }).click();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByText("You reviewed 1 card.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /more card/ })).toHaveCount(0);
 
     // Clearing the field turns the limit off again.
     await page.reload();
     await page.goto("/#/account");
-    await expect(page.getByLabel("Most cards per day")).toHaveValue("2");
-    await expect(page.getByText("Studied today: 2")).toBeVisible();
-    await page.getByLabel("Most cards per day").fill("");
-    await page.getByLabel("Most cards per day").blur();
-    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Cards" }).click();
-    await expect(page.getByRole("link", { name: "Review 1 card" })).toBeVisible();
+    await expect(page.getByLabel("Most cards per review")).toHaveValue("2");
+    await page.getByLabel("Most cards per review").fill("");
+    await page.getByLabel("Most cards per review").blur();
+    await expect(page.getByLabel("Most cards per review")).toHaveValue("");
 });
 
 test("cards can be studied back → front, or both ways", async ({ page }) => {
