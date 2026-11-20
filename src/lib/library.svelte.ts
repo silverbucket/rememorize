@@ -313,11 +313,12 @@ export class Library {
      * Move the new-card limit an older version saved next to the cards into
      * the app's folder, unless the app has one of its own by then.
      */
-    #migrateSettings(): Promise<void> {
-        return this.#queueSettings(async (stored) => {
+    async #migrateSettings(): Promise<void> {
+        // Read before the app's own settings, so a limit that syncs down meanwhile is seen and kept.
+        const legacy = (await this.#rs.flashcards.getSettings(false)).newCardsPerDay;
+        if (legacy === undefined) return;
+        await this.#queueSettings(async (stored) => {
             if (normalizeAppSettings(stored).newCardsPerDay !== undefined) return undefined;
-            const legacy = (await this.#rs.flashcards.getSettings(false)).newCardsPerDay;
-            if (legacy === undefined) return undefined;
             this.#applyLegacySettings(legacy);
             this.#ownNewPerDay = true;
             return { newCardsPerDay: parseNewPerDay(legacy) };
