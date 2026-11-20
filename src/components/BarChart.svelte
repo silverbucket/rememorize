@@ -118,7 +118,11 @@
         white-space: nowrap;
     }
 
-    /* The last label stays inside the chart instead of centring on its bar. */
+    /* The first and last labels stay inside the chart instead of centring on their bars. */
+    .tick:first-child {
+        justify-content: flex-start;
+    }
+
     .tick:last-child {
         justify-content: flex-end;
     }

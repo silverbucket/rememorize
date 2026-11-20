@@ -22,10 +22,13 @@
 
 <div class="page-head">
     <h1>Your cards</h1>
-    <div class="actions">
-        <a class="btn ghost" href={href.import()}><Icon name="import" />Import</a>
-        <a class="btn" href={href.newCard()}><Icon name="plus" />New card</a>
-    </div>
+    <!-- With no cards yet, the panel below offers both ways to start. -->
+    {#if library.loaded && library.groups.length > 0}
+        <div class="actions">
+            <a class="btn ghost import" href={href.import()}><Icon name="import" />Import</a>
+            <a class="btn" href={href.newCard()}><Icon name="plus" />New card</a>
+        </div>
+    {/if}
 </div>
 
 {#if library.error}
@@ -50,6 +53,7 @@
         </p>
         <div class="empty-actions">
             <a class="btn primary" href={href.newCard()}>Add your first card</a>
+            <a class="btn" href={href.import()}><Icon name="import" />Import a file</a>
         </div>
     </div>
 {:else}
@@ -129,6 +133,9 @@
     }
 
     .empty-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
         margin-top: 0.5rem;
     }
 
@@ -273,9 +280,14 @@
             padding-left: 1rem;
         }
 
-        /* Under the title, the bordered button comes first so the row starts on the page's left edge. */
-        .page-head .ghost {
-            order: 1;
+        /* The title and New card share one row; importing is in Settings too. */
+        .page-head {
+            flex-wrap: nowrap;
+            align-items: center;
+        }
+
+        .import {
+            display: none;
         }
     }
 </style>

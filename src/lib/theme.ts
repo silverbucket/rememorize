@@ -13,7 +13,7 @@ export const THEMES: { value: Theme; label: string }[] = [
 const THEME_KEY = "rememorize:theme";
 
 /** The page background in each scheme, for the browser's toolbar. Keep in step with --bg in app.css. */
-export const PAGE_COLOR = { light: "#f0f5ed", dark: "#151d19" } as const;
+export const PAGE_COLOR = { light: "#f0f5ed", dark: "#101814" } as const;
 
 export function parseTheme(value: unknown): Theme {
     return value === "light" || value === "dark" ? value : "auto";

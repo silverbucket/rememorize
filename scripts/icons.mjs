@@ -18,7 +18,7 @@ const PUBLIC = join(ROOT, "public");
 const ASSETS = join(ROOT, "docs/assets");
 
 /** Keep in step with src/app.css: the dark page, and the accent in each theme. */
-const BOARD = "#151d19";
+const BOARD = "#101814";
 const MINT = "#77de96";
 const CHALK = "#e4eae2";
 /** A green that reads on white and on a dark page alike, for images that can't tell which they are on. */

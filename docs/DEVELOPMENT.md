@@ -127,9 +127,10 @@ and the navigation is a tab bar along the bottom; above 880px both become a
 sidebar. On a phone, a review hides the header and the tab bar so the card has
 the whole screen, and the card editor swaps the tab bar for its Save button.
 
-If you change the page background (`--bg`), change it in three more places:
+If you change the page background (`--bg`), change it in four more places:
 `PAGE_COLOR` in `src/lib/theme.ts` and the `theme-color` tags in `index.html`
-(the browser's toolbar), and the manifest colours in `vite.config.ts`.
+(the browser's toolbar), the manifest colours in `vite.config.ts`, and `BOARD`
+in `scripts/icons.mjs` (the icons' background; run `bun run icons` after).
 
 ## Icons and logos
 

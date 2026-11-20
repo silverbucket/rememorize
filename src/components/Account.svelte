@@ -267,7 +267,8 @@
     }
 
     .number {
-        width: 7rem;
+        width: 5.5rem;
+        font-variant-numeric: tabular-nums;
     }
 
     /* Three choices, one of them always on. */
@@ -280,7 +281,7 @@
         margin-top: 0.25rem;
         padding: 3px;
         border-radius: 12px;
-        background: var(--surface-3);
+        background: var(--well);
     }
 
     .segments label {
@@ -310,7 +311,7 @@
     }
 
     .segments input:checked + span {
-        background: var(--surface);
+        background: var(--raised);
         color: var(--text);
         box-shadow: var(--shadow-sm);
     }

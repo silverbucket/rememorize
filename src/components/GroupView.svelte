@@ -105,15 +105,16 @@
                 <li>
                     <a class="card content" href={href.card(card.group, card["@id"])}>
                         <span class="front">{card.frontText}</span>
+                        <!-- The direction mark trails the text, so every back starts on the same line. -->
                         <span class="back muted">
+                            {card.backText}
                             {#if card.direction === "both"}
                                 <span class="direction" title="Studied both ways"><Icon name="both" size={15} /></span>
                             {:else if card.direction === "reverse"}
                                 <span class="direction" title="Studied back → front"><Icon name="reverse" size={15} /></span>
                             {/if}
-                            {card.backText}
                         </span>
-                        <span class="when" class:due={next.due}>{next.text}</span>
+                        <span class="when" class:due={next.due} class:fresh={next.text === "new"}>{next.text}</span>
                     </a>
                 </li>
             {/each}
@@ -177,7 +178,7 @@
 
     .direction {
         display: inline-block;
-        margin-right: 0.2rem;
+        margin-left: 0.25rem;
         vertical-align: -0.12em;
         color: var(--text-faint);
     }
@@ -198,6 +199,12 @@
         font-weight: 650;
     }
 
+    /* Green is for what is due; a card not started yet is marked more quietly, as on the home page. */
+    .when.fresh {
+        background: var(--surface-2);
+        color: var(--text-muted);
+    }
+
     @media (max-width: 560px) {
         .card {
             grid-template-columns: minmax(0, 1fr) auto;
@@ -207,6 +214,15 @@
         .back {
             grid-column: 1;
             grid-row: 2;
+        }
+
+        /* The two buttons share the width. */
+        .page-head .actions {
+            width: 100%;
+        }
+
+        .page-head .actions .btn {
+            flex: 1 1 0;
         }
     }
 

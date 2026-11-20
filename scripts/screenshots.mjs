@@ -514,7 +514,7 @@ const FRAME_CSS = `
     .phone { border-radius: 40px; padding: 9px; background: var(--bezel); border: 1px solid var(--edge);
         box-shadow: 0 30px 60px -16px var(--shade), 0 10px 22px -10px var(--shade); }
     .phone img { display: block; width: 100%; border-radius: 31px; }
-    .dark { --chrome: #232d28; --edge: #36423c; --dot: #44524b; --field: #151d19; --label: #a1afa5;
+    .dark { --chrome: #232d28; --edge: #36423c; --dot: #44524b; --field: #101814; --label: #a1afa5;
         --bezel: #0b100e; --shade: rgba(0, 0, 0, 0.6); }
     .light { --chrome: #e4ebe0; --edge: #cbd4c7; --dot: #b9c4b5; --field: #f6f9f3; --label: #4a5a4f;
         --bezel: #17251d; --shade: rgba(30, 50, 35, 0.28); }
