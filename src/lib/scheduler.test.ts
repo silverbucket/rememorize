@@ -1,6 +1,6 @@
 import type { Flashcard } from "remotestorage-module-flashcards";
 import { describe, expect, it } from "vitest";
-import { dueItems, formatInterval, isDue, nextDue, previewIntervals, rate, startedOn } from "./scheduler";
+import { dueItems, formatInterval, isDue, nextDue, previewIntervals, rate, startedOn, studiedOn } from "./scheduler";
 
 const NOW = new Date("2026-03-01T12:00:00.000Z");
 
@@ -156,6 +156,31 @@ describe("new-card limit", () => {
         const today = rate(card({ "@id": "t" }), 3, NOW);
         const yesterday = rate(card({ "@id": "y" }), 3, new Date(NOW.getTime() - 86_400_000));
         expect(startedOn([today, yesterday, card()], NOW)).toBe(1);
+    });
+});
+
+describe("daily card limit", () => {
+    const old = (id: string, days: number) => rate(card({ "@id": id }), 3, new Date(NOW.getTime() - days * 86_400_000));
+    const fresh = ["a", "b"].map((id, i) => card({ "@id": id, createdAt: `2026-01-0${i + 1}T00:00:00.000Z` }));
+
+    it("caps reviews and new cards together, most overdue first", () => {
+        const cards = [old("r1", 90), old("r2", 60), ...fresh];
+        expect(dueItems(cards, NOW, 20, 3).map((i) => i.card["@id"])).toEqual(["r1", "r2", "a"]);
+        expect(dueItems(cards, NOW, 20, 1).map((i) => i.card["@id"])).toEqual(["r1"]);
+        expect(dueItems(cards, NOW, 20, 0)).toEqual([]);
+        // The new-card limit still applies inside it.
+        expect(dueItems(cards, NOW, 1, 10).map((i) => i.card["@id"])).toEqual(["r1", "r2", "a"]);
+    });
+
+    it("always brings back a card studied today, so a session can be finished", () => {
+        const again = rate(card({ "@id": "x" }), 1, NOW);
+        const later = new Date(NOW.getTime() + 10 * 60_000);
+        expect(dueItems([again, old("r1", 90)], later, 20, 0).map((i) => i.card["@id"])).toEqual(["x"]);
+    });
+
+    it("counts cards studied today", () => {
+        const today = rate(old("t", 90), 3, NOW);
+        expect(studiedOn([today, old("y", 90), card()], NOW)).toBe(1);
     });
 });
 

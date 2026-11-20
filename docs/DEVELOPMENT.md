@@ -61,7 +61,7 @@ src/
   lib/scheduler.ts        FSRS wrapper (ratings, due queue, intervals)
   lib/stats.ts            statistics from the review log (streak, retention, forecast)
   lib/transfer.ts         import and export (CSV, TSV, JSON)
-  lib/settings.ts         the daily new-card limit
+  lib/settings.ts         the daily limits, stored in /rememorize/ (the app's own folder)
   lib/theme.ts            appearance: follow the system, or always light or dark
   lib/router.svelte.ts    hash routes
 tests/e2e/                Playwright specs
@@ -72,7 +72,9 @@ docs/assets/              README images
 
 Cards, review state and the review log are stored through
 [remotestorage-module-flashcards](https://github.com/silverbucket/remotestorage-module-flashcards),
-which defines the data format.
+which defines the data format. Rememorize's own settings (the daily limits)
+live apart from the cards, in `/rememorize/settings`, so the shared format
+doesn't have to change when the app needs a new setting.
 
 The production build injects a Content Security Policy (see `vite.config.ts`)
 that only allows the app's own scripts. `connect-src` stays open because the

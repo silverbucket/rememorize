@@ -3,7 +3,7 @@
  * contexts standing in for two devices.
  */
 import { expect, test } from "@playwright/test";
-import { acceptDialogs, addCard, connect, createUser } from "./helpers";
+import { acceptDialogs, addCard, connect, createUser, RS_HOST } from "./helpers";
 
 // One sync interval is 10s; leave room for a couple.
 const SYNC_TIMEOUT = 30_000;
@@ -80,6 +80,38 @@ test("settings are shared between devices", async ({ browser }) => {
     await expect(a.getByLabel("New cards per day")).toHaveValue("3", { timeout: SYNC_TIMEOUT });
     await a.reload();
     await expect(a.getByLabel("New cards per day")).toHaveValue("3");
+
+    // The daily card limit too, including turning it back off.
+    await expect(b.getByLabel("Most cards per day")).toHaveValue("");
+    await a.getByLabel("Most cards per day").fill("40");
+    await a.getByLabel("Most cards per day").blur();
+    await expect(b.getByLabel("Most cards per day")).toHaveValue("40", { timeout: SYNC_TIMEOUT });
+    await b.getByLabel("Most cards per day").fill("");
+    await b.getByLabel("Most cards per day").blur();
+    await expect(a.getByLabel("Most cards per day")).toHaveValue("", { timeout: SYNC_TIMEOUT });
+    await expect(a.getByLabel("New cards per day")).toHaveValue("3");
+});
+
+test("a connection made before the app had its own folder asks to sign in again", async ({ page }) => {
+    test.setTimeout(90_000);
+    const user = await createUser();
+    await connect(page, user);
+    // What an older version, which only asked for the flashcards folder, left behind.
+    await page.evaluate(() => {
+        const key = "remotestorage:authorized-scope";
+        const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
+        localStorage.setItem(key, JSON.stringify({ ...saved, scope: "flashcards:rw" }));
+    });
+    await page.reload();
+    await expect(page.getByText(/keeps its settings in a folder of its own/)).toBeVisible();
+    await page.getByRole("button", { name: "Sign in again" }).click();
+    await page.waitForURL(new RegExp(`${RS_HOST}/oauth`));
+    await expect(page.getByText(/rememorize/i).first()).toBeVisible();
+    await page.locator('input[name="password"]').fill(user.password);
+    await page.locator("form[action='/oauth'] [type=submit]").first().click();
+    await expect(page.getByText(`Connected as ${user.address}`)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "Sign in again" })).toHaveCount(0);
+    await expect(page.getByText(/keeps its settings in a folder of its own/)).toHaveCount(0);
 });
 
 test("the connection survives a reload", async ({ page }) => {

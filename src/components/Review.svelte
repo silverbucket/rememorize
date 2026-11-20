@@ -260,7 +260,13 @@
             {:else}
                 <h2>Nothing due</h2>
             {/if}
-            {#if library.newWaiting > 0}
+            {#if library.cardsWaiting > 0}
+                <p class="muted">
+                    {plural(library.cardsWaiting, "more card")} waiting: you've studied {library.studiedToday} of
+                    {library.cardsPerDay} cards for today.
+                    <a href={href.account()}>Change the daily limit</a>.
+                </p>
+            {:else if library.newWaiting > 0}
                 <p class="muted">
                     {plural(library.newWaiting, "more new card")} waiting: you've started {library.startedToday} of
                     {library.newPerDay} new cards for today.
@@ -272,7 +278,7 @@
                     {plural(held, "card")} held until tomorrow: the other direction of a card you studied today.
                 </p>
             {/if}
-            {#if nextDue(scope, library.now) && library.newWaiting === 0 && held === 0}
+            {#if nextDue(scope, library.now) && library.newWaiting === 0 && library.cardsWaiting === 0 && held === 0}
                 <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
             {/if}
             <div class="done-actions">

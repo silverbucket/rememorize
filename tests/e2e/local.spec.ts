@@ -215,6 +215,47 @@ test("daily limit on new cards", async ({ page }) => {
     await expect(page.getByRole("link", { name: "Review 1 card" })).toBeVisible();
 });
 
+test("daily limit on all cards, and the home page counts new cards apart", async ({ page }) => {
+    for (const [front, back] of [
+        ["jedna", "one"],
+        ["dva", "two"],
+        ["tři", "three"],
+    ]) {
+        await addCard(page, { front, back, group: "Numbers" });
+    }
+    await page.goto("/");
+    await expect(page.getByText("3 cards to study today")).toBeVisible();
+    await expect(page.locator(".today .muted")).toHaveText("3 new");
+
+    await page.goto("/#/account");
+    await expect(page.getByLabel("Most cards per day")).toHaveValue("");
+    await page.getByLabel("Most cards per day").fill("2");
+    await page.getByLabel("Most cards per day").blur();
+
+    await page.goto("/#/group/Numbers");
+    await expect(page.getByText("Today's review takes 2 of them: the daily card limit is 2.")).toBeVisible();
+    await page.goto("/");
+    await expect(page.locator(".today .muted")).toHaveText("2 new");
+    await page.getByRole("link", { name: "Review 2 cards" }).click();
+    for (let i = 0; i < 2; i++) {
+        await page.getByRole("button", { name: /Show answer/ }).click();
+        await page.getByRole("button", { name: /Easy/ }).click();
+    }
+    await expect(page.getByText("1 more card waiting: you've studied 2 of 2 cards for today.")).toBeVisible();
+    await page.getByRole("link", { name: "Back to your cards" }).click();
+    await expect(page.getByText("Daily limit reached: 1 more card waiting for tomorrow.")).toBeVisible();
+
+    // Clearing the field turns the limit off again.
+    await page.reload();
+    await page.goto("/#/account");
+    await expect(page.getByLabel("Most cards per day")).toHaveValue("2");
+    await expect(page.getByText("Studied today: 2")).toBeVisible();
+    await page.getByLabel("Most cards per day").fill("");
+    await page.getByLabel("Most cards per day").blur();
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Cards" }).click();
+    await expect(page.getByRole("link", { name: "Review 1 card" })).toBeVisible();
+});
+
 test("cards can be studied back → front, or both ways", async ({ page }) => {
     // Back → front only.
     await page.goto("/#/new?group=Drinks");

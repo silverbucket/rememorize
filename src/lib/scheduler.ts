@@ -124,8 +124,17 @@ export function isBuried(item: ReviewItem, now: Date): boolean {
  * What to study now: due reviews first (most overdue first), then up to
  * `newLimit` new cards (oldest first). A card studied both ways appears
  * once; its other direction waits for another day.
+ *
+ * `totalLimit` caps the cards not yet studied today, reviews and new ones
+ * together. Cards already studied today and due again (learning steps)
+ * always come back, so a session can be finished.
  */
-export function dueItems(cards: Flashcard[], now = new Date(), newLimit = Number.POSITIVE_INFINITY): ReviewItem[] {
+export function dueItems(
+    cards: Flashcard[],
+    now = new Date(),
+    newLimit = Number.POSITIVE_INFINITY,
+    totalLimit = Number.POSITIVE_INFINITY,
+): ReviewItem[] {
     const due = cards.flatMap(itemsOf).filter((i) => isDue(i.card, now, i.reverse) && !isBuried(i, now));
     const reviews = due.filter((i) => !isNew(i.card, i.reverse)).sort((a, b) => dueTime(a) - dueTime(b));
     // The sort is stable, so a card's front → back comes before its back → front.
@@ -134,7 +143,14 @@ export function dueItems(cards: Flashcard[], now = new Date(), newLimit = Number
         .sort((a, b) => a.card.createdAt.localeCompare(b.card.createdAt));
     const seen = new Set<Flashcard>();
     const once = (item: ReviewItem) => !seen.has(item.card) && !!seen.add(item.card);
-    return [...reviews.filter(once), ...fresh.filter(once).slice(0, Math.max(0, newLimit))];
+    let left = Math.max(0, totalLimit);
+    const shown = reviews.filter(once).filter((i) => lastReviewedOn(i, now) !== undefined || left-- > 0);
+    return [...shown, ...fresh.filter(once).slice(0, Math.max(0, Math.min(newLimit, left)))];
+}
+
+/** How many cards (counting each direction) were studied on the same (local) day as `now`. */
+export function studiedOn(cards: Flashcard[], now = new Date()): number {
+    return cards.flatMap(itemsOf).filter((i) => lastReviewedOn(i, now) !== undefined).length;
 }
 
 /** Directions that are due but waiting for tomorrow, because the card's other direction was studied today. */
