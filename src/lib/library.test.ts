@@ -168,6 +168,40 @@ describe("Library", () => {
         expect(library.groupNames()).toEqual(["two"]);
     });
 
+    it("renames a group, keeping each card's schedule", async () => {
+        const card = await library.save({ frontText: "pivo", backText: "beer", group: "nouns" });
+        const reviewed = await library.review(card, 3);
+        await library.save({ frontText: "chléb", backText: "bread", group: "nouns" });
+        await library.renameGroup("nouns", "Czech");
+        expect(library.groups.map((g) => [g.name, g.total])).toEqual([["Czech", 2]]);
+        expect(library.find("Czech", card["@id"])?.review).toEqual(reviewed.review);
+        // And in storage, after a fresh load.
+        await library.load();
+        expect(library.groups.map((g) => [g.name, g.total])).toEqual([["Czech", 2]]);
+    });
+
+    it("renaming onto a group that exists merges the two", async () => {
+        await library.save({ frontText: "pivo", backText: "beer", group: "nouns" });
+        await library.save({ frontText: "pít", backText: "to drink", group: "verbs" });
+        await library.save({ frontText: "ahoj", backText: "hi", group: "Czech" });
+        await library.renameGroup("nouns", "Czech");
+        await library.renameGroup("verbs", "Czech");
+        expect(library.groups.map((g) => [g.name, g.total])).toEqual([["Czech", 3]]);
+        await library.load();
+        expect(library.cards.map((c) => c.frontText).sort()).toEqual(["ahoj", "pivo", "pít"]);
+        expect(library.groupNames()).toEqual(["Czech"]);
+    });
+
+    it("doesn't merge a group over a card with the same id", async () => {
+        await library.save({ "@id": "same", frontText: "pivo", backText: "beer", group: "nouns" });
+        await library.save({ "@id": "same", frontText: "pít", backText: "to drink", group: "Czech" });
+        await expect(library.renameGroup("nouns", "Czech")).rejects.toThrow(/same id/);
+        expect(library.groups.map((g) => [g.name, g.total])).toEqual([
+            ["Czech", 1],
+            ["nouns", 1],
+        ]);
+    });
+
     it("logs each review, and takes it back out on undo", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
         const at = new Date("2026-01-01T10:00:00.000Z");

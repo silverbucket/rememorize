@@ -72,9 +72,11 @@
         <div class="page">
         {#if route.name === "home"}
             <Home />
+        {:else if route.name === "cards"}
+            <GroupView show={route.show} />
         {:else if route.name === "group"}
             {#key route.group}
-                <GroupView group={route.group} />
+                <GroupView group={route.group} show={route.show} />
             {/key}
         {:else if route.name === "edit"}
             {#key `${route.group}/${route.id}`}
@@ -85,8 +87,8 @@
                 <CardEditor group={route.group} />
             {/key}
         {:else if route.name === "review"}
-            {#key route.group}
-                <Review group={route.group} />
+            {#key href.review(route.group, route.show)}
+                <Review group={route.group} show={route.show} />
             {/key}
         {:else if route.name === "account"}
             <Account />

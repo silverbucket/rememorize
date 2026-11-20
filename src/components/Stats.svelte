@@ -30,7 +30,9 @@
     const reviewsToday = $derived(recent.at(-1)?.reviews ?? 0);
     const reviewsWeek = $derived(recent.slice(-7).reduce((sum, d) => sum + d.reviews, 0));
     const overall = $derived(retention(log));
-    const groups = $derived(retentionByGroup(log));
+    // Counted under the group a card is in now, so a renamed or merged group keeps its history.
+    const groupNow = $derived(new Map(library.cards.map((c) => [c["@id"], c.group])));
+    const groups = $derived(retentionByGroup(log.map((e) => ({ ...e, group: groupNow.get(e.cardId) ?? e.group }))));
 
     const weeks = $derived(calendarWeeks(log, now, WEEKS));
     const busiest = $derived(Math.max(1, ...weeks.flat().map((d) => d.reviews)));

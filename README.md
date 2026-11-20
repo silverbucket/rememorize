@@ -51,6 +51,10 @@ devices.
 - **Both directions.** Study a card front to back, back to front, or both.
 - **Progress you can see.** A review calendar, your streak, how much you
   remember and what is due next.
+- **Views instead of filing.** Put a whole subject in one group. Rememorize
+  works out the rest from how your reviews go: the cards you are struggling
+  with, the ones you are learning, know well, haven't started or added this
+  week, in one group or across all of them.
 - **Import and export.** Bring in cards from CSV or Anki's plain-text export.
   A daily limit on new cards keeps a big deck manageable. Export whenever you
   like.

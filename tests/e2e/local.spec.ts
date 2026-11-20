@@ -33,7 +33,7 @@ test("add cards, edit, move between groups, delete", async ({ page }) => {
 
     // Moving a card to another group doesn't leave a copy behind.
     await page.getByText("chléb").click();
-    await page.getByLabel("Group").fill("Bakery");
+    await page.getByLabel("Group", { exact: true }).fill("Bakery");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Bakery" })).toBeVisible();
     await expect(page.getByText("chléb")).toBeVisible();
@@ -52,6 +52,119 @@ test("add cards, edit, move between groups, delete", async ({ page }) => {
     await expect(page.getByText("No cards yet")).toBeVisible();
     await page.reload();
     await expect(page.getByText("No cards yet")).toBeVisible();
+});
+
+test("a group can be renamed, and renamed onto another group to merge them", async ({ page }) => {
+    await addCard(page, { front: "pivo", back: "beer", group: "Nouns" });
+    await addCard(page, { front: "pít", back: "to drink", group: "Verbs" });
+    // Studied, to see that the schedule moves with the card.
+    await page.goto("/#/review/Verbs");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByText("Done for now")).toBeVisible();
+
+    await page.goto("/#/group/Nouns");
+    await page.getByRole("button", { name: "Rename group" }).click();
+    await expect(page.getByLabel("Group name")).toHaveValue("Nouns");
+    await page.getByLabel("Group name").fill("Czech");
+    await page.getByRole("button", { name: "Rename", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
+    await expect(page.locator(".cards li")).toHaveCount(1);
+
+    // Onto a name that is taken, the cards join the ones already there.
+    await page.goto("/#/group/Verbs");
+    await page.getByRole("button", { name: "Rename group" }).click();
+    await page.getByLabel("Group name").fill("Czech");
+    await expect(page.getByText("“Czech” already has 1 card. The 1 card here will join it.")).toBeVisible();
+    await page.getByRole("button", { name: "Merge" }).click();
+    await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
+    await expect(page.locator(".cards li")).toHaveCount(2);
+    await expect(page.locator(".cards li").filter({ hasText: "pít" }).locator(".when")).toHaveText(/^in /);
+
+    await page.goto("/");
+    await expect(page.locator(".groups li")).toHaveCount(1);
+    await page.reload();
+    await expect(page.locator(".groups li")).toHaveCount(1);
+    await expect(page.locator(".groups li")).toContainText("2 cards");
+    // The reviews made before the merge are counted under the group the card is in now.
+    await page.goto("/#/stats");
+    await expect(page.getByRole("row", { name: "Czech" })).toContainText("100%");
+    await expect(page.getByText("Verbs")).toHaveCount(0);
+});
+
+test("views narrow the cards, in a group and across all of them, and can be reviewed", async ({ page }) => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const ago = (days: number) => new Date(Date.now() - days * DAY).toISOString();
+    const card = (id: string, frontText: string, backText: string, group: string) => ({
+        "@id": id,
+        "@type": "flashcard",
+        frontText,
+        backText,
+        group,
+        createdAt: ago(30),
+        updatedAt: ago(30),
+    });
+    const cards = [
+        // Studied, and due again since yesterday: in a review of the group, but not of its cards not started.
+        {
+            ...card("pes", "pes", "dog", "Animals"),
+            review: {
+                algorithm: "FSRS-7",
+                due: ago(1),
+                stability: 3,
+                difficulty: 5,
+                scheduledDays: 3,
+                reps: 2,
+                lapses: 0,
+                state: 2,
+                lastReview: ago(4),
+                firstReview: ago(10),
+            },
+        },
+        card("kocka", "kočka", "cat", "Animals"),
+        card("kun", "kůň", "horse", "Animals"),
+        card("voda", "voda", "water", "Drinks"),
+    ];
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles({
+        name: "cards.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify(cards)),
+    });
+    await page.getByRole("button", { name: "Import 4 cards" }).click();
+    await expect(page.locator(".groups li")).toHaveCount(2);
+
+    await page.goto("/#/group/Animals");
+    await expect(page.getByRole("link", { name: "Review 3 cards" })).toBeVisible();
+    const views = page.getByRole("navigation", { name: "Views" });
+    // Views with no cards in them aren't offered.
+    await expect(views.getByRole("link")).toHaveText(["All 3", "Learning 1", "Not started 2"]);
+    await views.getByRole("link", { name: "Learning" }).click();
+    await expect(page.locator(".cards li")).toHaveCount(1);
+    await expect(page.locator(".cards li")).toContainText("pes");
+    await expect(views.getByRole("link", { name: "Learning" })).toHaveAttribute("aria-current", "page");
+    // The view is part of the address, so it survives a reload.
+    await page.reload();
+    await expect(page.locator(".cards li")).toHaveCount(1);
+
+    // A view's review keeps to the cards in it.
+    await views.getByRole("link", { name: "Not started" }).click();
+    await expect(page.locator(".cards li")).toHaveCount(2);
+    await page.getByRole("link", { name: "Review 2 cards" }).click();
+    await expect(page.getByRole("heading", { name: "Review: Animals · Not started" })).toBeVisible();
+    await expect(page.getByText("2 cards left")).toBeVisible();
+    await page.getByRole("link", { name: "End review" }).click();
+    await expect(views.getByRole("link", { name: "Not started" })).toHaveAttribute("aria-current", "page");
+
+    // From the home page, the same views run across every group.
+    await page.goto("/");
+    await expect(views.getByRole("link")).toHaveText(["All 4", "Learning 1", "Not started 3"]);
+    await views.getByRole("link", { name: "Not started" }).click();
+    await expect(page.getByRole("heading", { name: "All cards" })).toBeVisible();
+    await expect(page.locator(".cards li")).toHaveCount(3);
+    await expect(page.locator(".cards li").filter({ hasText: "voda" })).toContainText("Drinks");
+    await views.getByRole("link", { name: "All" }).click();
+    await expect(page.locator(".cards li")).toHaveCount(4);
 });
 
 test("review session schedules cards", async ({ page }) => {

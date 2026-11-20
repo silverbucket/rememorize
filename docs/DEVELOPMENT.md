@@ -53,13 +53,14 @@ checkout's suite.
 src/
   App.svelte              shell (sidebar, or top bar and tab bar on a phone), routing, update prompt
   app.css                 design tokens (colours, type, radii) and shared styles
-  components/             pages: Home, GroupView, CardEditor, Review, Stats, Import, Account
+  components/             pages: Home, GroupView (a group's cards, or all of them), CardEditor, Review, Stats, Import, Account
   components/Icon.svelte  the line icons; Logo.svelte is the brain
   lib/rs.ts               remoteStorage instance
   lib/oauth-state.ts      checks OAuth callbacks against a per-tab nonce
   lib/library.svelte.ts   app state: cards, groups, review log, connection status
   lib/scheduler.ts        FSRS wrapper (ratings, due queue, intervals)
   lib/stats.ts            statistics from the review log (streak, retention, forecast)
+  lib/views.ts            views: slices of the cards worked out from their schedules (struggling, learning, …)
   lib/transfer.ts         import and export (CSV, TSV, JSON)
   lib/settings.ts         the daily limits, stored in /rememorize/ (the app's own folder)
   lib/theme.ts            appearance: follow the system, or always light or dark

@@ -5,6 +5,7 @@
     import { library } from "../lib/state";
     import { lastDays, streak } from "../lib/stats";
     import Icon from "./Icon.svelte";
+    import ViewChips from "./ViewChips.svelte";
 
     const queue = $derived(library.dueIn(library.cards));
     const fresh = $derived(queue.filter((i) => isNew(i.card, i.reverse)).length);
@@ -87,7 +88,10 @@
         </ul>
     </section>
 
-    <h2 class="section">Groups</h2>
+    <h2 class="section">All cards</h2>
+    <ViewChips cards={library.cards} link={href.cards} oneLine />
+
+    <h2 class="section groups-head">Groups</h2>
     <ul class="groups rows">
         {#each library.groups as group (group.name)}
             <li>
@@ -225,6 +229,11 @@
         color: var(--text-muted);
         font-size: 0.925rem;
         font-weight: 600;
+    }
+
+    /* The chips above already leave a gap. */
+    .groups-head {
+        margin-top: 1.1rem;
     }
 
     .group {
