@@ -238,7 +238,8 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     // because the other direction was just reviewed.
     await page.getByText("pivo").click();
     await expect(page.getByLabel("Study direction")).toHaveValue("reverse");
-    await page.getByLabel("Study direction").selectOption("Both ways, each on its own schedule");
+    await page.getByLabel("Study direction").selectOption("Both ways");
+    await expect(page.getByText("Each direction has its own schedule.")).toBeVisible();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByTitle("Studied both ways")).toBeVisible();
     await expect(page.locator(".when")).toHaveText("tomorrow");

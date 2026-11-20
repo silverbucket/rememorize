@@ -102,8 +102,11 @@
         <select id="direction" class="field" bind:value={direction}>
             <option value="forward">Front → back</option>
             <option value="reverse">Back → front</option>
-            <option value="both">Both ways, each on its own schedule</option>
+            <option value="both">Both ways</option>
         </select>
+        {#if direction === "both"}
+            <small class="note">Each direction has its own schedule. You won't see both on the same day.</small>
+        {/if}
     </div>
 
     {#if error}
@@ -164,9 +167,14 @@
         font-size: 0.925rem;
     }
 
-    .optional {
+    .optional,
+    .note {
         color: var(--text-muted);
         font-weight: 400;
+    }
+
+    .note {
+        font-size: 0.875rem;
     }
 
     textarea.content {
