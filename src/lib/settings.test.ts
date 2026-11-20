@@ -5,6 +5,7 @@ import {
     normalizeAppSettings,
     parseCardsPerReview,
     parseNewPerDay,
+    parseReminderTime,
 } from "./settings";
 
 describe("parseNewPerDay", () => {
@@ -41,6 +42,21 @@ describe("parseCardsPerReview", () => {
     });
 });
 
+describe("parseReminderTime", () => {
+    it.each([
+        ["07:30", "07:30"],
+        [" 23:59 ", "23:59"],
+        ["00:00", "00:00"],
+        ["24:00", "09:00"],
+        ["7:30", "09:00"],
+        ["12:60", "09:00"],
+        ["", "09:00"],
+        [undefined, "09:00"],
+    ])("%s → %s", (input, expected) => {
+        expect(parseReminderTime(input)).toBe(expected);
+    });
+});
+
 describe("normalizeAppSettings", () => {
     it("keeps valid limits and drops the rest", () => {
         expect(normalizeAppSettings({ newCardsPerDay: 5, cardsPerReview: null, other: 1 })).toEqual({
@@ -48,6 +64,8 @@ describe("normalizeAppSettings", () => {
             cardsPerReview: null,
         });
         expect(normalizeAppSettings({ newCardsPerDay: -1, cardsPerReview: "x" })).toEqual({});
+        expect(normalizeAppSettings({ reminderTime: "18:15" })).toEqual({ reminderTime: "18:15" });
+        expect(normalizeAppSettings({ reminderTime: "6pm" })).toEqual({});
         expect(normalizeAppSettings(undefined)).toEqual({});
     });
 

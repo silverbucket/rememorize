@@ -15,6 +15,11 @@ import { defineConfig, devices } from "@playwright/test";
  */
 // Override with E2E_PORT to run alongside another checkout's suite.
 const PORT = Number(process.env.E2E_PORT || 4317);
+/**
+ * The reminder server the build is told about. Nothing listens there: the
+ * reminder tests answer for it in the browser (see reminders.spec.ts).
+ */
+export const SOCKETHUB_URL = process.env.VITE_SOCKETHUB_URL || "http://localhost:10550";
 
 export default defineConfig({
     testDir: "./tests/e2e",
@@ -39,6 +44,7 @@ export default defineConfig({
         command: `bun run build && bun run preview -- --host localhost --port ${PORT} --strictPort`,
         url: `http://localhost:${PORT}`,
         reuseExistingServer: !process.env.CI,
+        env: { VITE_SOCKETHUB_URL: SOCKETHUB_URL },
         timeout: 120_000,
     },
 });

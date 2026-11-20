@@ -279,6 +279,20 @@ describe("Library", () => {
         expect(other.newPerDay).toBe(7);
     });
 
+    it("saves the reminder time next to the limits", async () => {
+        expect(library.reminderTime).toBe("09:00");
+        await library.setNewPerDay(7);
+        await library.setReminderTime("18:30");
+        expect(library.reminderTime).toBe("18:30");
+        expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
+            newCardsPerDay: 7,
+            reminderTime: "18:30",
+        });
+        const other = new Library(rs);
+        await other.load();
+        expect(other.reminderTime).toBe("18:30");
+    });
+
     it("moves the new-card limit an older version saved with the cards", async () => {
         await rs.flashcards.setSettings({ newCardsPerDay: 4 });
         await library.load();

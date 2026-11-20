@@ -25,9 +25,11 @@ import {
     appSettingsSchema,
     DEFAULT_CARDS_PER_REVIEW,
     DEFAULT_NEW_PER_DAY,
+    DEFAULT_REMINDER_TIME,
     normalizeAppSettings,
     parseCardsPerReview,
     parseNewPerDay,
+    parseReminderTime,
     SETTINGS_FILE,
     saveCardsPerReview,
     saveNewPerDay,
@@ -91,6 +93,9 @@ export class Library {
      * `setCardsPerReview()`.
      */
     cardsPerReview: number | null = $state(DEFAULT_CARDS_PER_REVIEW);
+
+    /** When a day's first reminder goes out ("HH:MM"). Synced; change it with `setReminderTime()`. */
+    reminderTime = $state(DEFAULT_REMINDER_TIME);
 
     cards = $derived(Object.values(this.#cards));
 
@@ -286,11 +291,17 @@ export class Library {
         await this.#changeSettings({ cardsPerReview: parseCardsPerReview(value) });
     }
 
+    /** Change the time of a day's first reminder on every device. */
+    async setReminderTime(value: string): Promise<void> {
+        await this.#changeSettings({ reminderTime: parseReminderTime(value) });
+    }
+
     async #changeSettings(changes: AppSettings): Promise<void> {
         // Only what this call changes is put back if it fails, not a setting saved alongside it.
         const previous: AppSettings = {};
         if ("newCardsPerDay" in changes) previous.newCardsPerDay = this.newPerDay;
         if ("cardsPerReview" in changes) previous.cardsPerReview = this.cardsPerReview;
+        if ("reminderTime" in changes) previous.reminderTime = this.reminderTime;
         const hadOwn = this.#ownNewPerDay;
         // Applied before the write finishes, so it holds even if the page is left straight away.
         this.#applySettings(changes);
@@ -457,6 +468,7 @@ export class Library {
             this.cardsPerReview = parseCardsPerReview(settings.cardsPerReview);
             saveCardsPerReview(this.cardsPerReview);
         }
+        if (settings.reminderTime !== undefined) this.reminderTime = parseReminderTime(settings.reminderTime);
     }
 
     /** The new-card limit as older versions stored it, which counts only until the app has its own. */

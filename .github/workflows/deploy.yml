@@ -90,6 +90,9 @@ jobs:
       - run: bun run check
       - run: bun run test
       - run: bun run build
+        env:
+          # The Sockethub server that sends reminders. Unset, the app offers none.
+          VITE_SOCKETHUB_URL: ${{ vars.SOCKETHUB_URL }}
 
       # Before the tag goes up, so a failure here leaves nothing released.
       - name: Setup SSH for 5apps

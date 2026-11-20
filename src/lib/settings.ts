@@ -1,12 +1,16 @@
 /**
- * The review limits. They are stored in the app's own folder (see Library),
- * so they sync; localStorage only remembers the last values this browser used.
+ * The review limits and the time of a day's first reminder. They are stored in
+ * the app's own folder (see Library), so they sync; localStorage only remembers
+ * the last limits this browser used.
  */
 
 export const DEFAULT_NEW_PER_DAY = 20;
 export const MAX_NEW_PER_DAY = 9999;
 /** The most cards in one review, reviews and new together; `null` is no limit. */
 export const DEFAULT_CARDS_PER_REVIEW = null;
+/** When a day's first reminder goes out, in the local time of the device that schedules it. */
+export const DEFAULT_REMINDER_TIME = "09:00";
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const NEW_PER_DAY_KEY = "rememorize:newPerDay";
 const CARDS_PER_REVIEW_KEY = "rememorize:cardsPerReview";
 /** Where older versions kept their daily card limit, now read as the review size. */
@@ -16,6 +20,8 @@ const CARDS_PER_DAY_KEY = "rememorize:cardsPerDay";
 export interface AppSettings {
     newCardsPerDay?: number;
     cardsPerReview?: number | null;
+    /** "HH:MM", 24-hour. */
+    reminderTime?: string;
     updatedAt?: string;
 }
 
@@ -28,6 +34,7 @@ export const appSettingsSchema = {
         cardsPerReview: { type: ["integer", "null"], minimum: 1 },
         /** Older versions' daily card limit; read as the review size if there's none yet. */
         cardsPerDay: { type: ["integer", "null"], minimum: 0 },
+        reminderTime: { type: "string", pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
         updatedAt: { type: "string", format: "date-time" },
     },
 };
@@ -45,6 +52,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     if (perReview === null || (Number.isInteger(perReview) && (perReview as number) >= 0)) {
         settings.cardsPerReview = parseCardsPerReview(perReview);
     }
+    if (typeof v.reminderTime === "string" && TIME.test(v.reminderTime)) settings.reminderTime = v.reminderTime;
     if (typeof v.updatedAt === "string") settings.updatedAt = v.updatedAt;
     return settings;
 }
@@ -68,6 +76,12 @@ export function parseCardsPerReview(value: unknown): number | null {
     const text = typeof value === "number" ? String(value) : String(value ?? "").trim();
     const n = parseCount(text);
     return n === undefined ? null : Math.max(1, n);
+}
+
+/** A time of day as "HH:MM"; anything else gives the default. */
+export function parseReminderTime(value: unknown): string {
+    const text = String(value ?? "").trim();
+    return TIME.test(text) ? text : DEFAULT_REMINDER_TIME;
 }
 
 function load<T>(key: string, parse: (value: unknown) => T, fallback: T): T {
