@@ -25,17 +25,6 @@ describe("planReminders", () => {
         expect(plan.map((r) => r.at.getDate())).toEqual([21, 23]);
     });
 
-    it("tells about a card that comes back within the hour when it does", () => {
-        // 3 due now; a card answered Hard comes back at 12:08.
-        const soon = at(20, 12, 8);
-        const count = (when: Date) => (when.getTime() >= soon.getTime() ? 4 : 3);
-        const plan = planReminders(at(20, 12), "09:00", count, 1, [soon, at(20, 18)]);
-        expect(plan.map((r) => [r.at, r.count])).toEqual([
-            [soon, 4],
-            [at(21, 9), 4],
-        ]);
-    });
-
     it("marks only the last one as last", () => {
         expect(planReminders(at(20, 12), "09:00", () => 1, 3).map((r) => r.last)).toEqual([false, false, true]);
     });
@@ -103,13 +92,30 @@ describe("later reminders in a day", () => {
         ]);
     });
 
-    it("tells of a card that comes back within the hour at the next hour", () => {
+    it("tells of a card that comes back within the hour when it does, and not again on the hour", () => {
         // A review ended at 14:20 with nothing left, and one card comes back at 14:30.
-        const plan = planReminders(at(20, 14, 20), "09:00", dueFrom(at(20, 14, 30)), 1);
+        const plan = planReminders(at(20, 14, 20), "09:00", dueFrom(at(20, 14, 30)), 1, [at(20, 14, 30)]);
         expect(times(plan)).toEqual([
-            [at(20, 15), 1],
+            [at(20, 14, 30), 1],
             [at(21, 9), 1],
         ]);
+    });
+
+    it("keeps reminders for cards coming back a few minutes apart, and the list within what a server holds", () => {
+        const soon = Array.from({ length: 40 }, (_, i) => at(20, 12, i + 1));
+        const plan = planReminders(
+            at(20, 12),
+            "09:00",
+            (when) => (when.getHours() === 12 ? when.getMinutes() : 40),
+            30,
+            soon,
+        );
+        expect(times(plan).slice(0, 3)).toEqual([
+            [at(20, 12, 1), 1],
+            [at(20, 12, 6), 6],
+            [at(20, 12, 11), 11],
+        ]);
+        expect(plan.length).toBeLessThanOrEqual(60);
     });
 
     it("doesn't announce again what the app was showing when it was last open", () => {

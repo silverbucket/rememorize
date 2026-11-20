@@ -209,7 +209,7 @@ test("a card answered Again or Hard waits out its time before it comes back", as
     await expect(page.locator(".side.front")).toHaveText("kočka");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText(/1 card comes back in 1 minute/)).toBeVisible();
+    await expect(page.getByText(/Next card comes back in 1 minute/)).toBeVisible();
 
     // Once its time is up, it is back.
     await page.clock.fastForward("02:00");
@@ -219,7 +219,7 @@ test("a card answered Again or Hard waits out its time before it comes back", as
     await page.getByRole("button", { name: /Show answer/ }).click();
     await expect(page.getByRole("button", { name: /Hard/ })).toContainText(/\dm/);
     await page.getByRole("button", { name: /Hard/ }).click();
-    await expect(page.getByText(/1 card comes back in \d+ minutes/)).toBeVisible();
+    await expect(page.getByText(/Next card comes back in \d+ minutes/)).toBeVisible();
     await page.clock.fastForward("01:30");
     await expect(page.locator(".side.front")).toHaveCount(0);
     await page.clock.fastForward("20:00");
@@ -493,7 +493,7 @@ test("statistics follow reviews", async ({ page }) => {
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Again/ }).click();
     // Saved, and the card waits a minute before it comes round again.
-    await expect(page.getByText(/1 card comes back in/)).toBeVisible();
+    await expect(page.getByText(/Next card comes back in/)).toBeVisible();
 
     // Recorded, and still there after a reload.
     await page.goto("/#/stats");

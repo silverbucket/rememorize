@@ -72,21 +72,33 @@
     /** How far through the session: ratings given, out of those plus what is left. */
     const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
     const dueAt = (i: ReviewItem) => new Date(stateOf(i.card, i.reverse)?.due ?? 0).getTime();
+    /** Ticks with the check that brings cards back, so the countdown agrees with it. */
+    let clock = $state(Date.now());
+    // As the library has them now: a card reviewed elsewhere has a new time, a deleted one is gone.
+    const waitingLive: ReviewItem[] = $derived(
+        later
+            .flatMap((item) => {
+                const card = library.find(item.card.group, item.card["@id"]);
+                return card ? [{ card, reverse: item.reverse }] : [];
+            })
+            .sort((a, b) => dueAt(a) - dueAt(b)),
+    );
     /** When the next card waiting in `later` comes back. */
-    const comesBack = $derived(later.length > 0 ? new Date(dueAt(later[0])).toISOString() : undefined);
+    const comesBack = $derived(waitingLive.length > 0 ? new Date(dueAt(waitingLive[0])).toISOString() : undefined);
 
     const comingBack = $derived(
         comesBack &&
-            `${plural(later.length, "card")} ${later.length === 1 ? "comes" : "come"} back ${fromNow(comesBack, library.now)}` +
+            `Next card comes back ${fromNow(comesBack, new Date(clock))}` +
                 (reminders.state === "on" ? ", and you'll get a notification." : "."),
     );
 
     /** Bring back the cards in `later` whose time is up. */
     function bringBack() {
         const now = Date.now();
-        const ready = later.filter((i) => dueAt(i) <= now);
+        clock = now;
+        const ready = waitingLive.filter((i) => dueAt(i) <= now);
+        later = waitingLive.filter((i) => dueAt(i) > now);
         if (ready.length === 0) return;
-        later = later.filter((i) => dueAt(i) > now);
         queue = [...queue, ...ready.filter((r) => !queue.some((q) => itemKey(q) === itemKey(r)))];
     }
 

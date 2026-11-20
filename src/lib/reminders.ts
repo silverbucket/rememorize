@@ -27,6 +27,10 @@ const GAP_MS = 6 * 60 * 60 * 1000;
 const DETAILED_DAYS = 10;
 /** Cards coming back within this long (after a Hard or Again) get a reminder of their own, right when they're due. */
 export const SOON_MS = 60 * 60 * 1000;
+/** Those reminders are at least this far apart, so a review full of Again answers isn't a stream of them. */
+const SOON_GAP_MS = 5 * 60 * 1000;
+/** The most reminders a server holds for one device. */
+const MAX_REMINDERS = 60;
 /** A device not seen for this long is taken off the list. It puts itself back when it is next opened. */
 export const STALE_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -111,14 +115,20 @@ export function planReminders(
     const plan: Reminder[] = [];
     let shown: number | undefined;
     // A card answered Hard or Again comes back in minutes: say so when it does, not on the next hour.
+    const early: Reminder[] = [];
     for (const at of [...soon].sort((a, b) => a.getTime() - b.getTime())) {
         if (at.getTime() <= now.getTime() || at.getTime() - now.getTime() > SOON_MS) continue;
+        const previous = early.at(-1);
+        if (previous && at.getTime() - previous.at.getTime() < SOON_GAP_MS) continue;
         const count = countAt(at);
         shown ??= countAt(now);
         if (count <= shown) continue;
-        plan.push({ at, count, last: false });
+        early.push({ at, count, last: false });
         shown = count;
     }
+    /** The most cards those early reminders have told of by `at`. */
+    const toldEarly = (at: Date) =>
+        Math.max(0, ...early.filter((r) => r.at.getTime() <= at.getTime()).map((r) => r.count));
     // From yesterday: when its first reminder was late in the day, its last hours are still ahead.
     for (let day = -1, ahead = 0; ahead < days; day++) {
         const begun = slot(day, 0).getTime() <= now.getTime();
@@ -130,18 +140,19 @@ export function planReminders(
             const at = slot(day, hour);
             if (at.getTime() <= now.getTime()) continue;
             if (previous !== undefined && at.getTime() - previous < GAP_MS) continue;
+            if (early.some((r) => r.at.getTime() === at.getTime())) continue;
             const count = countAt(at);
             // The first of a day says what is due even if that was said the evening before.
-            if (hour === 0 ? count === 0 : count <= told) continue;
+            if (hour === 0 ? count === 0 : count <= Math.max(told, toldEarly(at))) continue;
             plan.push({ at, count, last: false });
             told = count;
             previous = at.getTime();
         }
     }
-    plan.sort((a, b) => a.at.getTime() - b.at.getTime());
-    const last = plan.at(-1);
+    const all = [...early, ...plan].sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, MAX_REMINDERS);
+    const last = all.at(-1);
     if (last) last.last = true;
-    return plan;
+    return all;
 }
 
 /**
