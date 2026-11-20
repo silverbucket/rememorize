@@ -26,15 +26,28 @@
 
 <style>
     .pill {
-        display: inline-flex;
+        display: flex;
         align-items: center;
-        gap: 0.45rem;
-        max-width: 14rem;
-        padding: 0.3rem 0.75rem;
+        gap: 0.5rem;
+        max-width: 13rem;
+        min-height: 2.25rem;
+        padding: 0.3rem 0.8rem;
         border-radius: 999px;
         border: 1px solid var(--border);
+        background: var(--surface);
         color: var(--text-muted);
-        font-size: 0.85rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition:
+            border-color 120ms,
+            color 120ms;
+    }
+
+    @media (hover: hover) {
+        .pill:hover {
+            border-color: var(--border-strong);
+            color: var(--text);
+        }
     }
 
     .text {
@@ -48,19 +61,28 @@
         width: 0.5rem;
         height: 0.5rem;
         border-radius: 50%;
-        background: var(--text-muted);
+        background: var(--text-faint);
     }
 
     .ok .dot {
         background: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-subtle);
     }
 
     .warn {
         color: var(--hard);
-        border-color: var(--hard);
+        border-color: color-mix(in oklab, var(--hard) 60%, var(--border));
     }
 
     .warn .dot {
         background: var(--hard);
+    }
+
+    /* In the sidebar the pill spans its width. */
+    @media (min-width: 880px) {
+        .pill {
+            max-width: none;
+            background: var(--bg);
+        }
     }
 </style>

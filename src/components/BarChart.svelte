@@ -49,22 +49,26 @@
         position: relative;
         display: flex;
         align-items: flex-end;
-        gap: 2px;
-        height: 7rem;
+        gap: 3px;
+        height: 7.5rem;
         /* Room for the scale's top value beside the bars. */
         padding-left: 1.75rem;
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--border-strong);
+        /* A line at the top value and one halfway, to read the bars against. */
+        background:
+            linear-gradient(var(--border), var(--border)) 0 0 / 100% 1px no-repeat,
+            linear-gradient(var(--border), var(--border)) 0 50% / 100% 1px no-repeat;
         touch-action: pan-y;
     }
 
     .max {
         position: absolute;
-        top: 0.15rem;
+        top: 0.3rem;
         left: 0;
-        font-size: 0.7rem;
+        font-size: 0.72rem;
         line-height: 1;
         color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
         pointer-events: none;
     }
 
@@ -83,15 +87,19 @@
 
     .bar {
         width: 100%;
-        max-width: 24px;
+        max-width: 22px;
+        background: color-mix(in oklab, var(--accent) 82%, var(--surface));
+        border-radius: 3px 3px 0 0;
+    }
+
+    .slot.active .bar {
         background: var(--accent);
-        border-radius: 4px 4px 0 0;
     }
 
     .ticks {
         display: flex;
-        gap: 2px;
-        margin-top: 0.25rem;
+        gap: 3px;
+        margin-top: 0.4rem;
         padding-left: 1.75rem;
         height: 1rem;
     }
@@ -104,19 +112,23 @@
     }
 
     .tick span {
-        font-size: 0.7rem;
+        font-size: 0.72rem;
         line-height: 1rem;
         color: var(--text-muted);
         white-space: nowrap;
     }
 
-    /* The last label stays inside the chart instead of centring on its bar. */
+    /* The first and last labels stay inside the chart instead of centring on their bars. */
+    .tick:first-child {
+        justify-content: flex-start;
+    }
+
     .tick:last-child {
         justify-content: flex-end;
     }
 
     .reading {
-        margin: 0.5rem 0 0;
-        font-size: 0.85rem;
+        margin: 0.75rem 0 0;
+        font-size: 0.875rem;
     }
 </style>

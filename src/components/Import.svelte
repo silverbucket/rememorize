@@ -3,6 +3,14 @@
     import { href, router } from "../lib/router.svelte";
     import { library } from "../lib/state";
     import { type ImportPlan, type ParsedImport, parseImport, planImport } from "../lib/transfer";
+    import Icon from "./Icon.svelte";
+
+    /** Importing is offered on the home page and in Settings: go back to whichever led here. */
+    const back = $derived(
+        router.route.name === "import" && router.route.from === "settings"
+            ? { href: href.account(), label: "Settings" }
+            : { href: href.home(), label: "All groups" },
+    );
 
     let fileName = $state("");
     let text = $state("");
@@ -74,7 +82,7 @@
     }
 </script>
 
-<a class="crumb" href={href.account()}>← Settings</a>
+<a class="crumb" href={back.href}><Icon name="back" size={16} />{back.label}</a>
 <div class="page-head">
     <h1>Import cards</h1>
 </div>
@@ -84,13 +92,7 @@
         <span>File</span>
         <input class="field" type="file" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" onchange={choose} />
     </label>
-    <p class="muted help">
-        <strong>CSV or tab-separated:</strong> one card per line: front, back, then optionally hint and group. A header
-        row (front, back, hint, group) lets the columns come in any order. Anki's “Notes in Plain Text” export works
-        as-is.<br />
-        <strong>JSON:</strong> a Rememorize backup. Cards keep their review progress; ones that already exist are only
-        replaced if the backup's copy is newer.
-    </p>
+    <p class="muted accepts">CSV, tab-separated text, Anki's plain-text export, or a Rememorize backup (JSON).</p>
 
     {#if readError}<p class="error" role="alert">{readError}</p>{/if}
     {#if parsed.error}<p class="error" role="alert">{parsed.error}</p>{/if}
@@ -102,11 +104,33 @@
             {#if defaultGroupError}<small class="error">{defaultGroupError}</small>{/if}
         </label>
     {/if}
+
+    <!-- Open until a file is chosen; after that the preview matters more. -->
+    <details open={!text}>
+        <summary>How to lay out a file</summary>
+        <dl class="formats muted">
+            <div>
+                <dt>CSV or tab-separated</dt>
+                <dd>
+                    One card per line: front, back, then optionally hint and group. A header row (front, back, hint,
+                    group) lets the columns come in any order. Anki's “Notes in Plain Text” export works as-is.
+                </dd>
+            </div>
+            <div>
+                <dt>JSON</dt>
+                <dd>
+                    A Rememorize backup. Cards keep their review progress; ones that already exist are only replaced
+                    if the backup's copy is newer.
+                </dd>
+            </div>
+        </dl>
+    </details>
 </div>
 
 {#if importing && running}
     <div class="panel summary" aria-live="polite">
         <p>Importing… {progress} of {running.total}</p>
+        <div class="track" aria-hidden="true"><span style:width="{(progress / Math.max(1, running.total)) * 100}%"></span></div>
     </div>
 {:else if parsed.result && plan}
     <div class="panel summary" aria-live="polite">
@@ -128,20 +152,20 @@
 
         {#if plan.add.length}
             <table>
-                <thead><tr><th>Front</th><th>Back</th><th>Group</th></tr></thead>
+                <thead><tr><th>Front</th><th>Back</th><th class="where">Group</th></tr></thead>
                 <tbody>
                     {#each plan.add.slice(0, 5) as card, i (i)}
-                        <tr><td>{card.frontText}</td><td>{card.backText}</td><td>{card.group}</td></tr>
+                        <tr><td class="content">{card.frontText}</td><td class="content">{card.backText}</td><td>{card.group}</td></tr>
                     {/each}
                 </tbody>
             </table>
-            {#if plan.add.length > 5}<p class="muted">…and {plan.add.length - 5} more</p>{/if}
+            {#if plan.add.length > 5}<p class="muted more">…and {plan.add.length - 5} more</p>{/if}
         {/if}
 
         {#if importError}<p class="error" role="alert">{importError}</p>{/if}
 
         <div class="buttons">
-            <a class="btn" href={href.account()}>Cancel</a>
+            <a class="btn" href={back.href}>Cancel</a>
             <button class="btn primary" type="button" onclick={run} disabled={total === 0 || importing || !!defaultGroupError}>
                 {total ? `Import ${plural(total, "card")}` : "Nothing to import"}
             </button>
@@ -152,32 +176,75 @@
 <style>
     .form {
         display: grid;
-        gap: 1rem;
+        gap: 1.1rem;
+        padding: 1.5rem;
     }
 
     label {
         display: grid;
-        gap: 0.35rem;
+        gap: 0.4rem;
         font-weight: 600;
+        font-size: 0.925rem;
+    }
+
+    .accepts {
+        margin-top: -0.6rem;
         font-size: 0.9rem;
     }
 
-    .help {
+    summary {
+        width: fit-content;
+        color: var(--text-muted);
+        font-size: 0.925rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    @media (hover: hover) {
+        summary:hover {
+            color: var(--text);
+        }
+    }
+
+    .formats {
+        display: grid;
+        gap: 0.6rem;
+        margin: 0.75rem 0 0;
+        font-size: 0.925rem;
+    }
+
+    .formats dt {
+        color: var(--text);
+        font-weight: 600;
+    }
+
+    .formats dd {
         margin: 0;
-        font-size: 0.9rem;
     }
 
     .summary {
         margin-top: 1rem;
         display: grid;
-        gap: 0.75rem;
+        gap: 0.9rem;
+        padding: 1.5rem;
     }
 
-    .summary h2 {
-        font-size: 1.1rem;
+    .track {
+        height: 6px;
+        border-radius: 3px;
+        background: var(--surface-3);
+        overflow: hidden;
+    }
+
+    .track span {
+        display: block;
+        height: 100%;
+        background: var(--accent);
     }
 
     ul {
+        display: grid;
+        gap: 0.2rem;
         margin: 0;
         padding-left: 1.2rem;
     }
@@ -185,26 +252,47 @@
     table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.9rem;
+        font-size: 0.925rem;
         table-layout: fixed;
     }
 
     th,
     td {
         text-align: left;
-        padding: 0.35rem 0.5rem;
+        padding: 0.5rem 0.75rem 0.5rem 0;
         border-bottom: 1px solid var(--border);
         overflow-wrap: anywhere;
     }
 
     th {
         color: var(--text-muted);
+        font-size: 0.85rem;
         font-weight: 600;
+    }
+
+    /* The group is short; the card's two sides get the room. */
+    .where {
+        width: 22%;
+    }
+
+    td.content {
+        font-size: 1.02rem;
+    }
+
+    .more {
+        font-size: 0.9rem;
     }
 
     .buttons {
         display: flex;
         justify-content: flex-end;
         gap: 0.5rem;
+    }
+
+    @media (max-width: 560px) {
+        .form,
+        .summary {
+            padding: 1.1rem;
+        }
     }
 </style>

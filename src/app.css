@@ -1,47 +1,133 @@
+/*
+ * Design tokens and shared styles.
+ *
+ * The look borrows from two things made for long hours of study: pale green
+ * "eye-ease" ledger paper (light) and a chalkboard (dark). Both are tinted
+ * green rather than grey, with one calm green accent.
+ *
+ * Two typefaces, both bundled with the app (nothing is loaded from elsewhere):
+ * Schibsted Grotesk for the interface, and Newsreader for what the user
+ * wrote: card text, group names and page titles.
+ */
+@import "@fontsource-variable/schibsted-grotesk/wght.css";
+@import "@fontsource-variable/newsreader/opsz.css";
+
 :root {
-    color-scheme: dark light;
-    --bg: #1b1d21;
-    --surface: #24272d;
-    --surface-2: #2d3138;
-    --border: #3a3f47;
-    --text: #eceef1;
-    --text-muted: #9aa1ab;
-    --accent: #6be635;
-    --accent-ink: #0f1a08;
-    --accent-subtle: rgba(107, 230, 53, 0.14);
-    --danger: #ff6b6b;
-    --again: #ff6b6b;
-    --hard: #f0a640;
-    --good: #6be635;
-    --easy: #4fb3ff;
-    --radius: 12px;
+    color-scheme: light;
+
+    --bg: oklch(0.965 0.012 132);
+    --surface: oklch(0.993 0.004 125);
+    --surface-2: oklch(0.944 0.014 134);
+    --surface-3: oklch(0.912 0.018 136);
+    --border: oklch(0.89 0.015 136);
+    --border-strong: oklch(0.79 0.02 142);
+    --text: oklch(0.25 0.025 160);
+    --text-muted: oklch(0.45 0.025 156);
+    --text-faint: oklch(0.53 0.022 152);
+    --accent: oklch(0.49 0.13 150);
+    --accent-text: oklch(0.43 0.12 150);
+    --accent-subtle: oklch(0.49 0.13 150 / 0.1);
+    /* Filled buttons. */
+    --primary: oklch(0.49 0.13 150);
+    --primary-hover: oklch(0.44 0.12 150);
+    --primary-ink: oklch(0.99 0.01 130);
+    /* A recessed track, and the piece that sits raised in it (a segmented control). */
+    --well: oklch(0.912 0.018 136);
+    --raised: oklch(0.993 0.004 125);
+    --danger: oklch(0.5 0.17 27);
+    --again: oklch(0.52 0.17 27);
+    --hard: oklch(0.54 0.12 68);
+    --good: oklch(0.49 0.13 150);
+    --easy: oklch(0.5 0.13 248);
+    --shadow-sm: 0 1px 2px oklch(0.3 0.03 150 / 0.06);
+    --shadow: 0 1px 2px oklch(0.3 0.03 150 / 0.05), 0 10px 28px -12px oklch(0.3 0.03 150 / 0.18);
+
     --radius-sm: 8px;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.2);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --radius: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 22px;
+
+    --font-ui: "Schibsted Grotesk Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* Mincho and Song faces follow, so Japanese and Chinese cards are set in a matching serif. */
+    --font-content:
+        "Newsreader Variable", "Iowan Old Style", "Palatino Linotype", "Hiragino Mincho ProN", "Yu Mincho",
+        "Noto Serif CJK JP", "Songti SC", Georgia, serif;
+
+    --sidebar: 15rem;
+    --tabbar: 3.75rem;
+
+    font-family: var(--font-ui);
+    font-size: 100%;
     line-height: 1.5;
+    /* Where scrollbars take up room, keep it reserved: a page that grows must not get narrower and re-wrap. */
+    scrollbar-gutter: stable;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: light) {
-    :root {
-        --bg: #f4f5f2;
-        --surface: #ffffff;
-        --surface-2: #eceee9;
-        --border: #d6dad1;
-        --text: #1b1d21;
-        --text-muted: #5d636b;
-        --accent: #2f8f0a;
-        --accent-ink: #ffffff;
-        --accent-subtle: rgba(47, 143, 10, 0.1);
-        --danger: #c62828;
-        --again: #c62828;
-        --hard: #b86e00;
-        --good: #2f8f0a;
-        --easy: #1a6fc2;
-        --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
+/* Dark: the system's choice unless Settings says light, or whenever Settings says dark. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: oklch(0.2 0.014 165);
+        --surface: oklch(0.258 0.017 165);
+        --surface-2: oklch(0.292 0.018 165);
+        --surface-3: oklch(0.33 0.02 165);
+        --border: oklch(0.34 0.018 165);
+        --border-strong: oklch(0.44 0.02 165);
+        --text: oklch(0.93 0.012 140);
+        --text-muted: oklch(0.74 0.02 155);
+        --text-faint: oklch(0.62 0.02 155);
+        --accent: oklch(0.82 0.14 152);
+        --accent-text: oklch(0.82 0.14 152);
+        --accent-subtle: oklch(0.82 0.14 152 / 0.13);
+        /* Deeper than the accent: a slab of mint would be the brightest thing on the board. */
+        --primary: oklch(0.5 0.115 152);
+        --primary-hover: oklch(0.55 0.12 152);
+        --primary-ink: oklch(0.97 0.025 150);
+        --well: oklch(0.2 0.014 165);
+        --raised: oklch(0.33 0.02 165);
+        --danger: oklch(0.76 0.13 25);
+        --again: oklch(0.76 0.13 25);
+        --hard: oklch(0.82 0.11 80);
+        --good: oklch(0.82 0.14 152);
+        --easy: oklch(0.79 0.1 240);
+        --shadow-sm: 0 1px 2px oklch(0.1 0.02 165 / 0.3);
+        --shadow: 0 1px 2px oklch(0.1 0.02 165 / 0.3), 0 12px 32px -12px oklch(0.08 0.02 165 / 0.6);
     }
 }
 
-* {
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: oklch(0.2 0.014 165);
+    --surface: oklch(0.258 0.017 165);
+    --surface-2: oklch(0.292 0.018 165);
+    --surface-3: oklch(0.33 0.02 165);
+    --border: oklch(0.34 0.018 165);
+    --border-strong: oklch(0.44 0.02 165);
+    --text: oklch(0.93 0.012 140);
+    --text-muted: oklch(0.74 0.02 155);
+    --text-faint: oklch(0.62 0.02 155);
+    --accent: oklch(0.82 0.14 152);
+    --accent-text: oklch(0.82 0.14 152);
+    --accent-subtle: oklch(0.82 0.14 152 / 0.13);
+    --primary: oklch(0.5 0.115 152);
+    --primary-hover: oklch(0.55 0.12 152);
+    --primary-ink: oklch(0.97 0.025 150);
+    --well: oklch(0.2 0.014 165);
+    --raised: oklch(0.33 0.02 165);
+    --danger: oklch(0.76 0.13 25);
+    --again: oklch(0.76 0.13 25);
+    --hard: oklch(0.82 0.11 80);
+    --good: oklch(0.82 0.14 152);
+    --easy: oklch(0.79 0.1 240);
+    --shadow-sm: 0 1px 2px oklch(0.1 0.02 165 / 0.3);
+    --shadow: 0 1px 2px oklch(0.1 0.02 165 / 0.3), 0 12px 32px -12px oklch(0.08 0.02 165 / 0.6);
+}
+
+*,
+*::before,
+*::after {
     box-sizing: border-box;
 }
 
@@ -50,65 +136,192 @@ body {
     background: var(--bg);
     color: var(--text);
     min-height: 100dvh;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
 }
 
 a {
-    color: var(--accent);
+    color: var(--accent-text);
+    text-underline-offset: 0.18em;
+    text-decoration-thickness: 0.06em;
 }
 
 h1,
 h2,
 h3 {
-    line-height: 1.2;
     margin: 0;
+    line-height: 1.15;
+    text-wrap: balance;
+}
+
+h1 {
+    font-family: var(--font-content);
+    font-size: clamp(1.75rem, 1.4rem + 1.4vw, 2.25rem);
+    font-weight: 560;
+    letter-spacing: -0.015em;
+    overflow-wrap: anywhere;
+}
+
+h2 {
+    font-size: 1.0625rem;
+    font-weight: 650;
+    letter-spacing: -0.005em;
+}
+
+p {
+    margin: 0;
+}
+
+kbd {
+    display: inline-block;
+    min-width: 1.5em;
+    padding: 0.05em 0.4em;
+    border: 1px solid color-mix(in oklab, currentColor 28%, transparent);
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.5;
+    text-align: center;
+    opacity: 0.75;
+}
+
+/* Key hints mean nothing without a keyboard. */
+@media (hover: none) {
+    kbd {
+        display: none;
+    }
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+::selection {
+    background: color-mix(in oklab, var(--accent) 30%, transparent);
 }
 
 /* iOS zooms into inputs smaller than 16px and doesn't zoom back out. */
 input,
 select,
-textarea {
-    font-size: 16px;
+textarea,
+button {
+    font-size: 1rem;
     font-family: inherit;
+}
+
+/* What the user wrote, set in the content face. */
+.content {
+    font-family: var(--font-content);
+    font-size: 1.0625em;
+    line-height: 1.35;
 }
 
 .field {
     width: 100%;
-    padding: 0.65rem 0.8rem;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--bg);
+    min-height: 2.75rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
     color: var(--text);
+    transition:
+        border-color 120ms,
+        box-shadow 120ms;
+}
+
+.field::placeholder {
+    color: var(--text-faint);
+}
+
+/* Hover styles are for pointers that hover: on a touch screen they would stick to the last thing tapped. */
+@media (hover: hover) {
+    .field:hover {
+        border-color: var(--text-faint);
+    }
 }
 
 .field:focus {
-    outline: 2px solid var(--accent);
-    outline-offset: -1px;
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 textarea.field {
     resize: vertical;
-    min-height: 4.5rem;
+    min-height: 4.75rem;
+    line-height: 1.4;
+}
+
+select.field {
+    appearance: none;
+    padding-right: 2.4rem;
+    text-overflow: ellipsis;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+        linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+    background-position:
+        calc(100% - 1.15rem) 50%,
+        calc(100% - 0.8rem) 50%;
+    background-size:
+        0.36rem 0.36rem,
+        0.36rem 0.36rem;
+    background-repeat: no-repeat;
+}
+
+input[type="file"].field {
+    padding: 0.4rem;
+    color: var(--text-muted);
+}
+
+input[type="file"].field::file-selector-button {
+    margin-right: 0.75rem;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
 }
 
 .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    padding: 0.6rem 1rem;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: var(--surface-2);
+    gap: 0.45rem;
+    min-height: 2.75rem;
+    padding: 0.55rem 1.05rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
     color: var(--text);
     font: inherit;
-    font-weight: 600;
+    font-weight: 620;
+    line-height: 1.2;
     text-decoration: none;
     cursor: pointer;
     white-space: nowrap;
+    user-select: none;
+    transition:
+        background-color 120ms,
+        border-color 120ms,
+        color 120ms,
+        transform 80ms;
 }
 
-.btn:hover:not(:disabled) {
-    border-color: var(--text-muted);
+@media (hover: hover) {
+    .btn:hover:not(:disabled) {
+        background: var(--surface-2);
+        border-color: var(--text-faint);
+    }
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(1px);
 }
 
 .btn:disabled {
@@ -117,25 +330,92 @@ textarea.field {
 }
 
 .btn.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--accent-ink);
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-ink);
+}
+
+@media (hover: hover) {
+    .btn.primary:hover:not(:disabled) {
+        background: var(--primary-hover);
+        border-color: var(--primary-hover);
+    }
 }
 
 .btn.danger {
     color: var(--danger);
 }
 
+@media (hover: hover) {
+    .btn.danger:hover:not(:disabled) {
+        background: color-mix(in oklab, var(--danger) 10%, var(--surface));
+        border-color: color-mix(in oklab, var(--danger) 55%, var(--border));
+    }
+}
+
 .btn.ghost {
     background: transparent;
     border-color: transparent;
+    color: var(--text-muted);
+}
+
+@media (hover: hover) {
+    .btn.ghost:hover:not(:disabled) {
+        background: var(--surface-2);
+        border-color: transparent;
+        color: var(--text);
+    }
+}
+
+.btn.large {
+    min-height: 3.25rem;
+    padding: 0.8rem 1.4rem;
+    border-radius: 12px;
+    font-size: 1.0625rem;
+}
+
+.btn .icon {
+    flex: none;
 }
 
 .panel {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1rem;
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+}
+
+/* A list of rows in one bordered block, split by hairlines. */
+.rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.rows > li + li {
+    border-top: 1px solid var(--border);
+}
+
+.rows > li > a {
+    color: var(--text);
+    text-decoration: none;
+    transition: background-color 120ms;
+}
+
+@media (hover: hover) {
+    .rows > li > a:hover {
+        background: var(--surface-2);
+    }
+}
+
+.rows > li > a:focus-visible {
+    outline-offset: -2px;
 }
 
 .muted {
@@ -145,10 +425,10 @@ textarea.field {
 .page-head {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-end;
     justify-content: space-between;
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
+    gap: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
 }
 
 .page-head .actions {
@@ -157,30 +437,52 @@ textarea.field {
     gap: 0.5rem;
 }
 
+.page-head .sub {
+    margin-top: 0.3rem;
+    color: var(--text-muted);
+}
+
 .crumb {
-    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 2rem;
+    margin: -0.25rem 0 0.35rem -0.15rem;
+    font-size: 0.9rem;
+    font-weight: 500;
     text-decoration: none;
     color: var(--text-muted);
 }
 
-.crumb:hover {
-    color: var(--text);
+@media (hover: hover) {
+    .crumb:hover {
+        color: var(--text);
+    }
 }
 
 .badge {
     display: inline-block;
-    min-width: 1.6rem;
-    padding: 0.05rem 0.5rem;
+    padding: 0.14rem 0.6rem;
     border-radius: 999px;
     background: var(--accent-subtle);
-    color: var(--accent);
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-align: center;
+    color: var(--accent-text);
+    font-size: 0.82rem;
+    font-weight: 650;
+    line-height: 1.4;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .error {
     color: var(--danger);
+}
+
+p.error[role="alert"] {
+    margin-bottom: 1rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid color-mix(in oklab, var(--danger) 40%, var(--border));
+    border-radius: var(--radius);
+    background: color-mix(in oklab, var(--danger) 8%, var(--surface));
 }
 
 .visually-hidden {

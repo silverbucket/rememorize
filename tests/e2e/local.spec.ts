@@ -58,7 +58,7 @@ test("review session schedules cards", async ({ page }) => {
     await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks" });
     await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
     await page.goto("/");
-    await page.getByRole("link", { name: "Review 2 due" }).click();
+    await page.getByRole("link", { name: "Review 2 cards" }).click();
     await expect(page.getByText("2 cards left")).toBeVisible();
 
     // Cards come in creation order; the first one has a hint.
@@ -79,7 +79,7 @@ test("review session schedules cards", async ({ page }) => {
     await expect(page.getByText("Done for now")).toBeVisible();
 
     await page.goto("/");
-    await expect(page.getByRole("link", { name: /Review \d+ due/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Review \d+ cards?/ })).toHaveCount(0);
     await page.goto("/#/group/Animals");
     await expect(page.locator(".when").first()).toHaveText(/^in /);
 });
@@ -103,7 +103,7 @@ test("undo the last rating", async ({ page, isMobile }) => {
 
     // The undone rating isn't stored: both cards are still due.
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "Review 2 due" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Review 2 cards" })).toBeVisible();
 
     if (!isMobile) {
         await page.goto("/#/review");
@@ -181,9 +181,14 @@ test("daily limit on new cards", async ({ page }) => {
     await page.getByLabel("New cards per day").press("Enter");
     await page.getByLabel("New cards per day").blur();
 
+    // The group says why its review is shorter than its count of new cards.
+    await page.goto("/#/group/Numbers");
+    await expect(page.getByText("3 cards, 3 new")).toBeVisible();
+    await expect(page.getByText("Today's review takes 2 of the 3 new cards: the daily limit is 2.")).toBeVisible();
+
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "Review 2 due" })).toBeVisible();
-    await page.getByRole("link", { name: "Review 2 due" }).click();
+    await expect(page.getByRole("link", { name: "Review 2 cards" })).toBeVisible();
+    await page.getByRole("link", { name: "Review 2 cards" }).click();
     for (let i = 0; i < 2; i++) {
         await page.getByRole("button", { name: /Show answer/ }).click();
         await page.getByRole("button", { name: /Easy/ }).click();
@@ -192,6 +197,10 @@ test("daily limit on new cards", async ({ page }) => {
     await expect(page.getByText("1 more new card waiting: you've started 2 of 2 new cards for today.")).toBeVisible();
     // Don't claim the next card is months away while a new one is waiting.
     await expect(page.getByText(/Next card is due/)).toHaveCount(0);
+
+    await page.getByRole("link", { name: "Back to your cards" }).click();
+    await page.getByText("Numbers").click();
+    await expect(page.getByText("No more new cards today: the daily limit is 2.")).toBeVisible();
 
     // The setting is remembered, and today's count shows.
     await page.reload();
@@ -203,7 +212,7 @@ test("daily limit on new cards", async ({ page }) => {
     await page.getByLabel("New cards per day").fill("5");
     await page.getByLabel("New cards per day").blur();
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "Review 1 due" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Review 1 card" })).toBeVisible();
 });
 
 test("cards can be studied back → front, or both ways", async ({ page }) => {
@@ -216,7 +225,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByTitle("Studied back → front")).toBeVisible();
 
-    await page.getByRole("link", { name: "Review 1 due" }).click();
+    await page.getByRole("link", { name: "Review 1 card" }).click();
     await expect(page.getByText("Back → front")).toBeVisible();
     await expect(page.locator(".side.front")).toHaveText("beer");
     // The hint is for the front, so it isn't offered here.
@@ -238,11 +247,12 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     // because the other direction was just reviewed.
     await page.getByText("pivo").click();
     await expect(page.getByLabel("Study direction")).toHaveValue("reverse");
-    await page.getByLabel("Study direction").selectOption("Both ways, each on its own schedule");
+    await page.getByLabel("Study direction").selectOption("Both ways");
+    await expect(page.getByText("Each direction has its own schedule.")).toBeVisible();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByTitle("Studied both ways")).toBeVisible();
     await expect(page.locator(".when")).toHaveText("tomorrow");
-    await expect(page.getByRole("link", { name: /Review \d+ due/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Review \d+ cards?/ })).toHaveCount(0);
 
     // A new card studied both ways shows one direction today: front → back.
     await page.goto("/#/new?group=Drinks");
@@ -250,7 +260,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByLabel("Back").fill("water");
     await page.getByLabel("Study direction").selectOption("both");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await page.getByRole("link", { name: "Review 1 due" }).click();
+    await page.getByRole("link", { name: "Review 1 card" }).click();
     await expect(page.locator(".side.front")).toHaveText("voda");
     await expect(page.getByText("Back → front")).toHaveCount(0);
     await page.getByRole("button", { name: /Show answer/ }).click();
@@ -264,9 +274,9 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.goto("/#/group/Drinks");
     await page.reload();
     await page.getByText("voda").click();
-    await expect(page.getByText("Next review (front → back)")).toBeVisible();
-    await expect(page.getByText("Next review (back → front)")).toBeVisible();
-    await expect(page.locator(".stats")).toContainText("not reviewed yet");
+    // Its schedule has a row for each direction: one studied today, one not yet.
+    await expect(page.getByRole("row", { name: /Front → back/ })).toContainText(/in \d+/);
+    await expect(page.getByRole("row", { name: /Back → front/ })).toContainText("not reviewed yet");
 });
 
 test("statistics follow reviews", async ({ page }) => {
@@ -308,7 +318,7 @@ test("statistics follow reviews", async ({ page }) => {
     await expect(page.getByRole("row", { name: /Animals/ })).toContainText("50%");
     await expect(page.getByText("2 new cards started in the last 30 days")).toBeVisible();
     // The card rated Easy is scheduled for a later day.
-    await expect(page.getByText(/^\d+ cards? due today, 1 in the next 7 days$/)).toBeVisible();
+    await expect(page.getByText(/^\d+ cards? due by the end of today, 1 in the next 7 days$/)).toBeVisible();
 });
 
 test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
@@ -367,7 +377,7 @@ test("a JSON backup restores cards with their review progress", async ({ page, b
     // Still scheduled for later, not due again.
     await expect(fresh.locator(".when")).toHaveText(/^in /);
     await fresh.goto("/");
-    await expect(fresh.getByRole("link", { name: /Review \d+ due/ })).toHaveCount(0);
+    await expect(fresh.getByRole("link", { name: /Review \d+ cards?/ })).toHaveCount(0);
 
     // Restoring it again changes nothing.
     await fresh.goto("/#/import");
@@ -381,4 +391,189 @@ test("invalid import files show an error", async ({ page }) => {
         .getByLabel("File")
         .setInputFiles({ name: "x.json", mimeType: "application/json", buffer: Buffer.from("{oops") });
     await expect(page.getByRole("alert")).toContainText("isn't valid JSON");
+});
+
+test("the navigation reaches each part of the app and marks where you are", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Main" });
+    await expect(nav.getByRole("link", { name: "Cards" })).toHaveAttribute("aria-current", "page");
+
+    await nav.getByRole("link", { name: "Stats" }).click();
+    await expect(page.getByRole("heading", { name: "Statistics" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Stats" })).toHaveAttribute("aria-current", "page");
+
+    await nav.getByRole("link", { name: "Settings" }).click();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    // Importing is reached from Settings, so it stays marked there.
+    await page.getByRole("link", { name: "Import…" }).click();
+    await expect(nav.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".crumb")).toHaveText("Settings");
+    // The page's address says where it was opened from, so a reload leads back the same way.
+    await page.reload();
+    await expect(nav.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".crumb")).toHaveText("Settings");
+
+    // Reached from the home page instead, it belongs to Cards and leads back there.
+    await nav.getByRole("link", { name: "Cards" }).click();
+    await page.getByRole("link", { name: "Import" }).click();
+    await expect(nav.getByRole("link", { name: "Cards" })).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".crumb")).toHaveText("All groups");
+});
+
+test("the home page says what is due and what was done today", async ({ page }) => {
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
+    await page.goto("/");
+    await expect(page.getByText("2 cards to study today")).toBeVisible();
+    await expect(page.getByText("0 days in a row")).toBeVisible();
+    await expect(page.locator(".groups li")).toContainText("2 new");
+
+    await page.getByRole("link", { name: "Review 2 cards" }).click();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await page.getByRole("link", { name: "End review" }).click();
+
+    await expect(page.getByText("1 card to study today")).toBeVisible();
+    await expect(page.getByText("1 day in a row")).toBeVisible();
+    await expect(page.getByText("1 reviewed today")).toBeVisible();
+    await expect(page.locator(".groups li")).toContainText("1 new");
+
+    await page.getByRole("link", { name: "Review 1 card" }).click();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await page.getByRole("link", { name: "Back to your cards" }).click();
+    await expect(page.getByText("You're all caught up")).toBeVisible();
+    await expect(page.getByText(/The next card is due in /)).toBeVisible();
+});
+
+test("tapping the card shows the answer, but its hint button only shows the hint", async ({ page }) => {
+    await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks" });
+    await page.goto("/#/review");
+    await page.getByRole("button", { name: "Show hint" }).click();
+    await expect(page.getByText("barks")).toBeVisible();
+    await expect(page.locator(".side.back")).toHaveCount(0);
+
+    const top = async () => (await page.locator(".side.front").boundingBox())?.y;
+    const before = await top();
+    await page.locator(".side.front").click();
+    await expect(page.locator(".side.back")).toHaveText("dog");
+    // The question stays where it was; the answer appears below it.
+    expect(await top()).toBe(before);
+    // A second tap changes nothing; the rating buttons answer.
+    await page.locator(".side.front").click();
+    await expect(page.getByRole("button", { name: /Good/ })).toBeVisible();
+});
+
+test("a long group can be searched by front, back or hint", async ({ page }) => {
+    const rows = [
+        "front,back,hint",
+        ...Array.from({ length: 9 }, (_, i) => `word ${i},meaning ${i},`),
+        "pes,dog,barks",
+    ];
+    const file = { name: "Animals.csv", mimeType: "text/csv", buffer: Buffer.from(rows.join("\n")) };
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles(file);
+    await page.getByRole("button", { name: "Import 10 cards" }).click();
+    await expect(page.locator(".cards li")).toHaveCount(10);
+
+    await page.getByLabel("Find a card").fill("MEANING 3");
+    await expect(page.locator(".cards li")).toHaveCount(1);
+    await expect(page.locator(".cards li")).toContainText("word 3");
+    await page.getByLabel("Find a card").fill("barks");
+    await expect(page.locator(".cards li")).toContainText("pes");
+    await page.getByLabel("Find a card").fill("nothing like this");
+    await expect(page.getByText("No cards match “nothing like this”.")).toBeVisible();
+
+    // A short group has no search box.
+    await addCard(page, { front: "voda", back: "water", group: "Drinks" });
+    await expect(page.getByLabel("Find a card")).toHaveCount(0);
+});
+
+test("appearance follows the system until one is chosen, and the choice is remembered", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto("/#/account");
+    const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const light = await background();
+    await expect(page.getByRole("radio", { name: "System" })).toBeChecked();
+
+    await page.getByRole("radio", { name: "Dark" }).check();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    const dark = await background();
+    expect(dark).not.toBe(light);
+
+    await page.reload();
+    await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
+    expect(await background()).toBe(dark);
+
+    // Back to the system's choice, which here is light.
+    await page.getByRole("radio", { name: "System" }).check();
+    await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
+    expect(await background()).toBe(light);
+    await page.emulateMedia({ colorScheme: "dark" });
+    expect(await background()).toBe(dark);
+});
+
+test("saving a card is in reach without scrolling, and deleting is kept apart from it", async ({ page }) => {
+    acceptDialogs(page);
+    await page.goto("/#/new?group=Animals");
+    await page.getByLabel("Front").fill("pes");
+    await page.getByLabel("Back").fill("dog");
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    await page.getByText("pes").click();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
+    await page.getByRole("button", { name: "Delete card" }).click();
+    await expect(page.getByText("No cards in this group.")).toBeVisible();
+});
+
+test("a long answer leaves the question where it was and stays clear of the rating buttons", async ({ page }) => {
+    const lines = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n");
+    await addCard(page, { front: "pes", back: lines, group: "Animals" });
+    await addCard(page, { front: lines, back: "kočka", group: "Animals" });
+    // Without the card's entrance, so its position can be read straight away.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/#/review");
+    const front = page.locator(".side.front");
+    const before = (await front.boundingBox())?.y;
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await expect(page.locator(".side.back")).toContainText("line 20");
+    expect((await front.boundingBox())?.y).toBe(before);
+
+    const answer = await page.locator(".side.back").boundingBox();
+    const buttons = await page.locator(".grades").boundingBox();
+    expect((answer?.y ?? 0) + (answer?.height ?? 0)).toBeLessThanOrEqual(buttons?.y ?? 0);
+
+    // Rating it, from wherever the buttons were scrolled to, starts the next card (a long one) at the top.
+    await page.getByRole("button", { name: /Again/ }).click();
+    await expect(front).toContainText("line 20");
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test("on a small phone, a field that takes focus scrolls clear of the Save bar", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 430 });
+    await page.goto("/#/new");
+    await page.getByLabel("Front").focus();
+    for (const label of ["Back", "Hint", "Group", "Study direction"]) {
+        await page.keyboard.press("Tab");
+        const field = page.getByLabel(label);
+        await expect(field).toBeFocused();
+        // The line being typed on: a tall text box may run on under the bar below it.
+        const box = await field.boundingBox();
+        const bar = await page.locator("form .buttons").boundingBox();
+        const line = (box?.y ?? 0) + Math.min(box?.height ?? 0, 44);
+        expect(line, `${label} is above the Save bar`).toBeLessThanOrEqual(bar?.y ?? 0);
+    }
+
+    // And back up the form: clear of the header at the top.
+    const header = await page.locator("header").boundingBox();
+    for (const label of ["Group", "Hint", "Back", "Front"]) {
+        await page.keyboard.press("Shift+Tab");
+        const field = page.getByLabel(label);
+        await expect(field).toBeFocused();
+        const box = await field.boundingBox();
+        expect(box?.y ?? 0, `${label} is below the header`).toBeGreaterThanOrEqual(
+            (header?.y ?? 0) + (header?.height ?? 0),
+        );
+    }
 });

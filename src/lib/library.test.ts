@@ -28,7 +28,7 @@ describe("Library", () => {
     it("shows a new card in its group immediately", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
         expect(library.find("food", card["@id"])).toEqual(card);
-        expect(library.groups).toEqual([{ name: "food", total: 1, due: 1 }]);
+        expect(library.groups).toEqual([{ name: "food", total: 1, due: 1, reviews: 0, fresh: 1 }]);
         expect(library.dueCount).toBe(1);
     });
 
@@ -60,13 +60,35 @@ describe("Library", () => {
         expect(library.newWaiting).toBe(1);
         // Each group can still show up to the remaining limit.
         expect(library.groups).toEqual([
-            { name: "one", total: 2, due: 2 },
-            { name: "two", total: 1, due: 1 },
+            { name: "one", total: 2, due: 2, reviews: 0, fresh: 2 },
+            { name: "two", total: 1, due: 1, reviews: 0, fresh: 1 },
         ]);
         await library.review(a, 4);
+        // The card just studied is no longer new, and the one left in its group fits under the limit.
+        expect(library.groups.map((g) => g.fresh)).toEqual([1, 1]);
         expect(library.startedToday).toBe(1);
         expect(library.newRemaining).toBe(1);
         expect(library.dueCount).toBe(1);
+    });
+
+    it("tells a group's due reviews from its new cards", async () => {
+        const old = await library.save({ frontText: "a", backText: "a", group: "one" });
+        await library.save({ frontText: "b", backText: "b", group: "one" });
+        // Studied three months ago, so it has long since come due again.
+        await library.review(old, 3, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+        expect(library.groups).toEqual([{ name: "one", total: 2, due: 2, reviews: 1, fresh: 1 }]);
+    });
+
+    it("counts the unstudied side of a two-way card as new, in the queue's units", async () => {
+        library.newPerDay = 1;
+        const yesterday = new Date(2026, 4, 1, 12);
+        library.now = new Date(2026, 4, 2, 12);
+        const both = await library.save({ frontText: "a", backText: "a", group: "one", direction: "both" });
+        await library.save({ frontText: "b", backText: "b", group: "one" });
+        // Front → back was started yesterday and isn't due; back → front has never been studied.
+        await library.review(both, 4, yesterday);
+        // Two cards could be started; today's limit lets one through.
+        expect(library.groups).toEqual([{ name: "one", total: 2, due: 1, reviews: 0, fresh: 2 }]);
     });
 
     it("uses the allowance for the time it's asked about", async () => {

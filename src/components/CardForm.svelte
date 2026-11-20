@@ -5,6 +5,7 @@
     import { href, router } from "../lib/router.svelte";
     import { itemsOf, stateOf } from "../lib/scheduler";
     import { library } from "../lib/state";
+    import Icon from "./Icon.svelte";
 
     let { card, initialGroup }: { card?: Flashcard; initialGroup?: string } = $props();
 
@@ -68,28 +69,32 @@
 </script>
 
 <form class="panel form" onsubmit={save}>
-    <label>
-        <span>Front</span>
-        <textarea id="front" class="field" bind:value={frontText} required rows="2"></textarea>
-    </label>
-    <label>
-        <span>Back</span>
-        <textarea class="field" bind:value={backText} required rows="2"></textarea>
-    </label>
-    <label>
-        <span>Hint <span class="muted">(optional)</span></span>
-        <input class="field" bind:value={hint} />
-    </label>
-    <label>
-        <span>Group</span>
-        <input class="field" bind:value={group} list="group-names" placeholder="default" />
-        <datalist id="group-names">
-            {#each library.groupNames() as name (name)}
-                <option value={name}></option>
-            {/each}
-        </datalist>
-        {#if groupError}<small class="error">{groupError}</small>{/if}
-    </label>
+    <div class="faces">
+        <label>
+            <span>Front</span>
+            <textarea id="front" class="field content" bind:value={frontText} required rows="2"></textarea>
+        </label>
+        <label>
+            <span>Back</span>
+            <textarea class="field content" bind:value={backText} required rows="2"></textarea>
+        </label>
+    </div>
+    <div class="pair">
+        <label>
+            <span>Hint <span class="optional">(optional)</span></span>
+            <input class="field content" bind:value={hint} />
+        </label>
+        <label>
+            <span>Group</span>
+            <input class="field content" bind:value={group} list="group-names" placeholder="default" />
+            <datalist id="group-names">
+                {#each library.groupNames() as name (name)}
+                    <option value={name}></option>
+                {/each}
+            </datalist>
+            {#if groupError}<small class="error">{groupError}</small>{/if}
+        </label>
+    </div>
 
     <!-- Not wrapped in the label: the options would become part of its name. -->
     <div class="labelled">
@@ -97,19 +102,19 @@
         <select id="direction" class="field" bind:value={direction}>
             <option value="forward">Front → back</option>
             <option value="reverse">Back → front</option>
-            <option value="both">Both ways, each on its own schedule</option>
+            <option value="both">Both ways</option>
         </select>
+        {#if direction === "both"}
+            <small class="note">Each direction has its own schedule. You won't see both on the same day.</small>
+        {/if}
     </div>
 
     {#if error}
         <p class="error" role="alert">{error}</p>
     {/if}
 
+    <!-- On a phone this is a bar along the bottom, where the tab bar usually is. -->
     <div class="buttons">
-        {#if initial}
-            <button class="btn danger" type="button" onclick={remove} disabled={saving}>Delete</button>
-        {/if}
-        <span class="spacer"></span>
         {#if !initial}
             <button class="btn" type="submit" value="another" disabled={!canSave}>Save &amp; add another</button>
         {/if}
@@ -120,57 +125,223 @@
 </form>
 
 {#if initial}
-    <dl class="stats">
-        {#each itemsOf(initial) as item (item.reverse)}
-            {@const review = stateOf(initial, item.reverse)}
-            {@const which = initial.direction === "both" ? (item.reverse ? " (back → front)" : " (front → back)") : ""}
-            <div><dt>Next review{which}</dt><dd>{review ? fromNow(review.due, library.now) : "not reviewed yet"}</dd></div>
-            <div><dt>Reviews{which}</dt><dd>{review?.reps ?? 0}</dd></div>
-            <div><dt>Lapses{which}</dt><dd>{review?.lapses ?? 0}</dd></div>
-        {/each}
-        <div><dt>Last reviewed</dt><dd>{formatDateTime(initial.reviewedAt ?? initial.review?.lastReview)}</dd></div>
-        <div><dt>Created</dt><dd>{formatDateTime(initial.createdAt)}</dd></div>
-        <div><dt>Updated</dt><dd>{formatDateTime(initial.updatedAt)}</dd></div>
-    </dl>
+    <section class="panel stats" aria-label="Schedule">
+        <!-- One row for each direction the card is studied in. -->
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Direction</th>
+                    <th scope="col">Next review</th>
+                    <th scope="col" class="num">Reviews</th>
+                    <th scope="col" class="num">Lapses</th>
+                </tr>
+            </thead>
+            <tbody>
+                {#each itemsOf(initial) as item (item.reverse)}
+                    {@const review = stateOf(initial, item.reverse)}
+                    <tr>
+                        <th scope="row">{item.reverse ? "Back → front" : "Front → back"}</th>
+                        <td>{review ? fromNow(review.due, library.now) : "not reviewed yet"}</td>
+                        <td class="num">{review?.reps ?? 0}</td>
+                        <td class="num">{review?.lapses ?? 0}</td>
+                    </tr>
+                {/each}
+            </tbody>
+        </table>
+        <dl>
+            <div><dt>Last reviewed</dt><dd>{formatDateTime(initial.reviewedAt ?? initial.review?.lastReview)}</dd></div>
+            <div><dt>Created</dt><dd>{formatDateTime(initial.createdAt)}</dd></div>
+            <div><dt>Updated</dt><dd>{formatDateTime(initial.updatedAt)}</dd></div>
+        </dl>
+    </section>
+
+    <div class="danger-zone">
+        <button class="btn danger" type="button" onclick={remove} disabled={saving}>
+            <Icon name="trash" size={18} />Delete card
+        </button>
+    </div>
 {/if}
 
 <style>
     .form {
         display: grid;
-        gap: 1rem;
+        gap: 1.1rem;
+        padding: 1.5rem;
+    }
+
+    .faces,
+    .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.1rem 1rem;
     }
 
     label,
     .labelled {
         display: grid;
-        gap: 0.35rem;
+        align-content: start;
+        gap: 0.4rem;
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.925rem;
+    }
+
+    .optional,
+    .note {
+        color: var(--text-muted);
+        font-weight: 400;
+    }
+
+    .note {
+        font-size: 0.875rem;
+    }
+
+    .field.content {
+        font-size: 1.125rem;
+        font-weight: 400;
+    }
+
+    /* Two lines to start with, growing with what is typed where the browser can do that. */
+    textarea.content {
+        min-height: 4.4rem;
+        font-size: 1.2rem;
+        field-sizing: content;
+    }
+
+    /* A box that grows by itself needs no handle to drag. */
+    @supports (field-sizing: content) {
+        textarea.content {
+            resize: none;
+        }
     }
 
     .buttons {
         display: flex;
         flex-wrap: wrap;
+        justify-content: flex-end;
         gap: 0.5rem;
+        padding-top: 0.25rem;
     }
 
-    .spacer {
-        flex: 1;
+    .danger-zone {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 2rem;
     }
 
+    /* The card's schedule: a row for each direction, then its dates. */
     .stats {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-        gap: 0.75rem;
-        margin: 1.25rem 0 0;
+        gap: 1.1rem;
+        margin: 1rem 0 0;
+        padding: 1.25rem 1.5rem;
+        font-size: 0.925rem;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        padding: 0.45rem 1rem 0.45rem 0;
+        text-align: left;
+        font-weight: 400;
+    }
+
+    thead th {
+        padding-top: 0;
+        color: var(--text-muted);
         font-size: 0.85rem;
+    }
+
+    tbody tr {
+        border-top: 1px solid var(--border);
+    }
+
+    .num {
+        padding-right: 0;
+        padding-left: 1rem;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    dl {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem 1.5rem;
+        margin: 0;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
     }
 
     dt {
         color: var(--text-muted);
+        font-size: 0.85rem;
     }
 
     dd {
-        margin: 0;
+        margin: 0.1rem 0 0;
+    }
+
+    @media (max-width: 560px) {
+        .form {
+            padding: 1.1rem;
+        }
+
+        .faces,
+        .pair {
+            grid-template-columns: 1fr;
+        }
+
+        .stats {
+            padding: 1.1rem;
+        }
+
+        th,
+        td {
+            padding-right: 0.5rem;
+        }
+
+        /* One date per line, name on the left and value on the right. */
+        dl {
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+        }
+
+        dl div {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        dt {
+            font-size: inherit;
+        }
+
+        dd {
+            margin: 0;
+            text-align: right;
+        }
+
+    }
+
+    /* Where the tab bar would be (see App.svelte), saving is always in reach instead. */
+    @media (max-width: 879.98px) {
+        .buttons {
+            position: fixed;
+            z-index: 10;
+            inset: auto 0 0;
+            flex-wrap: nowrap;
+            padding: 0.6rem max(1rem, env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom))
+                max(1rem, env(safe-area-inset-left));
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+        }
+
+        .buttons .btn {
+            flex: 1 1 0;
+            min-width: 0;
+        }
     }
 </style>

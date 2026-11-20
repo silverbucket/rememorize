@@ -1,6 +1,5 @@
 <script lang="ts">
     import { plural } from "../lib/format";
-    import { href } from "../lib/router.svelte";
     import { library } from "../lib/state";
     import {
         calendarWeeks,
@@ -67,21 +66,14 @@
             key: dayKey(d.date),
             value: d.due,
             tick: i === 0 ? "Today" : i % 7 === 0 ? shortDay.format(d.date) : undefined,
-            text: `${i === 0 ? "Today (with overdue)" : dayName.format(d.date)}: ${plural(d.due, "card")} due`,
+            text: `${i === 0 ? "By the end of today (with overdue)" : dayName.format(d.date)}: ${plural(d.due, "card")} due`,
         })),
     );
     const upcomingWeek = $derived(upcoming.slice(0, 7).reduce((sum, d) => sum + d.due, 0));
 
     const percent = (r: Retention) => (r.rate === undefined ? "—" : `${Math.round(r.rate * 100)}%`);
-
-    // Show the most recent weeks first when the year doesn't fit (phones).
-    let scroller: HTMLElement | undefined = $state();
-    $effect(() => {
-        if (scroller) scroller.scrollLeft = scroller.scrollWidth;
-    });
 </script>
 
-<a class="crumb" href={href.home()}>← All groups</a>
 <div class="page-head">
     <h1>Statistics</h1>
 </div>
@@ -96,20 +88,20 @@
         </p>
     {/if}
 
-    <dl class="tiles">
-        <div class="panel tile">
+    <dl class="panel tiles">
+        <div class="tile">
             <dt>Day streak</dt>
             <dd>{streak(log, now)}</dd>
         </div>
-        <div class="panel tile">
+        <div class="tile">
             <dt>Reviews today</dt>
             <dd>{reviewsToday}</dd>
         </div>
-        <div class="panel tile">
+        <div class="tile">
             <dt>Last 7 days</dt>
             <dd>{reviewsWeek}</dd>
         </div>
-        <div class="panel tile">
+        <div class="tile">
             <dt>Retention</dt>
             <dd>{percent(overall)}</dd>
         </div>
@@ -117,35 +109,41 @@
 
     <section class="panel">
         <h2>Reviews per day</h2>
-        <div class="scroller" bind:this={scroller}>
-            <div class="calendar" aria-hidden="true" onpointerleave={(e) => e.pointerType === "mouse" && (pickedKey = undefined)}>
-                <div class="months">
-                    {#each weeks as week, i (i)}
-                        <div class="month">
-                            {#if week.some((d) => d.date.getDate() === 1)}<span>{monthName.format(week.at(-1)?.date)}</span
-                                >{/if}
-                        </div>
-                    {/each}
+        <div class="scroller">
+            <div
+                class="calendar"
+                style:--weeks={weeks.length}
+                aria-hidden="true"
+                onpointerleave={(e) => e.pointerType === "mouse" && (pickedKey = undefined)}
+            >
+                {#each weeks as week, w (w)}
+                    {#if week.some((d) => d.date.getDate() === 1)}
+                        <span class="month" style:grid-column={w + 2}>{monthName.format(week.at(-1)?.date)}</span>
+                    {/if}
+                {/each}
+                <!-- Pinned to the left edge: on a phone the weeks scroll underneath it. -->
+                <div class="rail">
+                    <span style:grid-row="2">Mon</span>
+                    <span style:grid-row="4">Wed</span>
+                    <span style:grid-row="6">Fri</span>
                 </div>
-                <div class="weekdays"><span>Mon</span><span>Wed</span><span>Fri</span></div>
-                <div class="weeks">
-                    {#each weeks as week, i (i)}
-                        <div class="week">
-                            {#each week as day (day.key)}
-                                <div
-                                    class="day l{level(day)}"
-                                    role="presentation"
-                                    class:today={day.key === today}
-                                    class:picked={day.key === pickedKey}
-                                    onpointerenter={() => (pickedKey = day.key)}
-                                    onpointerdown={() => (pickedKey = day.key)}
-                                ></div>
-                            {/each}
-                        </div>
+                {#each weeks as week, w (w)}
+                    {#each week as day, d (day.key)}
+                        <div
+                            class="day l{level(day)}"
+                            role="presentation"
+                            style:grid-column={w + 2}
+                            style:grid-row={d + 2}
+                            class:today={day.key === today}
+                            class:picked={day.key === pickedKey}
+                            onpointerenter={() => (pickedKey = day.key)}
+                            onpointerdown={() => (pickedKey = day.key)}
+                        ></div>
                     {/each}
-                </div>
+                {/each}
             </div>
         </div>
+        <p class="swipe" aria-hidden="true">Swipe for earlier months</p>
         <div class="under">
             <p class="muted reading" aria-hidden="true">{reading}</p>
             <p class="legend muted" aria-hidden="true">
@@ -175,7 +173,7 @@
                 <tbody>
                     {#each [{ group: "All groups", retention: overall }, ...groups] as row, i (i)}
                         <tr class:all={i === 0}>
-                            <th scope="row">{row.group}</th>
+                            <th scope="row" class:content={i > 0}>{row.group}</th>
                             <td class="meter-cell">
                                 <div class="meter"><div style:width={percent(row.retention)}></div></div>
                             </td>
@@ -196,10 +194,13 @@
 
     <section class="panel">
         <h2>Coming up</h2>
-        <p class="muted sub">Cards due each day for the next {DAYS} days. New cards aren't counted.</p>
+        <p class="muted sub">
+            Cards due each day for the next {DAYS} days. Today counts cards that come due later today too. New cards
+            aren't counted.
+        </p>
         <BarChart
             bars={upcomingBars}
-            summary="{plural(upcoming[0].due, 'card')} due today, {upcomingWeek} in the next 7 days"
+            summary="{plural(upcoming[0].due, 'card')} due by the end of today, {upcomingWeek} in the next 7 days"
         />
     </section>
 {/if}
@@ -210,134 +211,119 @@
         margin: 1rem 0 0;
     }
 
-    h2 {
-        font-size: 1.1rem;
+    section {
+        padding: 1.5rem;
     }
 
     .sub {
-        margin: 0.25rem 0 0.75rem;
-        font-size: 0.9rem;
+        margin: 0.3rem 0 1rem;
+        font-size: 0.925rem;
     }
 
+    /* The four headline numbers share one block, split by hairlines. */
     .tiles {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 0.6rem;
         margin: 0;
+        padding: 0;
+        overflow: hidden;
     }
 
     .tile {
         display: flex;
         flex-direction: column;
-        padding: 0.75rem 1rem;
+        gap: 0.15rem;
+        padding: 1.1rem 1.5rem 1.2rem;
+    }
+
+    .tile + .tile {
+        border-left: 1px solid var(--border);
     }
 
     .tile dt {
-        font-size: 0.85rem;
+        font-size: 0.875rem;
         color: var(--text-muted);
     }
 
     .tile dd {
         margin: 0;
-        font-size: 1.9rem;
-        font-weight: 700;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
+        font-family: var(--font-content);
+        font-size: 2.25rem;
+        font-weight: 500;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+        font-variant-numeric: lining-nums tabular-nums;
     }
 
-    @media (max-width: 560px) {
-        .tiles {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-
-    /* Calendar: one column per week, Monday at the top. */
+    /* Calendar: one column per week, Monday at the top. The squares grow to fill the panel. */
     .scroller {
+        /* Reversed, so when the year doesn't fit (phones) it opens on the most recent weeks. */
+        display: flex;
+        flex-direction: row-reverse;
         overflow-x: auto;
-        margin-top: 0.75rem;
+        margin-top: 1rem;
+        /* Room for the outline around today. */
+        padding: 3px 3px 3px 0;
     }
 
     .calendar {
-        --cell: 10px;
-        --gap: 2px;
+        flex: none;
         display: grid;
-        grid-template-columns: auto 1fr;
-        column-gap: 0.4rem;
-        width: max-content;
-        margin-left: auto;
+        grid-template-columns: 1.75rem repeat(var(--weeks), minmax(0, 1fr));
+        grid-template-rows: 1rem repeat(7, auto);
+        gap: 2px;
+        width: 100%;
+        /* Squares stay about 9px or wider; below that the calendar scrolls. */
+        min-width: calc(1.75rem + var(--weeks) * 11.25px);
         touch-action: pan-x pan-y;
     }
 
-    .months {
-        grid-column: 2;
-        display: flex;
-        gap: var(--gap);
-        height: 1rem;
-        /* The labels are wider than a week; this keeps the row from growing a full line tall. */
-        font-size: 0.7rem;
-        line-height: 1;
-    }
-
-    .month {
-        width: var(--cell);
-        flex: none;
-    }
-
-    .month span,
-    .weekdays span {
-        font-size: 0.7rem;
+    .month,
+    .rail {
+        font-size: 0.72rem;
         line-height: 1;
         color: var(--text-muted);
         white-space: nowrap;
     }
 
-    .weekdays {
-        display: grid;
-        grid-template-rows: repeat(7, var(--cell));
-        row-gap: var(--gap);
-    }
-
-    .weekdays span:nth-child(1) {
+    .month {
         grid-row: 1;
+        /* Wider than a week's column: let it run over the next ones. */
+        min-width: 0;
+        width: 0;
     }
 
-    .weekdays span:nth-child(2) {
-        grid-row: 3;
-    }
-
-    .weekdays span:nth-child(3) {
-        grid-row: 5;
-    }
-
-    .weeks {
-        display: flex;
-        gap: var(--gap);
-    }
-
-    .week {
+    .rail {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        grid-column: 1;
+        grid-row: 1 / -1;
         display: grid;
-        grid-template-rows: repeat(7, var(--cell));
-        row-gap: var(--gap);
+        grid-template-rows: subgrid;
+        align-items: center;
+        /* Covers the gap to the first week too, so nothing shows through beside the names. */
+        margin-right: -2px;
+        background: var(--surface);
     }
 
     .day {
-        width: 10px;
-        height: 10px;
-        border-radius: 2px;
-        background: var(--surface-2);
+        aspect-ratio: 1;
+        border-radius: 2.5px;
+        background: var(--surface-3);
     }
 
     /* One hue, stepping from the surface up to the full accent. */
     .day.l1 {
-        background: color-mix(in oklab, var(--accent) 30%, var(--surface-2));
+        background: color-mix(in oklab, var(--accent) 28%, var(--surface-3));
     }
 
     .day.l2 {
-        background: color-mix(in oklab, var(--accent) 55%, var(--surface-2));
+        background: color-mix(in oklab, var(--accent) 52%, var(--surface-3));
     }
 
     .day.l3 {
-        background: color-mix(in oklab, var(--accent) 78%, var(--surface-2));
+        background: color-mix(in oklab, var(--accent) 76%, var(--surface-3));
     }
 
     .day.l4 {
@@ -345,7 +331,7 @@
     }
 
     .day.today {
-        outline: 1px solid var(--text-muted);
+        outline: 1.5px solid var(--text-muted);
         outline-offset: 1px;
     }
 
@@ -360,20 +346,24 @@
         align-items: center;
         justify-content: space-between;
         gap: 0.25rem 1rem;
-        margin-top: 0.6rem;
+        margin-top: 0.75rem;
     }
 
     .reading,
     .legend,
     .since {
-        margin: 0;
-        font-size: 0.85rem;
+        font-size: 0.875rem;
     }
 
     .legend {
         display: flex;
         align-items: center;
         gap: 2px;
+    }
+
+    .legend .day {
+        width: 11px;
+        border-radius: 2.5px;
     }
 
     .legend .day:first-of-type {
@@ -386,19 +376,25 @@
 
     .since {
         margin-top: 0.25rem;
+        color: var(--text-faint);
     }
 
     table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
     }
 
     th,
     td {
-        padding: 0.35rem 0;
+        padding: 0.5rem 0;
         text-align: left;
         font-weight: 400;
+    }
+
+    tbody tr + tr th,
+    tbody tr + tr td {
+        border-top: 1px solid var(--border);
     }
 
     th {
@@ -407,29 +403,24 @@
     }
 
     thead th {
-        font-size: 0.8rem;
+        padding-top: 0;
+        font-size: 0.82rem;
         color: var(--text-muted);
     }
 
     .all th,
     .all .num:not(.muted) {
-        font-weight: 700;
+        font-weight: 650;
     }
 
     .meter-cell {
         width: 45%;
     }
 
-    @media (max-width: 560px) {
-        .meter-cell {
-            width: 30%;
-        }
-    }
-
     .meter {
         height: 8px;
         border-radius: 4px;
-        background: var(--surface-2);
+        background: var(--surface-3);
         overflow: hidden;
     }
 
@@ -440,9 +431,58 @@
     }
 
     .num {
+        padding-right: 0;
         padding-left: 0.75rem;
         text-align: right;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
+    }
+
+    .swipe {
+        display: none;
+        margin-top: 0.4rem;
+        color: var(--text-faint);
+        font-size: 0.8rem;
+    }
+
+    /* Where the year doesn't fit, say that it scrolls. */
+    @media (max-width: 760px) {
+        .swipe {
+            display: block;
+        }
+    }
+
+    @media (max-width: 560px) {
+        section {
+            padding: 1.1rem;
+        }
+
+        .tiles {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .tile {
+            padding: 0.9rem 1.1rem 1rem;
+        }
+
+        .tile:nth-child(odd) {
+            border-left: none;
+        }
+
+        .tile:nth-child(n + 3) {
+            border-top: 1px solid var(--border);
+        }
+
+        .tile dd {
+            font-size: 2rem;
+        }
+
+        .meter-cell {
+            width: 28%;
+        }
+
+        .all th {
+            white-space: nowrap;
+        }
     }
 </style>

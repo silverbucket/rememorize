@@ -15,6 +15,8 @@ describe("parseHash", () => {
         ["#/review/food", { name: "review", group: "food" }],
         ["#/account", { name: "account" }],
         ["#/import", { name: "import" }],
+        ["#/import?from=settings", { name: "import", from: "settings" }],
+        ["#/import?from=elsewhere", { name: "import" }],
         ["#/stats", { name: "stats" }],
         ["#/group/%E0%A4%A", { name: "home" }],
         // remoteStorage OAuth callback fragments fall back to home.

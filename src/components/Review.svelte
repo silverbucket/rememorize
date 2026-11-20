@@ -14,6 +14,7 @@
         stateOf,
     } from "../lib/scheduler";
     import { library } from "../lib/state";
+    import Icon from "./Icon.svelte";
 
     let { group }: { group?: string } = $props();
 
@@ -32,6 +33,8 @@
     let error = $state("");
     let reviewed = $state(0);
     let tally = $state<Record<Grade, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
+    /** False once this review has been left: a rating still being saved must not act on the page that replaced it. */
+    let mounted = true;
     /** The most recent rating, so it can be undone. */
     let last: { before: Flashcard; reverse: boolean; grade: Grade; queue: ReviewItem[] } | undefined = $state();
 
@@ -55,6 +58,11 @@
     const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt, reverse) : undefined);
     const back = $derived(group ? href.group(group) : href.home());
     const held = $derived(heldUntilTomorrow(scope, library.now));
+    /** How far through the session: ratings given, out of those plus what is left. */
+    const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
+
+    /** Short answers are set large, like a word on an index card; long ones step down so they fit. */
+    const sizeOf = (text = "") => (text.length <= 14 ? "xl" : text.length <= 48 ? "lg" : text.length <= 140 ? "md" : "sm");
 
     // Snapshot the due queue once cards have loaded, so sync updates during a
     // session don't reshuffle it.
@@ -92,6 +100,8 @@
             queue = dueSoon ? [...rest, { card: updated, reverse }] : rest;
             revealedFor = "";
             hintFor = "";
+            // A long answer may have been scrolled down to reach the buttons; the next card starts at the top.
+            if (mounted) window.scrollTo(0, 0);
         } catch (e) {
             error = `Could not save your answer: ${e instanceof Error ? e.message : String(e)}`;
         } finally {
@@ -144,210 +154,571 @@
             }
         };
         window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        return () => {
+            mounted = false;
+            window.removeEventListener("keydown", onKey);
+        };
     });
 </script>
 
-<a class="crumb" href={back}>← {group ?? "All groups"}</a>
-<div class="page-head">
-    <h1>Review{group ? `: ${group}` : ""}</h1>
-    <div class="head-side">
-        {#if last}
-            <button class="btn ghost undo" type="button" onclick={undo} disabled={busy}>
-                Undo <kbd>U</kbd>
-            </button>
-        {/if}
-        {#if current}
-            <span class="muted">{plural(live.length, "card")} left</span>
-        {/if}
-    </div>
-</div>
-
-{#if error}
-    <p class="error" role="alert">{error}</p>
-{/if}
-
-{#if !started}
-    <p class="muted">Loading…</p>
-{:else if current}
-    <div class="panel card">
-        {#if reverse}<span class="direction muted">Back → front</span>{/if}
-        <div class="side front">{question}</div>
-        {#if current.hint && !reverse && !revealed}
-            {#if showHint}
-                <p class="hint muted">{current.hint}</p>
-            {:else}
-                <button class="btn ghost hint-btn" type="button" onclick={() => (hintFor = currentKey)}>Show hint</button>
-            {/if}
-        {/if}
-        {#if revealed}
-            <hr />
-            <div class="side back">{answer}</div>
-        {/if}
-    </div>
-
-    {#if !revealed}
-        <button class="btn primary wide" type="button" onclick={reveal}>
-            Show answer <kbd>Space</kbd>
-        </button>
-    {:else}
-        <div class="grades">
-            {#each GRADES as g (g.grade)}
-                <button class="btn grade g{g.grade}" type="button" disabled={busy} onclick={() => grade(g.grade)}>
-                    <span>{g.label}</span>
-                    <small>{intervals?.[g.grade]}</small>
-                    <kbd>{g.key}</kbd>
+<div class="review">
+    <div class="session">
+        <a class="btn ghost end" href={back} aria-label="End review" title="End review"><Icon name="close" /></a>
+        <h1>Review{group ? `: ${group}` : ""}</h1>
+        <div class="head-side">
+            {#if last}
+                <button class="btn ghost undo" type="button" onclick={undo} disabled={busy}>
+                    <Icon name="undo" size={18} />Undo <kbd>U</kbd>
                 </button>
-            {/each}
+            {/if}
+            {#if current}
+                <span class="left muted">{plural(live.length, "card")} left</span>
+            {/if}
+        </div>
+    </div>
+
+    {#if current}
+        <div class="track" aria-hidden="true"><span style:width="{progress * 100}%"></span></div>
+    {/if}
+
+    {#if error}
+        <p class="error" role="alert">{error}</p>
+    {/if}
+
+    {#if !started}
+        <p class="muted">Loading…</p>
+    {:else if current}
+        <div class="stage" class:two={live.length > 1} class:three={live.length > 2}>
+            <!-- The whole card reveals on a tap; Space and the button below do the same from a keyboard. -->
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+            <div class="panel card" class:revealed onclick={() => !revealed && reveal()}>
+                {#key currentKey}
+                    <!-- The question ends at a fixed line and the answer starts below it, so showing the answer moves nothing. -->
+                    <div class="faces">
+                        <div class="asked">
+                            {#if reverse}<span class="direction">Back → front</span>{/if}
+                            <div class="side front content {sizeOf(question)}">{question}</div>
+                        </div>
+                        <hr class:shown={revealed} />
+                        <div class="told">
+                            {#if revealed}
+                                <div class="side back content {sizeOf(answer)}">{answer}</div>
+                            {:else if current.hint && !reverse}
+                                {#if showHint}
+                                    <p class="hint content muted">{current.hint}</p>
+                                {:else}
+                                    <button
+                                        class="btn ghost hint-btn"
+                                        type="button"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            hintFor = currentKey;
+                                        }}>Show hint</button
+                                    >
+                                {/if}
+                            {/if}
+                        </div>
+                    </div>
+                {/key}
+            </div>
+        </div>
+
+        <div class="answer-bar">
+            {#if !revealed}
+                <button class="btn primary large wide" type="button" onclick={reveal}>
+                    Show answer <kbd>Space</kbd>
+                </button>
+            {:else}
+                <div class="grades">
+                    {#each GRADES as g (g.grade)}
+                        <button class="btn grade g{g.grade}" type="button" disabled={busy} onclick={() => grade(g.grade)}>
+                            <span>{g.label}</span>
+                            <small>{intervals?.[g.grade]}</small>
+                            <kbd>{g.key}</kbd>
+                        </button>
+                    {/each}
+                </div>
+            {/if}
+        </div>
+    {:else}
+        <div class="panel done">
+            {#if reviewed > 0}
+                <span class="seal"><Icon name="check" size={26} /></span>
+                <h2>Done for now</h2>
+                <p>You reviewed {plural(reviewed, "card")}.</p>
+                <ul class="tally" aria-label="Your ratings">
+                    {#each GRADES as g (g.grade)}
+                        <li class="g{g.grade}" style:flex-grow={tally[g.grade]} class:none={tally[g.grade] === 0}>
+                            <span class="bar"></span>
+                            <span class="what"><strong>{tally[g.grade]}</strong> {g.label.toLowerCase()}</span>
+                        </li>
+                    {/each}
+                </ul>
+            {:else if scope.length === 0}
+                <h2>No cards to review</h2>
+                <p>Add some cards first.</p>
+            {:else}
+                <h2>Nothing due</h2>
+            {/if}
+            {#if library.newWaiting > 0}
+                <p class="muted">
+                    {plural(library.newWaiting, "more new card")} waiting: you've started {library.startedToday} of
+                    {library.newPerDay} new cards for today.
+                    <a href={href.account()}>Change the daily limit</a>.
+                </p>
+            {/if}
+            {#if held > 0}
+                <p class="muted">
+                    {plural(held, "card")} held until tomorrow: the other direction of a card you studied today.
+                </p>
+            {/if}
+            {#if nextDue(scope, library.now) && library.newWaiting === 0 && held === 0}
+                <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
+            {/if}
+            <div class="done-actions">
+                <a class="btn primary" href={back}>Back to {group ?? "your cards"}</a>
+                {#if reviewed > 0}
+                    <a class="btn" href={href.stats()}>See your progress</a>
+                {/if}
+            </div>
         </div>
     {/if}
-{:else}
-    <div class="panel done">
-        {#if reviewed > 0}
-            <h2>Done for now</h2>
-            <p>
-                You reviewed {plural(reviewed, "card")}:
-                {GRADES.map((g) => `${tally[g.grade]} ${g.label.toLowerCase()}`).join(", ")}.
-            </p>
-        {:else if scope.length === 0}
-            <h2>No cards to review</h2>
-            <p>Add some cards first.</p>
-        {:else}
-            <h2>Nothing due</h2>
-        {/if}
-        {#if library.newWaiting > 0}
-            <p class="muted">
-                {plural(library.newWaiting, "more new card")} waiting: you've started {library.startedToday} of
-                {library.newPerDay} new cards for today.
-                <a href={href.account()}>Change the daily limit</a>.
-            </p>
-        {/if}
-        {#if held > 0}
-            <p class="muted">
-                {plural(held, "card")} held until tomorrow: the other direction of a card you studied today.
-            </p>
-        {/if}
-        {#if nextDue(scope, library.now) && library.newWaiting === 0 && held === 0}
-            <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
-        {/if}
-        <a class="btn" href={back}>Back</a>
-    </div>
-{/if}
+</div>
 
 <style>
+    .review {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        max-width: 40rem;
+        margin-inline: auto;
+    }
+
+    .session {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 2.75rem;
+    }
+
+    .end {
+        min-height: 2.5rem;
+        width: 2.5rem;
+        margin-left: -0.5rem;
+        padding: 0;
+    }
+
+    .session h1 {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        font-family: var(--font-ui);
+        font-size: 1rem;
+        font-weight: 650;
+        letter-spacing: 0;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .head-side {
         display: flex;
         align-items: center;
         gap: 0.5rem;
+        font-size: 0.925rem;
+    }
+
+    .left {
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
     }
 
     .undo {
-        padding: 0.35rem 0.6rem;
+        min-height: 2.25rem;
+        padding: 0.3rem 0.6rem;
+        font-size: 0.925rem;
         font-weight: 500;
     }
 
-    .card {
-        min-height: 14rem;
+    .track {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--surface-3);
+        overflow: hidden;
+    }
+
+    .track span {
+        display: block;
+        height: 100%;
+        border-radius: 2px;
+        background: var(--accent);
+    }
+
+    /*
+     * The card sits on the rest of the queue: the next card, and the one after,
+     * show beneath it, each a step lower, narrower and dimmer.
+     */
+    .stage {
+        position: relative;
         display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 2rem 1.25rem;
+        margin: 0.5rem 0 1.75rem;
+    }
+
+    .stage::before,
+    .stage::after {
+        content: "";
+        position: absolute;
+        height: 5rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-sm);
+        opacity: 0;
+        transition: opacity 200ms;
+    }
+
+    .stage::after {
+        inset: auto 1rem -0.625rem;
+        background: color-mix(in oklab, var(--surface) 70%, var(--bg));
+    }
+
+    .stage::before {
+        inset: auto 2rem -1.25rem;
+        background: color-mix(in oklab, var(--surface) 40%, var(--bg));
+    }
+
+    .stage.two::after,
+    .stage.three::before {
+        opacity: 1;
+    }
+
+    .card {
+        position: relative;
+        z-index: 1;
+        flex: 1;
+        display: flex;
+        min-height: var(--card);
+        padding: 2rem 1.5rem;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow);
         text-align: center;
     }
 
+    .card:not(.revealed) {
+        cursor: pointer;
+    }
+
+    .faces {
+        flex: 1;
+        display: grid;
+        /*
+         * The question's row is as tall as half of an ordinary card, whatever the
+         * answer's length: a long answer makes the card longer below the line and
+         * leaves the question where it was.
+         */
+        grid-template-rows: minmax(var(--question), auto) auto 1fr;
+        justify-items: center;
+        gap: 1rem;
+        min-width: 0;
+    }
+
+    .asked {
+        align-self: end;
+        display: grid;
+        justify-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .told {
+        align-self: start;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    @keyframes deal {
+        from {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+    }
+
+    @keyframes reveal {
+        from {
+            opacity: 0;
+            transform: translateY(-4px);
+        }
+    }
+
+    /* A new card is dealt and its answer drops in, unless motion is unwelcome. */
+    @media (prefers-reduced-motion: no-preference) {
+        .faces {
+            animation: deal 220ms ease-out;
+        }
+
+        .back {
+            animation: reveal 220ms ease-out;
+        }
+
+        .track span {
+            transition: width 240ms ease-out;
+        }
+    }
+
     .direction {
-        font-size: 0.8rem;
+        padding: 0.15rem 0.7rem;
+        border-radius: 999px;
+        background: var(--surface-2);
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        font-weight: 500;
     }
 
     .side {
-        font-size: 1.6rem;
-        font-weight: 600;
+        max-width: 100%;
+        font-weight: 500;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+        text-wrap: balance;
+    }
+
+    .side.xl {
+        font-size: clamp(2.4rem, 1.6rem + 4vw, 3.25rem);
+    }
+
+    .side.lg {
+        font-size: clamp(1.75rem, 1.4rem + 1.8vw, 2.25rem);
+    }
+
+    .side.md {
+        font-size: 1.4rem;
+        line-height: 1.3;
+        letter-spacing: 0;
+    }
+
+    .side.sm {
+        font-size: 1.125rem;
+        font-weight: 400;
+        line-height: 1.45;
+        letter-spacing: 0;
     }
 
     .back {
-        color: var(--accent);
+        color: var(--accent-text);
     }
 
+    /* Always there, so the question doesn't move; drawn once the answer is shown. */
     hr {
-        width: 60%;
+        width: min(60%, 14rem);
+        margin: 0.25rem 0;
         border: none;
-        border-top: 1px solid var(--border);
-        margin: 0.5rem 0;
+        border-top: 1px solid transparent;
+    }
+
+    hr.shown {
+        border-top-color: var(--border-strong);
     }
 
     .hint {
-        margin: 0;
+        font-size: 1.125rem;
         font-style: italic;
     }
 
     .hint-btn {
-        font-weight: 400;
-        color: var(--text-muted);
+        min-height: 2.25rem;
+        padding: 0.3rem 0.8rem;
+        font-size: 0.925rem;
+        font-weight: 500;
     }
 
     .wide {
         width: 100%;
-        margin-top: 1rem;
-        padding: 0.9rem;
+        min-height: 4rem;
+    }
+
+    .wide kbd {
+        margin-left: 0.25rem;
     }
 
     .grades {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 0.5rem;
-        margin-top: 1rem;
     }
 
     .grade {
+        position: relative;
         flex-direction: column;
         gap: 0.1rem;
-        padding: 0.7rem 0.25rem;
+        min-height: 4rem;
+        padding: 0.5rem 0.25rem;
+        border-radius: 12px;
+        border-color: color-mix(in oklab, var(--tone) 22%, var(--border));
+        background: color-mix(in oklab, var(--tone) 10%, var(--surface));
+    }
+
+    @media (hover: hover) {
+        .grade:hover:not(:disabled) {
+            border-color: color-mix(in oklab, var(--tone) 60%, var(--border));
+            background: color-mix(in oklab, var(--tone) 17%, var(--surface));
+        }
     }
 
     .grade small {
-        font-weight: 400;
-        color: var(--text-muted);
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--tone);
+        font-variant-numeric: tabular-nums;
     }
 
-    .g1 {
-        border-color: var(--again);
+    .grade kbd {
+        position: absolute;
+        top: 0.35rem;
+        right: 0.4rem;
+        min-width: 1.35em;
+        padding: 0 0.3em;
+        font-size: 0.68rem;
+        opacity: 0.55;
     }
 
-    .g2 {
-        border-color: var(--hard);
-    }
-
-    .g3 {
-        border-color: var(--good);
-    }
-
-    .g4 {
-        border-color: var(--easy);
-    }
-
-    kbd {
-        font-size: 0.7rem;
-        font-family: inherit;
-        opacity: 0.6;
-    }
-
-    @media (hover: none) {
-        kbd {
+    /* Four buttons across a narrow window leave the hint no room beside the label. */
+    @media (max-width: 560px) {
+        .grade kbd {
             display: none;
         }
     }
 
-    .done {
-        display: grid;
-        gap: 0.5rem;
-        justify-items: start;
+    .g1 {
+        --tone: var(--again);
     }
 
-    .done p {
-        margin: 0;
+    .g2 {
+        --tone: var(--hard);
+    }
+
+    .g3 {
+        --tone: var(--good);
+    }
+
+    .g4 {
+        --tone: var(--easy);
+    }
+
+    .done {
+        display: grid;
+        gap: 0.75rem;
+        justify-items: start;
+        margin-top: 0.5rem;
+        padding: 2rem 1.5rem;
+    }
+
+    .done h2 {
+        font-family: var(--font-content);
+        font-size: 1.75rem;
+        font-weight: 560;
+        letter-spacing: -0.01em;
+    }
+
+    .seal {
+        display: grid;
+        place-items: center;
+        width: 3rem;
+        height: 3rem;
+        margin-bottom: 0.25rem;
+        border-radius: 50%;
+        background: var(--accent-subtle);
+        color: var(--accent-text);
+    }
+
+    /* One bar, split by how the cards were rated. */
+    .tally {
+        display: flex;
+        gap: 3px;
+        width: 100%;
+        margin: 0.25rem 0 0.5rem;
+        padding: 0;
+        list-style: none;
+    }
+
+    .tally li {
+        flex-basis: 0;
+        min-width: max-content;
+        display: grid;
+        gap: 0.4rem;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .tally li.none {
+        display: none;
+    }
+
+    .tally .bar {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--tone);
+    }
+
+    .tally strong {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .done-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    /*
+     * --card is the card's height with a short answer: what is left of the window
+     * after the bars above and below it. --question is half of that, less the
+     * card's padding and half of the gap and rule between the two sides.
+     */
+
+    /* On a wide screen the card grows with the window, up to a comfortable height. */
+    @media (min-width: 880px) {
+        .review {
+            --card: clamp(20rem, calc(100dvh - 18.5rem), 34rem);
+            --question: calc(var(--card) / 2 - 3.25rem);
+        }
+    }
+
+    /* On a phone the card takes the screen and the answer buttons sit at the bottom, under the thumb. */
+    @media (max-width: 879.98px) {
+        .review {
+            --card: max(14rem, calc(100dvh - 13.25rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+            --question: calc(var(--card) / 2 - 2.8rem);
+            min-height: calc(100dvh - 1.75rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+        }
+
+        .stage {
+            flex: 1;
+        }
+
+        .card {
+            padding: 1.5rem 1.25rem;
+        }
+
+        /* Like the card, the summary takes the screen, with its buttons at the bottom. */
+        .done {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 1.5rem 1.25rem;
+        }
+
+        .done-actions {
+            width: 100%;
+            margin-top: auto;
+            padding-top: 1.5rem;
+        }
+
+        .done-actions .btn {
+            flex: 1 1 auto;
+        }
     }
 </style>

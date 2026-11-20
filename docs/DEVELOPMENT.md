@@ -15,14 +15,15 @@ bun install
 bun run dev        # http://localhost:5173
 ```
 
-| Command           | What it does                                        |
-| ----------------- | --------------------------------------------------- |
-| `bun run dev`     | Dev server with hot reload                          |
-| `bun run test`    | Unit tests (Vitest)                                 |
-| `bun run check`   | Type-check (svelte-check)                           |
-| `bun run lint`    | Biome; `bun run lint:fix` to apply fixes            |
-| `bun run build`   | Production build in `dist/`                         |
-| `bun run preview` | Serve the production build, service worker included |
+| Command           | What it does                                          |
+| ----------------- | ----------------------------------------------------- |
+| `bun run dev`     | Dev server with hot reload                            |
+| `bun run test`    | Unit tests (Vitest)                                   |
+| `bun run check`   | Type-check (svelte-check)                             |
+| `bun run lint`    | Biome; `bun run lint:fix` to apply fixes              |
+| `bun run build`   | Production build in `dist/`                           |
+| `bun run preview` | Serve the production build, service worker included   |
+| `bun run icons`   | Redraw the app icons and logos from `public/icon.svg` |
 
 To turn on remoteStorage.js logging, run this in the browser console and
 reload:
@@ -50,8 +51,10 @@ checkout's suite.
 
 ```
 src/
-  App.svelte              shell, routing, update prompt
+  App.svelte              shell (sidebar, or top bar and tab bar on a phone), routing, update prompt
+  app.css                 design tokens (colours, type, radii) and shared styles
   components/             pages: Home, GroupView, CardEditor, Review, Stats, Import, Account
+  components/Icon.svelte  the line icons; Logo.svelte is the brain
   lib/rs.ts               remoteStorage instance
   lib/oauth-state.ts      checks OAuth callbacks against a per-tab nonce
   lib/library.svelte.ts   app state: cards, groups, review log, connection status
@@ -59,9 +62,11 @@ src/
   lib/stats.ts            statistics from the review log (streak, retention, forecast)
   lib/transfer.ts         import and export (CSV, TSV, JSON)
   lib/settings.ts         the daily new-card limit
+  lib/theme.ts            appearance: follow the system, or always light or dark
   lib/router.svelte.ts    hash routes
 tests/e2e/                Playwright specs
 scripts/screenshots.mjs   regenerates the README screenshots
+scripts/icons.mjs         regenerates the app icons and the README logos
 docs/assets/              README images
 ```
 
@@ -93,8 +98,60 @@ Chrome).
 Run it again after a visible change to the UI and commit the new images. The
 history always ends today, so the dates in the images move with each run.
 
-The logo wordmarks (`rememorize*.svg`) are hand-written SVG around the path
-from `public/icon.svg`.
+Most of the time goes on replaying the history. After a change that only
+affects how things look, skip it:
+
+```sh
+REUSE=1 bun run screenshots
+```
+
+captures again from the browser profile the last full run left in
+`node_modules/.cache/rememorize-screenshots/`.
+
+## Look and feel
+
+The colours, radii and type are CSS custom properties at the top of
+[`src/app.css`](../src/app.css), once for light and once for dark. Light is
+tinted like pale green ledger paper and dark like a chalkboard, with one green
+accent. The only other colours are the four answer buttons and the red of
+controls that remove something (Delete, Disconnect). Components use the
+properties and never a colour of their own.
+
+There are two typefaces, bundled from `@fontsource-variable` so nothing is
+fetched from another site: Schibsted Grotesk for the interface, and Newsreader
+(the `.content` class) for what the user wrote: card text, group names and
+page titles. Japanese and Chinese cards fall back to the system's Mincho or
+Song face.
+
+Below 880px wide there is a header across the top (logo and storage status)
+and the navigation is a tab bar along the bottom; above 880px both become a
+sidebar. On a phone, a review hides the header and the tab bar so the card has
+the whole screen, and the card editor swaps the tab bar for its Save button.
+
+If you change the page background (`--bg`), change it in four more places:
+`PAGE_COLOR` in `src/lib/theme.ts` and the `theme-color` tags in `index.html`
+(the browser's toolbar), the manifest colours in `vite.config.ts`, and `BOARD`
+in `scripts/icons.mjs` (the icons' background; run `bun run icons` after).
+
+## Icons and logos
+
+The logo is the brain in [`public/icon.svg`](../public/icon.svg). Everything
+else is drawn from it:
+
+```sh
+bun run icons
+```
+
+[`scripts/icons.mjs`](../scripts/icons.mjs) writes the PNG app icons in
+`public/` and the README logos (`docs/assets/rememorize*.svg`). The logo's
+letters are Newsreader converted to outlines (`docs/assets/wordmark.json`),
+because an SVG shown as an image can't load the app's fonts.
+
+`rememorize.svg` uses one green that reads on white and on a dark page, since
+a viewer that guesses the theme wrong would otherwise show dark letters on a
+dark page. `rememorize-dark.svg` is the brighter version for pages known to be
+dark. `Logo.svelte` holds a copy of the path for the app's header: update it
+when the brain changes.
 
 ## Releasing
 

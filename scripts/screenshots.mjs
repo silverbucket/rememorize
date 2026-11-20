@@ -11,17 +11,26 @@
  *
  * The run is seeded, so the same build gives the same history; only the dates
  * move, because the history always ends today.
+ *
+ * Replaying the history takes a few minutes. After a change that only affects
+ * how things look, `REUSE=1 bun run screenshots` skips it and captures from
+ * the browser profile the last full run left behind.
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "docs/assets");
-const RAW = join(ROOT, "node_modules/.cache/rememorize-screenshots");
+const CACHE = join(ROOT, "node_modules/.cache/rememorize-screenshots");
+const RAW = join(CACHE, "raw");
+/** The seeded browser profile and what it synced, kept so REUSE=1 can capture again without replaying. */
+const PROFILE = join(CACHE, "profile");
+const STORED = join(CACHE, "storage.json");
+const REUSE = process.env.REUSE === "1" && existsSync(PROFILE) && existsSync(STORED);
 const PORT = Number(process.env.SCREENSHOT_PORT || 4318);
 const BASE = `http://localhost:${PORT}`;
 
@@ -33,8 +42,8 @@ const DAYS = 372;
 const NEW_PER_DAY = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const DESKTOP = { width: 1000, height: 720 };
-const PHONE = { width: 390, height: 700 };
+const DESKTOP = { width: 1040, height: 740 };
+const PHONE = { width: 390, height: 780 };
 
 // ---------------------------------------------------------------------------
 // Sample decks. `from` is the day (0 = the first day) the deck is imported.
@@ -268,6 +277,12 @@ async function mockStorage(context) {
     /** path → { body, type, etag } */
     const files = new Map();
     let version = 0;
+    if (REUSE) {
+        for (const [path, file] of JSON.parse(readFileSync(STORED, "utf-8"))) {
+            files.set(path, { ...file, body: Buffer.from(file.body, "base64") });
+            version = Math.max(version, Number(file.etag));
+        }
+    }
     const root = "/storage/ada";
     const cors = {
         "Access-Control-Allow-Origin": "*",
@@ -385,8 +400,18 @@ async function connect(page, files) {
     return files.size;
 }
 
-/** The status pill shows the account once the app is connected and not mid-sync. */
-const synced = (page) => page.locator(".pill.ok .text", { hasText: ADDRESS }).waitFor({ timeout: 60_000 });
+/**
+ * The status pill shows the account once the app is connected and not mid-sync.
+ * (Attached, not visible: a review on a phone hides the header.)
+ */
+const synced = (page) =>
+    page.locator(".pill.ok .text", { hasText: ADDRESS }).waitFor({ state: "attached", timeout: 60_000 });
+
+/** Keep what was synced, so a REUSE=1 run can answer the app with the same storage. */
+function keepStorage(files) {
+    const stored = [...files].map(([path, file]) => [path, { ...file, body: file.body.toString("base64") }]);
+    writeFileSync(STORED, JSON.stringify(stored));
+}
 
 // ---------------------------------------------------------------------------
 // Capture
@@ -394,12 +419,17 @@ const synced = (page) => page.locator(".pill.ok .text", { hasText: ADDRESS }).wa
 async function capture(page) {
     rmSync(RAW, { recursive: true, force: true });
     mkdirSync(RAW, { recursive: true });
+    await page.goto(`${BASE}/`);
     const now = await page.evaluate(() => Date.now());
+    // A phone has no hover, which hides the key hints: emulate touch for those captures.
+    const devtools = await page.context().newCDPSession(page);
 
     const shoot = async (name) => {
         for (const scheme of ["dark", "light"]) {
             await page.emulateMedia({ colorScheme: scheme });
             await synced(page);
+            // Colours ease from one theme to the other; wait for them to settle.
+            await page.waitForTimeout(250);
             await page.screenshot({ path: join(RAW, `${name}-${scheme}.png`) });
         }
     };
@@ -407,7 +437,7 @@ async function capture(page) {
     // Review Spanish if any of it is due today; otherwise everything.
     await page.goto(`${BASE}/?t=${now}#/`);
     await page.locator(".groups li").first().waitFor();
-    const due = await page.locator(".groups li:has(.badge) .name").allTextContents();
+    const due = await page.locator(".groups li:has(.badge:not(.fresh)) .name").allTextContents();
     const reviewHash = due.includes("Spanish") ? "/review/Spanish" : "/review";
 
     const pages = {
@@ -418,31 +448,62 @@ async function capture(page) {
         stats: async () => {
             await page.goto(`${BASE}/?t=${now}#/stats`);
             await page.locator(".calendar").waitFor();
+            // Text reflows when the fonts arrive, which would move anything scrolled to before then.
+            await page.evaluate(() => document.fonts.ready);
         },
         // Further down the same page: the forecast.
         forecast: async () => {
             await pages.stats();
             await page.getByRole("heading", { name: "New cards started" }).evaluate((heading) => {
-                window.scrollTo(0, heading.closest("section").getBoundingClientRect().top + window.scrollY - 72);
+                // Just under the phone's header, with the panel above tucked out of sight behind it.
+                window.scrollTo(0, heading.closest("section").getBoundingClientRect().top + window.scrollY - 66);
             });
         },
-        review: async () => {
+        // One card into the session, so the progress line has something to show.
+        // Returns the way back: the rating is undone, leaving the library as it was.
+        question: async () => {
             await page.goto(`${BASE}/?t=${now}#${reviewHash}`);
+            const first = await page.locator(".side.front").textContent();
+            await page.getByRole("button", { name: /Show answer/ }).click();
+            await page.getByRole("button", { name: /Good/ }).click();
+            await page.locator(".side.front").filter({ hasNotText: first }).waitFor();
+            return async () => {
+                await page.getByRole("button", { name: /Undo/ }).click();
+                await page.locator(".side.front", { hasText: first }).waitFor();
+                await synced(page);
+            };
+        },
+        review: async () => {
+            const undo = await pages.question();
             await page.getByRole("button", { name: /Show answer/ }).click();
             await page.locator(".grades").waitFor();
+            return undo;
         },
         group: async () => {
             await page.goto(`${BASE}/?t=${now}#/group/Spanish`);
             await page.locator(".cards li").first().waitFor();
         },
+        card: async () => {
+            await pages.group();
+            await page.locator(".cards li a").first().click();
+            await page.getByLabel("Front").waitFor();
+        },
+        settings: async () => {
+            await page.goto(`${BASE}/?t=${now}#/account`);
+            await page.getByLabel("New cards per day").waitFor();
+        },
     };
 
     for (const [device, viewport] of Object.entries({ desktop: DESKTOP, phone: PHONE })) {
         await page.setViewportSize(viewport);
+        await devtools.send("Emulation.setTouchEmulationEnabled", { enabled: device === "phone", maxTouchPoints: 5 });
         for (const [name, open] of Object.entries(pages)) {
-            await open();
+            const restore = await open();
             await page.mouse.move(0, 0);
+            // Let the card's entrance and the answer's reveal finish.
+            await page.waitForTimeout(350);
             await shoot(`${device}-${name}`);
+            await restore?.();
         }
     }
 }
@@ -467,10 +528,10 @@ const FRAME_CSS = `
     .phone { border-radius: 40px; padding: 9px; background: var(--bezel); border: 1px solid var(--edge);
         box-shadow: 0 30px 60px -16px var(--shade), 0 10px 22px -10px var(--shade); }
     .phone img { display: block; width: 100%; border-radius: 31px; }
-    .dark { --chrome: #2a2d33; --edge: #40454e; --dot: #4b515b; --field: #1f2226; --label: #9aa1ab;
-        --bezel: #0d0e10; --shade: rgba(0, 0, 0, 0.6); }
-    .light { --chrome: #e9ebe6; --edge: #cfd3ca; --dot: #c3c8bd; --field: #f7f8f5; --label: #5d636b;
-        --bezel: #1b1d21; --shade: rgba(40, 50, 30, 0.3); }
+    .dark { --chrome: #232d28; --edge: #36423c; --dot: #44524b; --field: #101814; --label: #a1afa5;
+        --bezel: #0b100e; --shade: rgba(0, 0, 0, 0.6); }
+    .light { --chrome: #e4ebe0; --edge: #cbd4c7; --dot: #b9c4b5; --field: #f6f9f3; --label: #4a5a4f;
+        --bezel: #17251d; --shade: rgba(30, 50, 35, 0.28); }
 `;
 
 const browserWindow = (shot, style) =>
@@ -478,10 +539,14 @@ const browserWindow = (shot, style) =>
 const phone = (shot, style) => `<div class="phone" style="${style}"><img src="${dataUrl(shot)}"></div>`;
 
 const LAYOUTS = {
-    /** The stats page in a browser window, with a review in progress on a phone in front of it. */
+    /**
+     * The stats page in a browser window, with a review in progress on a phone in front of it.
+     * The phone stands over the lower part of the sidebar, which is empty, and ends on the
+     * sidebar's edge, so it covers nothing and cuts through no text.
+     */
     hero: (scheme) => `
-        ${browserWindow(`desktop-stats-${scheme}`, "width: 760px; margin-right: 96px;")}
-        ${phone(`phone-review-${scheme}`, "width: 232px; position: absolute; right: 22px; bottom: 16px;")}`,
+        ${browserWindow(`desktop-stats-${scheme}`, "width: 780px; margin-left: 34px;")}
+        ${phone(`phone-review-${scheme}`, "width: 214px; position: absolute; left: 44px; bottom: 22px;")}`,
     /** Three phones side by side: groups, a group's cards, the forecast. */
     tour: (scheme) => `
         <div style="display: flex; gap: 34px;">
@@ -535,11 +600,15 @@ async function serve() {
 }
 
 const server = await serve();
-const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || undefined });
+const channel = process.env.PW_CHANNEL || undefined;
+const browser = await chromium.launch({ channel });
 try {
     mkdirSync(OUT, { recursive: true });
     if (process.env.FRAME_ONLY !== "1") {
-        const context = await browser.newContext({
+        if (!REUSE) rmSync(PROFILE, { recursive: true, force: true });
+        // A profile on disk, so the replayed history outlives the run (see REUSE above).
+        const context = await chromium.launchPersistentContext(PROFILE, {
+            channel,
             viewport: DESKTOP,
             deviceScaleFactor: 2,
             locale: "en-US",
@@ -549,16 +618,22 @@ try {
         });
         await context.addInitScript(fakeClock);
         const files = await mockStorage(context);
-        const page = await context.newPage();
+        const page = context.pages()[0] ?? (await context.newPage());
         page.on("pageerror", (error) => console.error("page error:", error.message));
 
-        const today = new Date();
-        today.setHours(9, 41, 0, 0);
-        const started = Date.now();
-        const total = await seed(page, today.getTime());
-        console.log(`Replayed ${total} reviews over ${DAYS} days in ${Math.round((Date.now() - started) / 1000)}s`);
-        console.log(`Synced ${await connect(page, files)} documents to ${ADDRESS}`);
+        if (REUSE) {
+            console.log("Reusing the history from the last full run");
+        } else {
+            const today = new Date();
+            today.setHours(9, 41, 0, 0);
+            const started = Date.now();
+            const total = await seed(page, today.getTime());
+            console.log(`Replayed ${total} reviews over ${DAYS} days in ${Math.round((Date.now() - started) / 1000)}s`);
+            console.log(`Synced ${await connect(page, files)} documents to ${ADDRESS}`);
+        }
         await capture(page);
+        // After the captures: one of them rates a card and takes it back, which the storage saw.
+        keepStorage(files);
         await context.close();
     }
     await frame(browser);
