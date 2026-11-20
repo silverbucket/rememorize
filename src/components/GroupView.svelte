@@ -79,7 +79,7 @@
     /** Cards that went away meanwhile (moved or deleted elsewhere) drop out of the pick. */
     const pickedCards = $derived(all.filter((c) => picked.has(keyOf(c))));
     /** Nothing left to add: every card shown is picked, or a search hides all the ones that are. */
-    const allShownPicked = $derived(picked.size > 0 && shown.every((c) => picked.has(keyOf(c))));
+    const allShownPicked = $derived(pickedCards.length > 0 && shown.every((c) => picked.has(keyOf(c))));
 
     let selectButton: HTMLButtonElement | undefined = $state();
 
