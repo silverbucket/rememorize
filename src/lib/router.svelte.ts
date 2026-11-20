@@ -70,10 +70,13 @@ export const href = {
 
 class Router {
     route: Route = $state(parseHash(typeof window === "undefined" ? "" : window.location.hash));
+    /** The page this one was reached from, if any, so a page with two ways in can lead back the same way. */
+    previous: Route | undefined = $state();
 
     constructor() {
         if (typeof window === "undefined") return;
         window.addEventListener("hashchange", () => {
+            this.previous = this.route;
             this.route = parseHash(window.location.hash);
             window.scrollTo(0, 0);
         });

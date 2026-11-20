@@ -35,15 +35,17 @@
         { section: "stats", label: "Stats", icon: "chart", href: href.stats() },
         { section: "settings", label: "Settings", icon: "settings", href: href.account() },
     ];
-    /** The part of the app a page belongs to; importing is reached from Settings. */
-    const sectionOf = (name: Route["name"]): Section =>
-        name === "stats" ? "stats" : name === "account" || name === "import" ? "settings" : "cards";
-    const section = $derived(sectionOf(route.name));
+    /** The part of the app a page belongs to. Importing belongs to whichever page led to it. */
+    const sectionOf = (name: Route["name"], from?: Route["name"]): Section =>
+        name === "stats" ? "stats" : name === "account" || (name === "import" && from === "account") ? "settings" : "cards";
+    const section = $derived(sectionOf(route.name, router.previous?.name));
     /** A review fills a phone's screen: the bars step aside until it ends. */
     const focused = $derived(route.name === "review");
+    /** Writing a card puts its Save button where a phone's tab bar is. */
+    const writing = $derived(route.name === "new" || route.name === "edit");
 </script>
 
-<div class="app" class:focused>
+<div class="app" class:focused class:writing>
     <header class="chrome">
         <a class="brand" href={href.home()}>
             <Logo size={30} />
@@ -201,7 +203,8 @@
     }
 
     @media (max-width: 879.98px) {
-        .focused .chrome {
+        .focused .chrome,
+        .writing nav {
             display: none;
         }
 

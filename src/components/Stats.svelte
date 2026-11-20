@@ -140,6 +140,7 @@
                 {/each}
             </div>
         </div>
+        <p class="swipe" aria-hidden="true">Swipe for earlier months</p>
         <div class="under">
             <p class="muted reading" aria-hidden="true">{reading}</p>
             <p class="legend muted" aria-hidden="true">
@@ -421,10 +422,21 @@
         font-variant-numeric: tabular-nums;
     }
 
+    .swipe {
+        display: none;
+        margin-top: 0.4rem;
+        color: var(--text-faint);
+        font-size: 0.8rem;
+    }
+
     /* Where the year doesn't fit, its older weeks fade out at the edge they scroll in from. */
     @media (max-width: 760px) {
         .scroller {
             mask-image: linear-gradient(to right, transparent, #000 1.75rem);
+        }
+
+        .swipe {
+            display: block;
         }
     }
 

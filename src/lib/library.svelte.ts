@@ -26,7 +26,10 @@ export type ConnectionStatus = "local" | "connecting" | "connected" | "unauthori
 export interface GroupSummary {
     name: string;
     total: number;
+    /** What a review of the group would show now: due reviews, then new cards up to today's limit. */
     due: number;
+    /** The part of `due` that is reviews of cards already started. */
+    reviews: number;
     /** Cards reviewed at least once, in either direction. */
     started: number;
 }
@@ -82,12 +85,16 @@ export class Library {
             byName.set(card.group, list);
         }
         return [...byName.entries()]
-            .map(([name, cards]) => ({
-                name,
-                total: cards.length,
-                due: this.dueIn(cards).length,
-                started: cards.filter((c) => itemsOf(c).some((i) => !isNew(c, i.reverse))).length,
-            }))
+            .map(([name, cards]) => {
+                const queue = this.dueIn(cards);
+                return {
+                    name,
+                    total: cards.length,
+                    due: queue.length,
+                    reviews: queue.filter((i) => !isNew(i.card, i.reverse)).length,
+                    started: cards.filter((c) => itemsOf(c).some((i) => !isNew(c, i.reverse))).length,
+                };
+            })
             .sort((a, b) => a.name.localeCompare(b.name));
     });
 

@@ -38,81 +38,26 @@ devices.
 
 ## What it does
 
-<table>
-<tr>
-<td width="50%" valign="top">
-
-**Smart scheduling**
-
-Rate each answer: Again, Hard, Good or Easy. Cards you know come back less and
-less often. Cards you miss come back soon. It uses
-[FSRS](https://github.com/open-spaced-repetition/ts-fsrs), the same algorithm
-as Anki.
-
-</td>
-<td width="50%" valign="top">
-
-**Works offline**
-
-Install it on your phone or desktop. Study and edit your cards without a
-connection. On a phone, a review fills the screen and the answer buttons sit
-under your thumb.
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-**Your own storage**
-
-Link a remoteStorage account and your cards sync across all your devices.
-Without one, they stay in your browser.
-
-</td>
-<td width="50%" valign="top">
-
-**Both directions**
-
-Study a card front to back, back to front, or both.
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-**Progress you can see**
-
-A review calendar, your streak, how much you remember and what is due next.
-Each group shows how many of its cards you have started.
-
-</td>
-<td width="50%" valign="top">
-
-**Import and export**
-
-Bring in cards from CSV or Anki's plain-text export. A daily limit on new
-cards keeps a big deck manageable. Export whenever you like.
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-**Easy on the eyes**
-
-Light is tinted like ledger paper, dark like a chalkboard. It follows your
-system, or you choose.
-
-</td>
-<td width="50%" valign="top">
-
-**Quick with a keyboard**
-
-Space shows the answer, 1 to 4 rate it, and U takes the last rating back.
-
-</td>
-</tr>
-</table>
+- **Smart scheduling.** Rate each answer: Again, Hard, Good or Easy. Cards you
+  know come back less and less often. Cards you miss come back soon. It uses
+  [FSRS](https://github.com/open-spaced-repetition/ts-fsrs), the same
+  algorithm as Anki.
+- **Works offline.** Install it on your phone or desktop. Study and edit your
+  cards without a connection.
+- **Made for a phone.** A review fills the screen, the answer buttons sit
+  under your thumb, and a tap on the card shows the answer.
+- **Your own storage.** Link a remoteStorage account and your cards sync
+  across all your devices. Without one, they stay in your browser.
+- **Both directions.** Study a card front to back, back to front, or both.
+- **Progress you can see.** A review calendar, your streak, how much you
+  remember and what is due next.
+- **Import and export.** Bring in cards from CSV or Anki's plain-text export.
+  A daily limit on new cards keeps a big deck manageable. Export whenever you
+  like.
+- **Easy on the eyes.** Light is tinted like ledger paper, dark like a
+  chalkboard. It follows your system, or you choose.
+- **Quick with a keyboard.** Space shows the answer, 1 to 4 rate it, and U
+  takes the last rating back.
 
 <br>
 

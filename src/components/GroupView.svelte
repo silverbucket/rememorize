@@ -2,7 +2,7 @@
     import type { Flashcard } from "remotestorage-module-flashcards";
     import { fromNow, plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
-    import { isBuried, isDue, itemsOf, nextDue, stateOf } from "../lib/scheduler";
+    import { isBuried, isDue, isNew, itemsOf, nextDue, stateOf } from "../lib/scheduler";
     import { library } from "../lib/state";
     import Icon from "./Icon.svelte";
 
@@ -14,7 +14,11 @@
     const cards = $derived(
         library.cardsIn(group).sort((a, b) => a.frontText.localeCompare(b.frontText, undefined, { sensitivity: "base" })),
     );
-    const due = $derived(library.dueIn(cards).length);
+    const queue = $derived(library.dueIn(cards));
+    const due = $derived(queue.length);
+    /** Reviews that are due, and cards never studied: counted apart, as on the home page. */
+    const reviews = $derived(queue.filter((i) => !isNew(i.card, i.reverse)).length);
+    const fresh = $derived(cards.filter((c) => itemsOf(c).every((i) => isNew(c, i.reverse))).length);
 
     let query = $state("");
     const needle = $derived(query.trim().toLocaleLowerCase());
@@ -59,13 +63,15 @@
     <div>
         <h1>{group}</h1>
         {#if library.loaded && cards.length > 0}
-            <p class="sub">{plural(cards.length, "card")}{#if due > 0}, {due} due{/if}</p>
+            <p class="sub">
+                {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if fresh > 0}, {fresh} new{/if}
+            </p>
         {/if}
     </div>
     <div class="actions">
         <a class="btn" href={href.newCard(group)}><Icon name="plus" />Add card</a>
         {#if due > 0}
-            <a class="btn primary" href={href.review(group)}>Review {due} due</a>
+            <a class="btn primary" href={href.review(group)}>Review {plural(due, "card")}</a>
         {/if}
     </div>
 </div>

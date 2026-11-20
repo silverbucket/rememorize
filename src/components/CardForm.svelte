@@ -72,11 +72,11 @@
     <div class="faces">
         <label>
             <span>Front</span>
-            <textarea id="front" class="field content" bind:value={frontText} required rows="3"></textarea>
+            <textarea id="front" class="field content" bind:value={frontText} required rows="2"></textarea>
         </label>
         <label>
             <span>Back</span>
-            <textarea class="field content" bind:value={backText} required rows="3"></textarea>
+            <textarea class="field content" bind:value={backText} required rows="2"></textarea>
         </label>
     </div>
     <div class="pair">
@@ -113,13 +113,8 @@
         <p class="error" role="alert">{error}</p>
     {/if}
 
+    <!-- On a phone this is a bar along the bottom, where the tab bar usually is. -->
     <div class="buttons">
-        {#if initial}
-            <button class="btn danger" type="button" onclick={remove} disabled={saving}>
-                <Icon name="trash" size={18} />Delete
-            </button>
-        {/if}
-        <span class="spacer"></span>
         {#if !initial}
             <button class="btn" type="submit" value="another" disabled={!canSave}>Save &amp; add another</button>
         {/if}
@@ -142,6 +137,12 @@
         <div><dt>Created</dt><dd>{formatDateTime(initial.createdAt)}</dd></div>
         <div><dt>Updated</dt><dd>{formatDateTime(initial.updatedAt)}</dd></div>
     </dl>
+
+    <div class="danger-zone">
+        <button class="btn danger" type="button" onclick={remove} disabled={saving}>
+            <Icon name="trash" size={18} />Delete card
+        </button>
+    </div>
 {/if}
 
 <style>
@@ -177,20 +178,26 @@
         font-size: 0.875rem;
     }
 
+    /* Two lines to start with, growing with what is typed where the browser can do that. */
     textarea.content {
+        min-height: 4.4rem;
         font-size: 1.2rem;
         font-weight: 400;
+        field-sizing: content;
     }
 
     .buttons {
         display: flex;
         flex-wrap: wrap;
+        justify-content: flex-end;
         gap: 0.5rem;
         padding-top: 0.25rem;
     }
 
-    .spacer {
-        flex: 1;
+    .danger-zone {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 2rem;
     }
 
     /* The card's schedule: a row of three for each direction, then its dates. */
@@ -222,10 +229,6 @@
             grid-template-columns: 1fr;
         }
 
-        .buttons .btn {
-            flex: 1 1 auto;
-        }
-
         /* One fact per line, name on the left and value on the right. */
         .stats {
             grid-template-columns: 1fr;
@@ -253,8 +256,24 @@
             text-align: right;
         }
 
-        .spacer {
-            display: none;
+    }
+
+    /* Where the tab bar would be (see App.svelte), saving is always in reach instead. */
+    @media (max-width: 879.98px) {
+        .buttons {
+            position: fixed;
+            z-index: 10;
+            inset: auto 0 0;
+            flex-wrap: nowrap;
+            padding: 0.6rem max(1rem, env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom))
+                max(1rem, env(safe-area-inset-left));
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+        }
+
+        .buttons .btn {
+            flex: 1 1 0;
+            min-width: 0;
         }
     }
 </style>

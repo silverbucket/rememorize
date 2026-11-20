@@ -28,7 +28,7 @@ describe("Library", () => {
     it("shows a new card in its group immediately", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
         expect(library.find("food", card["@id"])).toEqual(card);
-        expect(library.groups).toEqual([{ name: "food", total: 1, due: 1, started: 0 }]);
+        expect(library.groups).toEqual([{ name: "food", total: 1, due: 1, reviews: 0, started: 0 }]);
         expect(library.dueCount).toBe(1);
     });
 
@@ -60,8 +60,8 @@ describe("Library", () => {
         expect(library.newWaiting).toBe(1);
         // Each group can still show up to the remaining limit.
         expect(library.groups).toEqual([
-            { name: "one", total: 2, due: 2, started: 0 },
-            { name: "two", total: 1, due: 1, started: 0 },
+            { name: "one", total: 2, due: 2, reviews: 0, started: 0 },
+            { name: "two", total: 1, due: 1, reviews: 0, started: 0 },
         ]);
         await library.review(a, 4);
         // A group counts the cards that have been reviewed at least once.
@@ -69,6 +69,14 @@ describe("Library", () => {
         expect(library.startedToday).toBe(1);
         expect(library.newRemaining).toBe(1);
         expect(library.dueCount).toBe(1);
+    });
+
+    it("tells a group's due reviews from its new cards", async () => {
+        const old = await library.save({ frontText: "a", backText: "a", group: "one" });
+        await library.save({ frontText: "b", backText: "b", group: "one" });
+        // Studied three months ago, so it has long since come due again.
+        await library.review(old, 3, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+        expect(library.groups).toEqual([{ name: "one", total: 2, due: 2, reviews: 1, started: 1 }]);
     });
 
     it("uses the allowance for the time it's asked about", async () => {

@@ -453,7 +453,8 @@ async function capture(page) {
         forecast: async () => {
             await pages.stats();
             await page.getByRole("heading", { name: "New cards started" }).evaluate((heading) => {
-                window.scrollTo(0, heading.closest("section").getBoundingClientRect().top + window.scrollY - 72);
+                // Just under the phone's header, with the panel above tucked out of sight behind it.
+                window.scrollTo(0, heading.closest("section").getBoundingClientRect().top + window.scrollY - 66);
             });
         },
         question: async () => {

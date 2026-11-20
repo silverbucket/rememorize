@@ -122,8 +122,10 @@ fetched from another site: Schibsted Grotesk for the interface, and Newsreader
 page titles. Japanese and Chinese cards fall back to the system's Mincho or
 Song face.
 
-Below 880px wide the navigation is a tab bar along the bottom; above, a
-sidebar. A review hides both on a phone, so the card has the whole screen.
+Below 880px wide there is a header across the top (logo and storage status)
+and the navigation is a tab bar along the bottom; above 880px both become a
+sidebar. On a phone, a review hides the header and the tab bar so the card has
+the whole screen, and the card editor swaps the tab bar for its Save button.
 
 If you change the page background (`--bg`), change it in three more places:
 `PAGE_COLOR` in `src/lib/theme.ts` and the `theme-color` tags in `index.html`

@@ -12,9 +12,9 @@
     const days = $derived(streak(library.log, library.now));
     const reviewedToday = $derived(lastDays(library.log, library.now, 1)[0].reviews);
 
-    /** "6 to review and 4 new", leaving out whichever is zero. */
+    /** "4 due for review and 3 new", leaving out whichever is zero. */
     const breakdown = $derived(
-        [queue.length - fresh > 0 ? `${queue.length - fresh} to review` : "", fresh > 0 ? `${fresh} new` : ""]
+        [queue.length - fresh > 0 ? `${queue.length - fresh} due for review` : "", fresh > 0 ? `${fresh} new` : ""]
             .filter(Boolean)
             .join(" and "),
     );
@@ -56,7 +56,7 @@
     <section class="panel today" aria-label="Today">
         <div class="today-text">
             {#if queue.length > 0}
-                <p class="headline">{plural(queue.length, "card")} due today</p>
+                <p class="headline">{plural(queue.length, "card")} to study today</p>
                 <p class="muted">{breakdown}</p>
             {:else}
                 <p class="headline">You're all caught up</p>
@@ -72,7 +72,7 @@
             {/if}
         </div>
         {#if queue.length > 0}
-            <a class="btn primary large" href={href.review()}>Review {queue.length} due</a>
+            <a class="btn primary large" href={href.review()}>Review {plural(queue.length, "card")}</a>
         {/if}
         <ul class="facts">
             <li class:lit={days > 0}><Icon name="flame" size={18} />{plural(days, "day")} in a row</li>
@@ -87,16 +87,18 @@
                 <a class="group" href={href.group(group.name)}>
                     <span class="about">
                         <span class="name content">{group.name}</span>
-                        <span class="count muted">
-                            {plural(group.total, "card")}{#if group.started < group.total}, {group.started} started{/if}
-                        </span>
+                        <span class="count muted">{plural(group.total, "card")}</span>
                     </span>
-                    <span class="progress" aria-hidden="true">
+                    <span class="progress" title="{group.started} of {group.total} started" aria-hidden="true">
                         <span style:width="{(group.started / group.total) * 100}%"></span>
                     </span>
+                    <!-- Due counts only reviews, so the groups add up to the total above; new cards are counted apart. -->
                     <span class="due">
-                        {#if group.due > 0}
-                            <span class="badge" title="Due for review">{group.due} due</span>
+                        {#if group.reviews > 0}
+                            <span class="badge" title="Due for review">{group.reviews} due</span>
+                        {/if}
+                        {#if group.started < group.total}
+                            <span class="badge fresh" title="Not started yet">{group.total - group.started} new</span>
                         {/if}
                     </span>
                     <span class="go"><Icon name="chevron" size={18} /></span>
@@ -216,7 +218,7 @@
 
     .group {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 5rem minmax(4.25rem, auto) auto;
+        grid-template-columns: minmax(0, 1fr) 5rem minmax(7.5rem, auto) auto;
         align-items: center;
         gap: 1rem;
         min-height: 4.25rem;
@@ -255,7 +257,14 @@
 
     .due {
         display: flex;
+        flex-wrap: wrap;
         justify-content: flex-end;
+        gap: 0.3rem;
+    }
+
+    .fresh {
+        background: var(--surface-2);
+        color: var(--text-muted);
     }
 
     .go {

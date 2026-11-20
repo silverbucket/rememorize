@@ -186,27 +186,31 @@
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
             <div class="panel card" class:revealed onclick={() => !revealed && reveal()}>
                 {#key currentKey}
+                    <!-- The question sits above the middle and the answer below it, so showing the answer moves nothing. -->
                     <div class="faces">
-                        {#if reverse}<span class="direction">Back → front</span>{/if}
-                        <div class="side front content {sizeOf(question)}">{question}</div>
-                        {#if current.hint && !reverse && !revealed}
-                            {#if showHint}
-                                <p class="hint content muted">{current.hint}</p>
-                            {:else}
-                                <button
-                                    class="btn ghost hint-btn"
-                                    type="button"
-                                    onclick={(e) => {
-                                        e.stopPropagation();
-                                        hintFor = currentKey;
-                                    }}>Show hint</button
-                                >
+                        <div class="asked">
+                            {#if reverse}<span class="direction">Back → front</span>{/if}
+                            <div class="side front content {sizeOf(question)}">{question}</div>
+                        </div>
+                        <hr class:shown={revealed} />
+                        <div class="told">
+                            {#if revealed}
+                                <div class="side back content {sizeOf(answer)}">{answer}</div>
+                            {:else if current.hint && !reverse}
+                                {#if showHint}
+                                    <p class="hint content muted">{current.hint}</p>
+                                {:else}
+                                    <button
+                                        class="btn ghost hint-btn"
+                                        type="button"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            hintFor = currentKey;
+                                        }}>Show hint</button
+                                    >
+                                {/if}
                             {/if}
-                        {/if}
-                        {#if revealed}
-                            <hr />
-                            <div class="side back content {sizeOf(answer)}">{answer}</div>
-                        {/if}
+                        </div>
                     </div>
                 {/key}
             </div>
@@ -392,12 +396,26 @@
 
     .faces {
         flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
+        display: grid;
+        grid-template-rows: 1fr auto 1fr;
+        justify-items: center;
         gap: 1rem;
         min-width: 0;
+    }
+
+    .asked {
+        align-self: end;
+        display: grid;
+        justify-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .told {
+        align-self: start;
+        min-width: 0;
+        max-width: 100%;
     }
 
     @keyframes deal {
@@ -473,11 +491,16 @@
         color: var(--accent-text);
     }
 
+    /* Always there, so the question doesn't move; drawn once the answer is shown. */
     hr {
         width: min(60%, 14rem);
         margin: 0.25rem 0;
         border: none;
-        border-top: 1px solid var(--border-strong);
+        border-top: 1px solid transparent;
+    }
+
+    hr.shown {
+        border-top-color: var(--border-strong);
     }
 
     .hint {
