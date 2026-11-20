@@ -9,6 +9,8 @@ export const MAX_NEW_PER_DAY = 9999;
 export const DEFAULT_CARDS_PER_REVIEW = null;
 const NEW_PER_DAY_KEY = "rememorize:newPerDay";
 const CARDS_PER_REVIEW_KEY = "rememorize:cardsPerReview";
+/** Where older versions kept their daily card limit, now read as the review size. */
+const CARDS_PER_DAY_KEY = "rememorize:cardsPerDay";
 
 /** Rememorize's settings, shared by every device, stored at `/rememorize/settings`. */
 export interface AppSettings {
@@ -88,6 +90,10 @@ function save(key: string, value: string): void {
 export const loadNewPerDay = (): number => load(NEW_PER_DAY_KEY, parseNewPerDay, DEFAULT_NEW_PER_DAY);
 export const saveNewPerDay = (value: number): void => save(NEW_PER_DAY_KEY, String(value));
 export const loadCardsPerReview = (): number | null =>
-    load(CARDS_PER_REVIEW_KEY, parseCardsPerReview, DEFAULT_CARDS_PER_REVIEW);
+    load(
+        CARDS_PER_REVIEW_KEY,
+        parseCardsPerReview,
+        load(CARDS_PER_DAY_KEY, parseCardsPerReview, DEFAULT_CARDS_PER_REVIEW),
+    );
 export const saveCardsPerReview = (value: number | null): void =>
     save(CARDS_PER_REVIEW_KEY, value === null ? "" : String(value));

@@ -297,7 +297,7 @@
             {/if}
             <div class="done-actions">
                 {#if waiting > 0}
-                    <button class="btn primary" type="button" onclick={nextBatch}>
+                    <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>
                         Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
                     </button>
                 {/if}

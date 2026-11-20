@@ -174,7 +174,7 @@
                     {#if starting === 0}
                         No more new cards today:
                     {:else}
-                        Today's review takes {starting} of the {fresh} new cards:
+                        You can start {starting} of the {fresh} new cards today:
                     {/if}
                     <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
                 </p>

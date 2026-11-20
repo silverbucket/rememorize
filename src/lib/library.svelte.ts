@@ -136,9 +136,6 @@ export class Library {
         Math.max(0, dueItems(this.cards, this.now).filter((i) => isNew(i.card, i.reverse)).length - this.newRemaining),
     );
 
-    /** Cards due now that don't fit in one review, and wait for the next one. */
-    cardsWaiting = $derived(Math.max(0, this.todayIn(this.cards).length - this.dueCount));
-
     constructor(rs: RSWithModules, options: { newPerDay?: number; cardsPerReview?: number | null } = {}) {
         this.#rs = rs;
         this.#app = rs.scope("/rememorize/");

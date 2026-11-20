@@ -297,7 +297,7 @@ test("daily limit on new cards", async ({ page }) => {
     // The group says why its review is shorter than its count of new cards.
     await page.goto("/#/group/Numbers");
     await expect(page.getByText("3 cards, 3 new")).toBeVisible();
-    await expect(page.getByText("Today's review takes 2 of the 3 new cards: the daily limit is 2.")).toBeVisible();
+    await expect(page.getByText("You can start 2 of the 3 new cards today: the daily limit is 2.")).toBeVisible();
 
     await page.goto("/");
     await expect(page.getByRole("link", { name: "Review 2 cards" })).toBeVisible();

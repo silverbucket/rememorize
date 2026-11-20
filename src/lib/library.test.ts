@@ -324,7 +324,6 @@ describe("Library", () => {
         await library.save({ frontText: "a", backText: "a", group: "one" });
         await library.save({ frontText: "b", backText: "b", group: "two" });
         expect(library.dueCount).toBe(2);
-        expect(library.cardsWaiting).toBe(1);
         expect(library.todayIn(library.cards)).toHaveLength(3);
         expect(library.newWaiting).toBe(0);
         // The group still says how much is really due.
@@ -335,7 +334,7 @@ describe("Library", () => {
         // Once one review is done, the next takes the rest: studying today doesn't use anything up.
         for (const item of library.dueIn(library.cards)) await library.review(item.card, 4);
         expect(library.dueCount).toBe(1);
-        expect(library.cardsWaiting).toBe(0);
+        expect(library.todayIn(library.cards)).toHaveLength(1);
         library.cardsPerReview = null;
         expect(library.dueCount).toBe(1);
     });
