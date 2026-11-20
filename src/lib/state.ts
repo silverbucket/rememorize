@@ -1,6 +1,6 @@
 import { Library } from "./library.svelte";
 import { rs } from "./rs";
-import { loadCardsPerDay, loadNewPerDay } from "./settings";
+import { loadCardsPerReview, loadNewPerDay } from "./settings";
 
 /** The app-wide library, bound to the real remoteStorage instance. */
-export const library = new Library(rs, { newPerDay: loadNewPerDay(), cardsPerDay: loadCardsPerDay() });
+export const library = new Library(rs, { newPerDay: loadNewPerDay(), cardsPerReview: loadCardsPerReview() });

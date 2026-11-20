@@ -125,9 +125,8 @@ export function isBuried(item: ReviewItem, now: Date): boolean {
  * `newLimit` new cards (oldest first). A card studied both ways appears
  * once; its other direction waits for another day.
  *
- * `totalLimit` caps the cards not yet studied today, reviews and new ones
- * together. Cards already studied today and due again (learning steps)
- * always come back, so a session can be finished.
+ * `totalLimit` caps the whole queue, reviews and new ones together: the size
+ * of one review.
  */
 export function dueItems(
     cards: Flashcard[],
@@ -143,14 +142,8 @@ export function dueItems(
         .sort((a, b) => a.card.createdAt.localeCompare(b.card.createdAt));
     const seen = new Set<Flashcard>();
     const once = (item: ReviewItem) => !seen.has(item.card) && !!seen.add(item.card);
-    let left = Math.max(0, totalLimit);
-    const shown = reviews.filter(once).filter((i) => lastReviewedOn(i, now) !== undefined || left-- > 0);
-    return [...shown, ...fresh.filter(once).slice(0, Math.max(0, Math.min(newLimit, left)))];
-}
-
-/** How many cards (counting each direction) were studied on the same (local) day as `now`. */
-export function studiedOn(cards: Flashcard[], now = new Date()): number {
-    return cards.flatMap(itemsOf).filter((i) => lastReviewedOn(i, now) !== undefined).length;
+    const shown = [...reviews.filter(once), ...fresh.filter(once).slice(0, Math.max(0, newLimit))];
+    return shown.slice(0, Math.max(0, totalLimit));
 }
 
 /** Directions that are due but waiting for tomorrow, because the card's other direction was studied today. */

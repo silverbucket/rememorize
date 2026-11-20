@@ -62,7 +62,7 @@ src/
   lib/stats.ts            statistics from the review log (streak, retention, forecast)
   lib/views.ts            views: slices of the cards worked out from their schedules (struggling, learning, …)
   lib/transfer.ts         import and export (CSV, TSV, JSON)
-  lib/settings.ts         the daily limits, stored in /rememorize/ (the app's own folder)
+  lib/settings.ts         the review limits, stored in /rememorize/ (the app's own folder)
   lib/theme.ts            appearance: follow the system, or always light or dark
   lib/router.svelte.ts    hash routes
 tests/e2e/                Playwright specs
@@ -73,7 +73,7 @@ docs/assets/              README images
 
 Cards, review state and the review log are stored through
 [remotestorage-module-flashcards](https://github.com/silverbucket/remotestorage-module-flashcards),
-which defines the data format. Rememorize's own settings (the daily limits)
+which defines the data format. Rememorize's own settings (the review limits)
 live apart from the cards, in `/rememorize/settings`, so the shared format
 doesn't have to change when the app needs a new setting.
 

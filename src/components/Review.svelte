@@ -62,6 +62,8 @@
     const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt, reverse) : undefined);
     const back = $derived(group ? href.group(group, show) : show ? href.cards(show) : href.home());
     const held = $derived(heldUntilTomorrow(scope, library.now));
+    /** Cards still due once this review is over: they didn't fit in it, and can make the next one. */
+    const waiting = $derived(live.length === 0 ? library.todayIn(scope, library.now).length : 0);
     /** How far through the session: ratings given, out of those plus what is left. */
     const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
 
@@ -78,6 +80,14 @@
             started = true;
         });
     });
+
+    /** Start another review of what is still due, as if the page had just opened. */
+    function nextBatch() {
+        reviewed = 0;
+        tally = { 1: 0, 2: 0, 3: 0, 4: 0 };
+        last = undefined;
+        started = false;
+    }
 
     function reveal() {
         revealedAt = new Date();
@@ -264,11 +274,11 @@
             {:else}
                 <h2>Nothing due</h2>
             {/if}
-            {#if library.cardsWaiting > 0}
+            {#if waiting > 0}
+                <p>{plural(waiting, "more card")} {waiting === 1 ? "is" : "are"} due.</p>
                 <p class="muted">
-                    {plural(library.cardsWaiting, "more card")} waiting: you've studied {library.studiedToday} of
-                    {library.cardsPerDay} cards for today.
-                    <a href={href.account()}>Change the daily limit</a>.
+                    Carry on now or come back later: they stay due, and a few hours makes little difference to how
+                    well you remember them.
                 </p>
             {:else if library.newWaiting > 0}
                 <p class="muted">
@@ -282,11 +292,16 @@
                     {plural(held, "card")} held until tomorrow: the other direction of a card you studied today.
                 </p>
             {/if}
-            {#if nextDue(scope, library.now) && library.newWaiting === 0 && library.cardsWaiting === 0 && held === 0}
+            {#if nextDue(scope, library.now) && library.newWaiting === 0 && waiting === 0 && held === 0}
                 <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
             {/if}
             <div class="done-actions">
-                <a class="btn primary" href={back}>Back to {group ?? "your cards"}</a>
+                {#if waiting > 0}
+                    <button class="btn primary" type="button" onclick={nextBatch}>
+                        Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
+                    </button>
+                {/if}
+                <a class="btn" class:primary={waiting === 0} href={back}>Back to {group ?? "your cards"}</a>
                 {#if reviewed > 0}
                     <a class="btn" href={href.stats()}>See your progress</a>
                 {/if}

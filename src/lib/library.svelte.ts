@@ -19,17 +19,17 @@ import {
     type Settings,
 } from "remotestorage-module-flashcards";
 import type { RSWithModules } from "./rs";
-import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf, studiedOn } from "./scheduler";
+import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
 import {
     type AppSettings,
     appSettingsSchema,
-    DEFAULT_CARDS_PER_DAY,
+    DEFAULT_CARDS_PER_REVIEW,
     DEFAULT_NEW_PER_DAY,
     normalizeAppSettings,
-    parseCardsPerDay,
+    parseCardsPerReview,
     parseNewPerDay,
     SETTINGS_FILE,
-    saveCardsPerDay,
+    saveCardsPerReview,
     saveNewPerDay,
 } from "./settings";
 
@@ -38,9 +38,9 @@ export type ConnectionStatus = "local" | "connecting" | "connected" | "unauthori
 export interface GroupSummary {
     name: string;
     total: number;
-    /** What a review of the group would show now: due reviews, then new cards, within today's limits. */
+    /** What a review of the group would show now: due reviews, then new cards, within the limits. */
     due: number;
-    /** Reviews of cards already started that are due, whether or not the daily card limit lets them all in. */
+    /** Reviews of cards already started that are due, whether or not one review takes them all. */
     reviews: number;
     /** New cards a review could start now if there were no daily limits. */
     fresh: number;
@@ -86,10 +86,11 @@ export class Library {
     newPerDay = $state(DEFAULT_NEW_PER_DAY);
 
     /**
-     * Most cards to study per day, reviews and new together, or `null` for no
-     * limit. Synced; change it with `setCardsPerDay()`.
+     * Most cards in one review, reviews and new together, or `null` for no
+     * limit. Another review can start straight after. Synced; change it with
+     * `setCardsPerReview()`.
      */
-    cardsPerDay: number | null = $state(DEFAULT_CARDS_PER_DAY);
+    cardsPerReview: number | null = $state(DEFAULT_CARDS_PER_REVIEW);
 
     cards = $derived(Object.values(this.#cards));
 
@@ -105,9 +106,6 @@ export class Library {
 
     /** How many more new cards can be started today. */
     newRemaining = $derived(Math.max(0, this.newPerDay - this.startedToday));
-
-    /** Cards studied today (each direction counts), against the daily card limit. */
-    studiedToday = $derived(studiedOn(this.cards, this.now));
 
     groups: GroupSummary[] = $derived.by(() => {
         const byName = new Map<string, Flashcard[]>();
@@ -138,15 +136,15 @@ export class Library {
         Math.max(0, dueItems(this.cards, this.now).filter((i) => isNew(i.card, i.reverse)).length - this.newRemaining),
     );
 
-    /** Cards held back today by the daily card limit (on top of any held by the new-card limit). */
-    cardsWaiting = $derived(Math.max(0, dueItems(this.cards, this.now, this.newRemaining).length - this.dueCount));
+    /** Cards due now that don't fit in one review, and wait for the next one. */
+    cardsWaiting = $derived(Math.max(0, this.todayIn(this.cards).length - this.dueCount));
 
-    constructor(rs: RSWithModules, options: { newPerDay?: number; cardsPerDay?: number | null } = {}) {
+    constructor(rs: RSWithModules, options: { newPerDay?: number; cardsPerReview?: number | null } = {}) {
         this.#rs = rs;
         this.#app = rs.scope("/rememorize/");
         this.#app.declareType("settings", appSettingsSchema);
         if (options.newPerDay !== undefined) this.newPerDay = options.newPerDay;
-        if (options.cardsPerDay !== undefined) this.cardsPerDay = options.cardsPerDay;
+        if (options.cardsPerReview !== undefined) this.cardsPerReview = options.cardsPerReview;
         // Connected before Rememorize had its own folder: the token doesn't cover it yet.
         rs.on("scope-change-required", () => this.#checkAccess());
         rs.on("ready", () => void this.load());
@@ -230,15 +228,19 @@ export class Library {
         }
     }
 
-    /** The review queue for some cards: due reviews, then new cards, within today's limits. */
+    /** The queue for one review of some cards: due reviews, then new cards, within the limits. */
     dueIn(cards: Flashcard[], now = this.now): ReviewItem[] {
-        // Today's allowance at `now`, not at the last clock tick (matters just after midnight).
-        const fresh = Math.max(0, this.newPerDay - startedOn(this.cards, now));
-        const total =
-            this.cardsPerDay === null
-                ? Number.POSITIVE_INFINITY
-                : Math.max(0, this.cardsPerDay - studiedOn(this.cards, now));
-        return dueItems(cards, now, fresh, total);
+        return dueItems(cards, now, this.#freshLeft(now), this.cardsPerReview ?? Number.POSITIVE_INFINITY);
+    }
+
+    /** Everything due in these cards now, however many reviews that takes (the new-card limit still applies). */
+    todayIn(cards: Flashcard[], now = this.now): ReviewItem[] {
+        return dueItems(cards, now, this.#freshLeft(now));
+    }
+
+    // Today's allowance at `now`, not at the last clock tick (matters just after midnight).
+    #freshLeft(now: Date): number {
+        return Math.max(0, this.newPerDay - startedOn(this.cards, now));
     }
 
     /**
@@ -250,7 +252,7 @@ export class Library {
         return dueItems(cards, now).filter((i) => isNew(i.card, i.reverse)).length;
     }
 
-    /** Due reviews of these, ignoring the daily card limit. */
+    /** Due reviews of these, however many reviews they take. */
     reviewsIn(cards: Flashcard[], now = this.now): number {
         return dueItems(cards, now, 0).length;
     }
@@ -282,16 +284,16 @@ export class Library {
         await this.#changeSettings({ newCardsPerDay: parseNewPerDay(value) });
     }
 
-    /** Change the daily card limit (`null` for none) on every device. */
-    async setCardsPerDay(value: number | null): Promise<void> {
-        await this.#changeSettings({ cardsPerDay: parseCardsPerDay(value) });
+    /** Change the most cards in one review (`null` for no limit) on every device. */
+    async setCardsPerReview(value: number | null): Promise<void> {
+        await this.#changeSettings({ cardsPerReview: parseCardsPerReview(value) });
     }
 
     async #changeSettings(changes: AppSettings): Promise<void> {
         // Only what this call changes is put back if it fails, not a setting saved alongside it.
         const previous: AppSettings = {};
         if ("newCardsPerDay" in changes) previous.newCardsPerDay = this.newPerDay;
-        if ("cardsPerDay" in changes) previous.cardsPerDay = this.cardsPerDay;
+        if ("cardsPerReview" in changes) previous.cardsPerReview = this.cardsPerReview;
         const hadOwn = this.#ownNewPerDay;
         // Applied before the write finishes, so it holds even if the page is left straight away.
         this.#applySettings(changes);
@@ -454,9 +456,9 @@ export class Library {
             this.newPerDay = parseNewPerDay(settings.newCardsPerDay);
             saveNewPerDay(this.newPerDay);
         }
-        if (settings.cardsPerDay !== undefined) {
-            this.cardsPerDay = parseCardsPerDay(settings.cardsPerDay);
-            saveCardsPerDay(this.cardsPerDay);
+        if (settings.cardsPerReview !== undefined) {
+            this.cardsPerReview = parseCardsPerReview(settings.cardsPerReview);
+            saveCardsPerReview(this.cardsPerReview);
         }
     }
 

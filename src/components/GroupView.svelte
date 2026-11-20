@@ -27,10 +27,12 @@
     /** Reviews that are due, and new cards that could be started: counted apart, as on the home page. */
     const reviews = $derived(library.reviewsIn(cards));
     const fresh = $derived(library.freshIn(cards));
-    /** New cards a review would start now. Fewer than `fresh` only when a daily limit is in the way. */
-    const starting = $derived(queue.filter((i) => isNew(i.card, i.reverse)).length);
-    /** Whether the daily card limit, rather than the new-card one, is what's holding cards back. */
-    const capped = $derived(library.cardsPerDay !== null && due < reviews + Math.min(fresh, library.newRemaining));
+    /** Everything due here today, however many reviews it takes. */
+    const today = $derived(library.todayIn(cards));
+    /** New cards that can be started today. Fewer than `fresh` only when the daily new-card limit is in the way. */
+    const starting = $derived(today.filter((i) => isNew(i.card, i.reverse)).length);
+    /** Whether it takes more than one review to get through what's due. */
+    const capped = $derived(due < today.length);
 
     let query = $state("");
     const needle = $derived(query.trim().toLocaleLowerCase());
@@ -163,14 +165,11 @@
             <!-- Says why the button's count is smaller than due plus new. -->
             {#if capped}
                 <p class="sub limit">
-                    {#if due === 0}
-                        No more cards today:
-                    {:else}
-                        Today's review takes {due} of them:
-                    {/if}
-                    <a href={href.account()}>the daily card limit</a> is {library.cardsPerDay}.
+                    {today.length} to study today, {due} at a time:
+                    <a href={href.account()}>the review size</a> is {library.cardsPerReview}.
                 </p>
-            {:else if starting < fresh}
+            {/if}
+            {#if starting < fresh}
                 <p class="sub limit">
                     {#if starting === 0}
                         No more new cards today:
