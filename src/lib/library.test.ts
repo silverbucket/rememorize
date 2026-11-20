@@ -279,6 +279,47 @@ describe("Library", () => {
         expect(other.newPerDay).toBe(7);
     });
 
+    it("saves the reminder time next to the limits", async () => {
+        expect(library.reminderTime).toBe("09:00");
+        await library.setNewPerDay(7);
+        await library.setReminderTime("18:30");
+        expect(library.reminderTime).toBe("18:30");
+        expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
+            newCardsPerDay: 7,
+            reminderTime: "18:30",
+        });
+        const other = new Library(rs);
+        await other.load();
+        expect(other.reminderTime).toBe("18:30");
+    });
+
+    it("saves a reminder server of the user's own, and the usual one as none", async () => {
+        const usual = library.reminderServer;
+        expect(usual).toBe("https://sockethub.silverbucket.net");
+        await library.setReminderServer("hub.example/");
+        expect(library.reminderServer).toBe("https://hub.example");
+        const stored = () => rs.scope("/rememorize/").getObject("settings", false);
+        expect(await stored()).toMatchObject({ reminderServer: "https://hub.example" });
+        const other = new Library(rs);
+        await other.load();
+        expect(other.reminderServer).toBe("https://hub.example");
+
+        // Something that isn't an address changes nothing.
+        await expect(library.setReminderServer("not a server")).rejects.toThrow("That isn't a web address.");
+        expect(library.reminderServer).toBe("https://hub.example");
+        expect(await stored()).toMatchObject({ reminderServer: "https://hub.example" });
+
+        // Blank goes back to the usual one, and so does its own address.
+        await library.setReminderServer("");
+        expect(library.reminderServer).toBe(usual);
+        expect(await stored()).toMatchObject({ reminderServer: "" });
+        await other.load();
+        expect(other.reminderServer).toBe(usual);
+        await library.setReminderServer("https://hub.example");
+        await library.setReminderServer(`${usual}/`);
+        expect(await stored()).toMatchObject({ reminderServer: "" });
+    });
+
     it("moves the new-card limit an older version saved with the cards", async () => {
         await rs.flashcards.setSettings({ newCardsPerDay: 4 });
         await library.load();

@@ -25,9 +25,13 @@ import {
     appSettingsSchema,
     DEFAULT_CARDS_PER_REVIEW,
     DEFAULT_NEW_PER_DAY,
+    DEFAULT_REMINDER_SERVER,
+    DEFAULT_REMINDER_TIME,
     normalizeAppSettings,
     parseCardsPerReview,
     parseNewPerDay,
+    parseReminderServer,
+    parseReminderTime,
     SETTINGS_FILE,
     saveCardsPerReview,
     saveNewPerDay,
@@ -91,6 +95,11 @@ export class Library {
      * `setCardsPerReview()`.
      */
     cardsPerReview: number | null = $state(DEFAULT_CARDS_PER_REVIEW);
+
+    /** When a day's first reminder goes out ("HH:MM"). Synced; change it with `setReminderTime()`. */
+    reminderTime = $state(DEFAULT_REMINDER_TIME);
+    /** The server that sends reminders. Synced; change it with `setReminderServer()`. */
+    reminderServer = $state(DEFAULT_REMINDER_SERVER);
 
     cards = $derived(Object.values(this.#cards));
 
@@ -171,6 +180,9 @@ export class Library {
             rs.caching.enable("/rememorize/");
             this.#cards = {};
             this.#log = {};
+            // Saved with the account, and gone from this browser with it.
+            this.reminderTime = DEFAULT_REMINDER_TIME;
+            this.reminderServer = DEFAULT_REMINDER_SERVER;
             void this.load();
         });
         rs.on("network-offline", () => {
@@ -286,11 +298,26 @@ export class Library {
         await this.#changeSettings({ cardsPerReview: parseCardsPerReview(value) });
     }
 
+    /** Change the time of a day's first reminder on every device. */
+    async setReminderTime(value: string): Promise<void> {
+        await this.#changeSettings({ reminderTime: parseReminderTime(value) });
+    }
+
+    /** Send reminders through another server on every device. Blank goes back to the usual one. */
+    async setReminderServer(value: string): Promise<void> {
+        const server = parseReminderServer(value);
+        if (!server) throw new Error("That isn't a web address.");
+        // The usual one is saved as none, so it stays the usual one if a later version has another.
+        await this.#changeSettings({ reminderServer: server === DEFAULT_REMINDER_SERVER ? "" : server });
+    }
+
     async #changeSettings(changes: AppSettings): Promise<void> {
         // Only what this call changes is put back if it fails, not a setting saved alongside it.
         const previous: AppSettings = {};
         if ("newCardsPerDay" in changes) previous.newCardsPerDay = this.newPerDay;
         if ("cardsPerReview" in changes) previous.cardsPerReview = this.cardsPerReview;
+        if ("reminderTime" in changes) previous.reminderTime = this.reminderTime;
+        if ("reminderServer" in changes) previous.reminderServer = this.reminderServer;
         const hadOwn = this.#ownNewPerDay;
         // Applied before the write finishes, so it holds even if the page is left straight away.
         this.#applySettings(changes);
@@ -456,6 +483,10 @@ export class Library {
         if (settings.cardsPerReview !== undefined) {
             this.cardsPerReview = parseCardsPerReview(settings.cardsPerReview);
             saveCardsPerReview(this.cardsPerReview);
+        }
+        if (settings.reminderTime !== undefined) this.reminderTime = parseReminderTime(settings.reminderTime);
+        if (settings.reminderServer !== undefined) {
+            this.reminderServer = parseReminderServer(settings.reminderServer) ?? DEFAULT_REMINDER_SERVER;
         }
     }
 

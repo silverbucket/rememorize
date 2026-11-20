@@ -14,6 +14,7 @@ Sync through your own remoteStorage.
 [![Release](https://img.shields.io/github/v/release/silverbucket/rememorize?color=158f44)](https://github.com/silverbucket/rememorize/releases)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-158f44)](LICENSE)
 [![remoteStorage](https://img.shields.io/badge/storage-remoteStorage-FF4B03)](https://remotestorage.io)
+[![Sockethub](https://img.shields.io/badge/reminders-Sockethub-F23C00)](https://sockethub.org)
 
 **[Open Rememorize →](https://rememorize.5apps.com)**
 
@@ -48,6 +49,8 @@ devices.
   under your thumb, and a tap on the card shows the answer.
 - **Your own storage.** Link a remoteStorage account and your cards sync
   across all your devices. Without one, they stay in your browser.
+- **Reminders.** A notification when cards are due, even while the app is
+  closed.
 - **Both directions.** Study a card front to back, back to front, or both.
 - **Progress you can see.** A review calendar, your streak, how much you
   remember and what is due next.
@@ -110,6 +113,30 @@ account yet? [Get one](https://remotestorage.io/get).
 
 Disconnecting removes the cards from that browser, not from your storage.
 
+## Reminders
+
+Turn on **Reminders** in Settings and Rememorize tells you how many cards are
+due: first at a time you choose, then again later in the day when more come
+due. On an iPhone or iPad, add Rememorize to your Home Screen first.
+
+A web app that is closed can't notify anyone, so a server has to send each
+reminder when it is due. Rememorize uses [Sockethub](https://sockethub.org)
+for that, an open-source gateway between web apps and messaging protocols.
+
+- **Encrypted on your device.** Each reminder is encrypted for your phone
+  before it leaves the browser. The server passes it on and can't read it.
+- **No account, no cards.** The server is given a delivery address, a time and
+  the encrypted reminder. Your cards are never sent to it.
+- **Off until you ask.** The server isn't contacted until you turn reminders
+  on, or enter a server's address, which is checked before it is saved.
+- **In step across devices.** A review on your laptop corrects the reminder
+  your phone will show.
+- **Your server, if you like.** Reminders go through
+  `sockethub.silverbucket.net` unless you enter the address of your own
+  Sockethub server in Settings.
+
+Reminders are planned a month ahead and renewed each time you open the app.
+
 ## Development
 
 ```sh
@@ -136,9 +163,17 @@ screenshots and releases.
     <img alt="remoteStorage" src="docs/assets/remotestorage-text.svg" height="48">
   </picture>
 </a>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://sockethub.org">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/sockethub-text-dark.svg">
+    <img alt="Sockethub" src="docs/assets/sockethub-text.svg" height="36">
+  </picture>
+</a>
 
 <br>
 
-<sub><a href="https://remotestorage.io">remoteStorage</a> keeps your data yours</sub>
+<sub><a href="https://remotestorage.io">remoteStorage</a> keeps your data yours ·
+<a href="https://sockethub.org">Sockethub</a> sends your reminders</sub>
 
 </div>

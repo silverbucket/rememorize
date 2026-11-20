@@ -11,6 +11,7 @@
     import Review from "./components/Review.svelte";
     import Stats from "./components/Stats.svelte";
     import StatusPill from "./components/StatusPill.svelte";
+    import { reminders } from "./lib/notifications.svelte";
     import { href, type Route, router } from "./lib/router.svelte";
     import { library } from "./lib/state";
 
@@ -19,12 +20,22 @@
 
     onMount(() => {
         const stopClock = library.startClock();
+        const stopReminders = reminders.start();
         updateSW = registerSW({
             onNeedRefresh() {
                 needRefresh = true;
             },
         });
-        return stopClock;
+        return () => {
+            stopClock();
+            stopReminders();
+        };
+    });
+
+    $effect(() => {
+        // Everything a reminder is worked out from. Reading them is what makes this run again.
+        void [library.loaded, library.cards, library.newPerDay, library.reminderTime, library.reminderServer];
+        reminders.changed();
     });
 
     const route = $derived(router.route);

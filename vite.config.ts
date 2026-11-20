@@ -62,6 +62,8 @@ export default defineConfig({
                 globPatterns: ["**/*.{js,css,html,svg,png,webmanifest,woff2}"],
                 cleanupOutdatedCaches: true,
                 navigateFallback: "index.html",
+                // Shows reminders that arrive while the app is closed.
+                importScripts: ["push-sw.js"],
             },
         }),
     ],

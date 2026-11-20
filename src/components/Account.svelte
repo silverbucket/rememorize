@@ -1,7 +1,13 @@
 <script lang="ts">
     import { untrack } from "svelte";
+    import { reminders } from "../lib/notifications.svelte";
     import { href } from "../lib/router.svelte";
-    import { MAX_NEW_PER_DAY, parseCardsPerReview, parseNewPerDay } from "../lib/settings";
+    import {
+        DEFAULT_REMINDER_SERVER,
+        MAX_NEW_PER_DAY,
+        parseCardsPerReview,
+        parseNewPerDay,
+    } from "../lib/settings";
     import { library } from "../lib/state";
     import { applyTheme, loadTheme, saveTheme, THEMES, type Theme } from "../lib/theme";
     import { exportCsv, exportJson } from "../lib/transfer";
@@ -60,6 +66,28 @@
         }
     }
 
+    let reminderError = $state("");
+
+    async function setReminderTime(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        reminderError = "";
+        try {
+            await library.setReminderTime(input.value);
+        } catch (e) {
+            reminderError = `Could not save the time: ${e instanceof Error ? e.message : String(e)}`;
+        }
+        // A cleared field falls back to the default; show what is actually set.
+        input.value = library.reminderTime;
+    }
+
+    async function setReminderServer(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        await reminders.setServer(input.value);
+        // An address that was refused stays in the field to be corrected. Otherwise show the one in use,
+        // which for an empty field is the usual one.
+        if (!reminders.error) input.value = library.reminderServer;
+    }
+
     function download(contents: string, type: string, extension: string) {
         const url = URL.createObjectURL(new Blob([contents], { type }));
         const link = document.createElement("a");
@@ -77,13 +105,20 @@
         applyTheme(value);
     }
 
-    function disconnect() {
+    async function disconnect() {
+        const on = reminders.state === "on";
         if (
             !confirm(
-                "Disconnect this browser? The local copy of your cards is removed. Synced cards stay on your storage server, but changes not yet synced are lost.",
+                `Disconnect this browser? The local copy of your cards is removed${on ? " and its reminders are turned off" : ""}. Synced cards stay on your storage server, but changes not yet synced are lost.`,
             )
         ) {
             return;
+        }
+        if (on) {
+            // Its reminders are about the account's cards, and the account's other devices would go on scheduling them.
+            await reminders.disable();
+            // Still subscribed, so they would go on arriving. The panel says what went wrong.
+            if (reminders.error) return;
         }
         library.disconnect();
     }
@@ -188,6 +223,102 @@
     </div>
     <p class="muted">These settings are the same on every device you connect.</p>
     {#if settingsError}<p class="error" role="alert">{settingsError}</p>{/if}
+</section>
+
+<section class="panel">
+    <h2>Reminders</h2>
+    <p class="muted">
+        A notification on this device when cards are due. It arrives even while Rememorize is closed.
+    </p>
+    {#if reminders.state === "install"}
+        <p>
+            On an iPhone or iPad, Rememorize has to be on your Home Screen first. Tap Share, then “Add to Home
+            Screen”, open Rememorize from there and come back to this page.
+        </p>
+    {:else if reminders.state === "unsupported"}
+        <p>This browser can't show notifications.</p>
+    {:else if reminders.state === "blocked"}
+        <p>
+            Notifications are blocked for Rememorize. Allow them in your browser's or your phone's settings, then
+            come back to this page.
+        </p>
+    {:else if reminders.state === "on"}
+        <p class="account">
+            <span class="dot" aria-hidden="true"></span>
+            <span>Reminders are on for this device.</span>
+        </p>
+        <div class="row">
+            <label for="reminder-time">First reminder at</label>
+            <input
+                id="reminder-time"
+                class="field time"
+                type="time"
+                value={library.reminderTime}
+                onchange={setReminderTime}
+            />
+        </div>
+        <p class="muted">
+            A day's first reminder comes at this time. When more cards come due after you last had Rememorize
+            open, another follows within the hour. With the app left closed they are at least six hours apart,
+            and none come later than twelve hours after the first.
+        </p>
+        <p class="muted">
+            The time is the same on every device you connect, and follows the clock of the one you used last.
+        </p>
+        <p class="muted">
+            Reminders are planned a month ahead and renewed each time you open Rememorize, so they stop if it stays
+            closed for longer than that.
+        </p>
+        <div class="buttons">
+            <button class="btn" type="button" disabled={reminders.busy} onclick={() => reminders.test()}
+                >Send a test</button
+            >
+            <button class="btn" type="button" disabled={reminders.busy} onclick={() => reminders.disable()}
+                >Turn off</button
+            >
+        </div>
+    {:else}
+        {#if reminders.state === "stopped"}
+            <p>Reminders have stopped on this device. Turn them on again to keep getting them.</p>
+        {/if}
+        <div class="buttons">
+            <button class="btn primary" type="button" disabled={reminders.busy} onclick={() => reminders.enable()}
+                >{reminders.busy ? "Turning on…" : "Turn on reminders"}</button
+            >
+        </div>
+    {/if}
+    {#if reminders.state === "on" || reminders.state === "off" || reminders.state === "stopped"}
+        <label class="title next" for="reminder-server">Reminder server</label>
+        <p class="muted">
+            Reminders are sent by a <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a>
+            server. It is given a delivery address, a time and an encrypted message for each one, and can't read
+            what they say. Use this one, or enter the address of your own. Leave it empty to go back to
+            {DEFAULT_REMINDER_SERVER.replace(/^https:\/\//, "")}.
+        </p>
+        <div class="row">
+            <input
+                id="reminder-server"
+                class="field"
+                type="text"
+                inputmode="url"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+                placeholder={DEFAULT_REMINDER_SERVER}
+                value={library.reminderServer}
+                disabled={reminders.busy}
+                onchange={setReminderServer}
+            />
+        </div>
+        <p class="muted">The server is the same on every device you connect.</p>
+    {/if}
+    {#if reminders.error}<p class="error" role="alert">{reminders.error}</p>{/if}
+    {#if reminderError}<p class="error" role="alert">{reminderError}</p>{/if}
+    {#if reminders.syncError && reminders.state === "on"}
+        <p class="muted">
+            Your reminders couldn't be updated just now. Rememorize will try again. ({reminders.syncError})
+        </p>
+    {/if}
 </section>
 
 <section class="panel">
@@ -308,6 +439,11 @@
 
     .number {
         width: 5.5rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .time {
+        width: auto;
         font-variant-numeric: tabular-nums;
     }
 
