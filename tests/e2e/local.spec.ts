@@ -613,6 +613,16 @@ test("new cards take a direction from the settings or their group, and many card
     // Typed into another group, it's that group's (here the settings') direction.
     await page.getByLabel("Group", { exact: true }).fill("Capitals");
     await expect(page.getByLabel("Study direction")).toHaveValue("both");
+    // Left blank, the card goes in "default", so it's that group's direction.
+    await page.getByLabel("Group", { exact: true }).fill("");
+    await page.getByLabel("Front").fill("ahoj");
+    await page.getByLabel("Back").fill("hi");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "default" })).toBeVisible();
+    await own.selectOption("Back → front");
+    await page.getByRole("link", { name: "Add card" }).click();
+    await page.getByLabel("Group", { exact: true }).fill("");
+    await expect(page.getByLabel("Study direction")).toHaveValue("reverse");
 
     // Picked cards change direction together.
     await page.goto("/#/group/Czech");

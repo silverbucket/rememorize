@@ -3,8 +3,6 @@
 
     /** The direction some cards were given, and the one each had before, so it can be undone. */
     export type Redirected = { to: CardDirection; from: { id: string; group: string; direction: CardDirection }[] };
-
-    export const ICON_OF = { forward: "forward", reverse: "reverse", both: "both" } as const;
 </script>
 
 <script lang="ts">
@@ -38,11 +36,8 @@
         if (saving) return;
         saving = true;
         error = "";
-        const from = cards
-            .filter((c) => directionOf(c) !== to)
-            .map((c) => ({ id: c["@id"], group: c.group, direction: directionOf(c) }));
         try {
-            await library.setCardDirection(cards, to);
+            const from = await library.setCardDirection(cards, to);
             dialog?.close();
             onchanged({ to, from });
         } catch (e) {
@@ -88,7 +83,7 @@
                         disabled={saving || already === cards.length}
                         onclick={() => choose(direction)}
                     >
-                        <span class="mark"><Icon name={ICON_OF[direction]} size={18} /></span>
+                        <span class="mark"><Icon name={direction} size={18} /></span>
                         <span class="name">{label}</span>
                         {#if already > 0}
                             <span class="count">{already === cards.length ? (cards.length === 1 ? "now" : "all now") : `${already} now`}</span>

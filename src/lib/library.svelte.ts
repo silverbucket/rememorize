@@ -302,14 +302,27 @@ export class Library {
 
     /** The direction a new card in this group is studied in: the group's own, else the one in the settings. */
     directionFor(group: string): CardDirection {
-        return this.groupDirections[group] ?? this.direction;
+        return Object.hasOwn(this.groupDirections, group) ? this.groupDirections[group] : this.direction;
     }
 
-    /** Study cards in another direction. Each keeps the schedule it has for each direction. */
-    async setCardDirection(cards: Flashcard[], direction: CardDirection): Promise<void> {
-        for (const card of cards) {
-            if ((card.direction ?? "forward") !== direction) await this.save({ ...card, direction }, card.group);
+    /**
+     * Study cards in another direction. Each keeps the schedule it has for
+     * each direction. Returns the cards changed, with the direction each had.
+     */
+    async setCardDirection(
+        cards: Flashcard[],
+        direction: CardDirection,
+    ): Promise<{ id: string; group: string; direction: CardDirection }[]> {
+        const changed = [];
+        for (const { group, "@id": id } of cards) {
+            // As it is now: sync may have changed, moved or deleted it since the list was made.
+            const card = this.find(group, id);
+            const was = card?.direction ?? "forward";
+            if (!card || was === direction) continue;
+            await this.save({ ...card, direction }, group);
+            changed.push({ id, group, direction: was });
         }
+        return changed;
     }
 
     /** Change the direction new cards are studied in, on every device. */

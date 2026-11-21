@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { CardDirection, Flashcard } from "remotestorage-module-flashcards";
+    import { type CardDirection, DEFAULT_GROUP, type Flashcard } from "remotestorage-module-flashcards";
     import { untrack } from "svelte";
     import { formatDateTime, fromNow } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
@@ -19,7 +19,7 @@
     let group = $state(initial?.group ?? untrack(() => initialGroup) ?? "");
     /** A direction picked here; until one is, a new card is studied the way its group's new cards are. */
     let chosen: CardDirection | undefined = $state(initial ? (initial.direction ?? "forward") : undefined);
-    const direction: CardDirection = $derived(chosen ?? library.directionFor(group.trim()));
+    const direction: CardDirection = $derived(chosen ?? library.directionFor(group.trim() || DEFAULT_GROUP));
     let saving = $state(false);
     let error = $state("");
 

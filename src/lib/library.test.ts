@@ -294,6 +294,18 @@ describe("Library", () => {
         expect(library.find("one", a["@id"])?.reverseReview).toEqual(studied.reverseReview);
     });
 
+    it("changes cards as they are now, not as they were listed", async () => {
+        const a = await library.save({ frontText: "a", backText: "a", group: "one" });
+        const b = await library.save({ frontText: "b", backText: "b", group: "one" });
+        // Since the list was made, a was studied and b was deleted.
+        const studied = await library.review(a, 3);
+        await library.remove(b);
+        const changed = await library.setCardDirection([a, b], "both");
+        expect(changed).toEqual([{ id: a["@id"], group: "one", direction: "forward" }]);
+        expect(library.cards).toHaveLength(1);
+        expect(library.find("one", a["@id"])?.review).toEqual(studied.review);
+    });
+
     it("logs each review, and takes it back out on undo", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
         const at = new Date("2026-01-01T10:00:00.000Z");

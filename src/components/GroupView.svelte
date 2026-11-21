@@ -202,11 +202,10 @@
     async function applyToAll() {
         if (applying) return;
         const to = groupDirection;
-        const from = others.map((c) => ({ id: c["@id"], group: c.group, direction: c.direction ?? "forward" }));
         applying = true;
         error = "";
         try {
-            await library.setCardDirection(others, to);
+            const from = await library.setCardDirection(others, to);
             offeredFor = undefined;
             moved = undefined;
             redirected = { to, from };
