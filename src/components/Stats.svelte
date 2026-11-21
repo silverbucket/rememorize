@@ -539,7 +539,7 @@
         {/if}
     </section>
 
-    {#if log.length >= MIN_FOR_TIMES && byTime.grid.flat().some((r) => r.rate !== undefined)}
+    {#if log.length >= MIN_FOR_TIMES && (bestAndWorst || byTime.grid.flat().some((r) => r.rate !== undefined))}
         <section class="panel">
             <h2>When you remember best</h2>
             <p class="muted sub">
