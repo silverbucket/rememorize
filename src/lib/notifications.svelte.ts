@@ -47,13 +47,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const REFRESH_MS = 7 * DAY_MS;
 /**
  * A changed list is sent once the cards have been left alone this long. Working it out takes a moment on a
- * large deck, and that moment shouldn't fall in the middle of a review.
+ * large deck, and that moment shouldn't fall in the middle of a review. A build can shorten this and
+ * `FRESH_WAIT_MS`, as the one the end-to-end tests run against does (see playwright.config.ts).
  */
-const QUIET_MS = 20_000;
+const QUIET_MS = Number(import.meta.env.VITE_QUIET_MS) || 20_000;
 /** A list that couldn't be sent is tried again after `QUIET_MS`, then after twice as long each time, up to this. */
 const RETRY_MAX_MS = 10 * 60_000;
 /** How long a device with a storage account waits for its first sync before scheduling from what it has. */
-const FRESH_WAIT_MS = 30_000;
+const FRESH_WAIT_MS = Number(import.meta.env.VITE_FRESH_WAIT_MS) || 30_000;
 /**
  * A reminder waits a day for a phone that is offline, and a newer one takes
  * the place of one still waiting. `high` asks for delivery when it is due

@@ -49,6 +49,18 @@ bun run armadietto:down
 `E2E_PORT` changes the port the app is served on, to run next to another
 checkout's suite.
 
+The build the suite runs against waits far less than the app does: a second
+rather than twenty before sending a changed list of reminders, ten rather
+than thirty for a first sync, and two rather than ten between syncs. The
+values are `TIMING` in `playwright.config.ts`, handed to the build as
+`VITE_QUIET_MS`, `VITE_FRESH_WAIT_MS` and `VITE_SYNC_MS`. A test that has to
+wait for the app waits for what it does (a request, something on screen)
+rather than for a length of time; where it checks that nothing happens, it
+waits by `TIMING`.
+
+The sync and reminder specs run in the desktop project only. Everything in
+`local.spec.ts` runs at both screen sizes.
+
 The reminder tests use Playwright's full Chromium rather than its headless
 shell, which refuses notifications whatever it is granted.
 `bunx playwright install chromium` installs both.

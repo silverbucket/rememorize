@@ -5,6 +5,11 @@ on:
     branches: [master]
   pull_request:
 
+# A newer push to a pull request replaces the run for the one before it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
