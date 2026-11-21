@@ -179,7 +179,9 @@
      * The group's own direction for new cards. Once it changes, the cards
      * already here that are studied another way can be brought in line.
      */
-    const ownDirection = $derived(group === undefined ? undefined : library.groupDirections[group]);
+    const ownDirection = $derived(
+        group !== undefined && Object.hasOwn(library.groupDirections, group) ? library.groupDirections[group] : undefined,
+    );
     const groupDirection = $derived(group === undefined ? library.direction : library.directionFor(group));
     /** Cards here studied another way than the group's new cards, offered a change after the group's changes. */
     let offeredFor: string | undefined = $state();
