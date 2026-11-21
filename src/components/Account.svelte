@@ -413,10 +413,10 @@
         Rememorize is closed.
     </p>
     <p class="muted">
+        <strong>Rememorize</strong> {__APP_VERSION__}<br />
         <a href="https://github.com/silverbucket/rememorize" target="_blank" rel="noreferrer">Source code</a>
         · Free software under the
-        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer">GPL-3.0 or later</a><br />
-        Rememorize {__APP_VERSION__}
+        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer">GPL-3.0 or later</a>
     </p>
 </section>
 
