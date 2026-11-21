@@ -1,4 +1,5 @@
 <script lang="ts" module>
+    import type { Redirected } from "./DirectionDialog.svelte";
     import type { Moved } from "./MoveDialog.svelte";
 
     /**
@@ -6,16 +7,20 @@
      * following the note's link to where the cards went keeps it.
      */
     let moved: Moved | undefined = $state();
+    /** The last change of direction, likewise. */
+    let redirected: Redirected | undefined = $state();
 </script>
 
 <script lang="ts">
-    import type { Flashcard } from "remotestorage-module-flashcards";
+    import type { CardDirection, Flashcard } from "remotestorage-module-flashcards";
     import { onDestroy, tick } from "svelte";
     import { fromNow, plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { isBuried, isDue, isNew, itemsOf, nextDue, stateOf } from "../lib/scheduler";
+    import { DIRECTION_LABELS, isDirection } from "../lib/settings";
     import { library } from "../lib/state";
     import { inView, labelOf, type ViewId } from "../lib/views";
+    import DirectionDialog from "./DirectionDialog.svelte";
     import Icon from "./Icon.svelte";
     import MoveDialog from "./MoveDialog.svelte";
     import ViewChips from "./ViewChips.svelte";
@@ -76,6 +81,8 @@
     /** Where a shift-click range starts. */
     let anchor: string | undefined;
     let choosing = $state(false);
+    /** Picking a direction for the picked cards. */
+    let turning = $state(false);
     /** Cards that went away meanwhile (moved or deleted elsewhere) drop out of the pick. */
     const pickedCards = $derived(all.filter((c) => picked.has(keyOf(c))));
     /** Nothing left to add: every card shown is picked, or a search hides all the ones that are. */
@@ -87,6 +94,7 @@
         picked = new Set();
         anchor = undefined;
         moved = undefined;
+        redirected = undefined;
         selecting = true;
     }
 
@@ -94,6 +102,7 @@
     function stopSelecting() {
         selecting = false;
         choosing = false;
+        turning = false;
         picked = new Set();
         selectButton?.focus();
     }
@@ -133,10 +142,80 @@
         // Finished after the page was left: there is nowhere to show it.
         if (gone) return;
         stopSelecting();
+        redirected = undefined;
         moved = move;
         await tick();
         // Without Select (every card moved out), focus goes to where they went.
         if (!selectButton?.isConnected) noteLink?.focus();
+    }
+
+    async function turned(change: Redirected) {
+        if (gone) return;
+        stopSelecting();
+        redirected = change;
+    }
+
+    async function undoTurn() {
+        if (!redirected || undoing) return;
+        const note = redirected;
+        undoing = true;
+        error = "";
+        try {
+            const back = new Map<CardDirection, Flashcard[]>();
+            for (const { id, group, direction } of note.from) {
+                const card = library.find(group, id);
+                if (card) back.set(direction, [...(back.get(direction) ?? []), card]);
+            }
+            for (const [direction, cards] of back) await library.setCardDirection(cards, direction);
+            if (redirected === note) redirected = undefined;
+        } catch (e) {
+            error = e instanceof Error ? e.message : String(e);
+        } finally {
+            undoing = false;
+        }
+    }
+
+    /**
+     * The group's own direction for new cards. Once it changes, the cards
+     * already here that are studied another way can be brought in line.
+     */
+    const ownDirection = $derived(
+        group !== undefined && Object.hasOwn(library.groupDirections, group) ? library.groupDirections[group] : undefined,
+    );
+    const groupDirection = $derived(group === undefined ? library.direction : library.directionFor(group));
+    /** Cards here studied another way than the group's new cards, offered a change after the group's changes. */
+    let offeredFor: string | undefined = $state();
+    const offerAll = $derived(group !== undefined && offeredFor === group);
+    const others = $derived(all.filter((c) => (c.direction ?? "forward") !== groupDirection));
+    let applying = $state(false);
+
+    async function setGroupDirection(event: Event) {
+        const value = (event.currentTarget as HTMLSelectElement).value;
+        if (group === undefined) return;
+        error = "";
+        try {
+            await library.setGroupDirection(group, isDirection(value) ? value : undefined);
+            offeredFor = group;
+        } catch (e) {
+            error = `Could not save the direction: ${e instanceof Error ? e.message : String(e)}`;
+        }
+    }
+
+    async function applyToAll() {
+        if (applying) return;
+        const to = groupDirection;
+        applying = true;
+        error = "";
+        try {
+            const from = await library.setCardDirection(others, to);
+            offeredFor = undefined;
+            moved = undefined;
+            redirected = { to, from };
+        } catch (e) {
+            error = e instanceof Error ? e.message : String(e);
+        } finally {
+            applying = false;
+        }
     }
 
     async function undo() {
@@ -165,7 +244,10 @@
         gone = true;
         queueMicrotask(() => {
             const name = router.route.name;
-            if (name !== "group" && name !== "cards") moved = undefined;
+            if (name !== "group" && name !== "cards") {
+                moved = undefined;
+                redirected = undefined;
+            }
         });
     });
 
@@ -291,6 +373,23 @@
                 </p>
             {/if}
         {/if}
+        {#if group !== undefined && all.length > 0}
+            <div class="new-direction">
+                <label for="group-direction">New cards here</label>
+                <select
+                    id="group-direction"
+                    class="field"
+                    value={ownDirection ?? ""}
+                    onchange={setGroupDirection}
+                    disabled={applying}
+                >
+                    <option value="">{DIRECTION_LABELS[library.direction]} (the default)</option>
+                    {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
+                        <option {value}>{label}</option>
+                    {/each}
+                </select>
+            </div>
+        {/if}
     </div>
     <div class="actions">
         <a class="btn" href={href.newCard(group)}><Icon name="plus" />Add card</a>
@@ -299,6 +398,22 @@
         {/if}
     </div>
 </div>
+
+    {#if offerAll && others.length > 0}
+        <div class="offer" role="status">
+            <span>
+                {others.length === all.length
+                    ? `Study the ${plural(all.length, "card")} already here ${DIRECTION_LABELS[groupDirection].toLocaleLowerCase()} too?`
+                    : `${plural(others.length, "card")} of ${all.length} here ${others.length === 1 ? "is" : "are"} studied another way. Change ${others.length === 1 ? "it" : "them"} to ${DIRECTION_LABELS[groupDirection].toLocaleLowerCase()} too?`}
+            </span>
+            <button class="btn primary" type="button" onclick={applyToAll} disabled={applying}>
+                {applying ? "Changing…" : `Change ${others.length === 1 ? "it" : others.length === 2 ? "both" : `all ${others.length}`}`}
+            </button>
+            <button class="btn ghost" type="button" onclick={() => (offeredFor = undefined)} disabled={applying}>
+                Keep as they are
+            </button>
+        </div>
+    {/if}
 
 {#if error}
     <p class="error" role="alert">{error}</p>
@@ -402,11 +517,33 @@
             {allShownPicked ? "Select none" : `Select all${shown.length < cards.length ? " shown" : ""}`}
         </button>
         <button
+            class="btn"
+            type="button"
+            disabled={pickedCards.length === 0}
+            onclick={() => (turning = true)}><Icon name="both" size={18} />Direction…</button
+        >
+        <button
             class="btn primary"
             type="button"
             disabled={pickedCards.length === 0}
             onclick={() => (choosing = true)}><Icon name="move" size={18} />Move to…</button
         >
+    </div>
+{:else if redirected}
+    <div class="bar note" role="status">
+        <span class="picked">
+            {redirected.from.length === 0
+                ? "Nothing changed"
+                : `${plural(redirected.from.length, "card")} now studied ${DIRECTION_LABELS[redirected.to].toLocaleLowerCase()}`}
+        </span>
+        {#if redirected.from.length > 0}
+            <button class="btn ghost" type="button" onclick={undoTurn} disabled={undoing}>
+                <Icon name="undo" size={18} />{undoing ? "Undoing…" : "Undo"}
+            </button>
+        {/if}
+        <button class="btn ghost close" type="button" aria-label="Dismiss" onclick={() => (redirected = undefined)}>
+            <Icon name="close" size={18} />
+        </button>
     </div>
 {:else if moved}
     <div class="bar note" role="status">
@@ -421,6 +558,10 @@
             <Icon name="close" size={18} />
         </button>
     </div>
+{/if}
+
+{#if turning && pickedCards.length > 0}
+    <DirectionDialog cards={pickedCards} onchanged={turned} onclose={() => (turning = false)} />
 {/if}
 
 {#if choosing && pickedCards.length > 0}
@@ -476,6 +617,39 @@
 
     .limit {
         font-size: 0.9rem;
+    }
+
+    .new-direction {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem 0.6rem;
+        margin-top: 0.6rem;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+    }
+
+    .new-direction .field {
+        width: auto;
+        min-height: 0;
+        padding-block: 0.35rem;
+        font-size: 0.9rem;
+    }
+
+    .offer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.6rem;
+        margin: -0.5rem 0 1.25rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: var(--radius);
+        background: var(--accent-subtle);
+        font-size: 0.925rem;
+    }
+
+    .offer span {
+        flex: 1 1 14rem;
     }
 
     .none {

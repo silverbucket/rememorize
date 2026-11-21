@@ -4,6 +4,8 @@
     import { href } from "../lib/router.svelte";
     import {
         DEFAULT_REMINDER_SERVER,
+        DIRECTION_LABELS,
+        isDirection,
         MAX_NEW_PER_DAY,
         parseCardsPerReview,
         parseNewPerDay,
@@ -63,6 +65,18 @@
         } catch (e) {
             settingsError = `Could not save the setting: ${e instanceof Error ? e.message : String(e)}`;
             input.value = library.cardsPerReview === null ? "" : String(library.cardsPerReview);
+        }
+    }
+
+    async function setDirection(event: Event) {
+        const select = event.currentTarget as HTMLSelectElement;
+        if (!isDirection(select.value)) return;
+        settingsError = "";
+        try {
+            await library.setDirection(select.value);
+        } catch (e) {
+            settingsError = `Could not save the setting: ${e instanceof Error ? e.message : String(e)}`;
+            select.value = library.direction;
         }
     }
 
@@ -220,6 +234,19 @@
             value={library.cardsPerReview ?? ""}
             onchange={setCardsPerReview}
         />
+    </div>
+
+    <label class="title next" for="direction">Study new cards</label>
+    <p class="muted">
+        Which way round new cards are studied, unless their group says otherwise. A group's page can give it a
+        direction of its own, and each card can still be changed by itself.
+    </p>
+    <div class="row">
+        <select id="direction" class="field direction" value={library.direction} onchange={setDirection}>
+            {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
+                <option {value}>{label}</option>
+            {/each}
+        </select>
     </div>
     <p class="muted">These settings are the same on every device you connect.</p>
     {#if settingsError}<p class="error" role="alert">{settingsError}</p>{/if}
@@ -440,6 +467,10 @@
     .number {
         width: 5.5rem;
         font-variant-numeric: tabular-nums;
+    }
+
+    .direction {
+        width: auto;
     }
 
     .time {

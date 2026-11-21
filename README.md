@@ -52,6 +52,8 @@ devices.
 - **Reminders.** A notification when cards are due, even while the app is
   closed.
 - **Both directions.** Study a card front to back, back to front, or both.
+  Set the direction for new cards once in Settings or per group, and change a
+  whole group, or the cards you pick, in one go.
 - **Progress you can see.** A review calendar, your streak, how much you
   remember and what is due next.
 - **Views instead of filing.** Put a whole subject in one group. Rememorize

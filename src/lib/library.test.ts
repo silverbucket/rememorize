@@ -232,6 +232,80 @@ describe("Library", () => {
         ]);
     });
 
+    it("studies new cards in the settings' direction unless their group has its own", async () => {
+        expect(library.directionFor("Czech")).toBe("forward");
+        await library.setDirection("both");
+        await library.setGroupDirection("capitals", "reverse");
+        expect(library.directionFor("Czech")).toBe("both");
+        expect(library.directionFor("capitals")).toBe("reverse");
+        expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
+            direction: "both",
+            groupDirections: { capitals: "reverse" },
+        });
+        // A second device (or a reload) reads them from storage.
+        const other = new Library(rs);
+        await other.load();
+        expect(other.directionFor("Czech")).toBe("both");
+        expect(other.directionFor("capitals")).toBe("reverse");
+        // And a group can go back to the settings' direction.
+        await library.setGroupDirection("capitals", undefined);
+        await other.load();
+        expect(other.directionFor("capitals")).toBe("both");
+        expect(other.groupDirections).toEqual({});
+    });
+
+    it("keeps a group's direction set on another device when it sets its own", async () => {
+        const other = new Library(rs);
+        await other.load();
+        await other.setGroupDirection("capitals", "reverse");
+        // This one hasn't seen that change yet.
+        await library.setGroupDirection("Czech", "both");
+        await other.load();
+        expect(other.groupDirections).toEqual({ capitals: "reverse", Czech: "both" });
+    });
+
+    it("a group's direction follows it when renamed, and goes when it's deleted or merged", async () => {
+        await library.save({ frontText: "pivo", backText: "beer", group: "nouns" });
+        await library.save({ frontText: "pít", backText: "to drink", group: "verbs" });
+        await library.save({ frontText: "ahoj", backText: "hi", group: "Czech" });
+        await library.setGroupDirection("nouns", "both");
+        await library.setGroupDirection("verbs", "reverse");
+        await library.renameGroup("nouns", "words");
+        expect(library.groupDirections).toEqual({ words: "both", verbs: "reverse" });
+        // Merged into a group, the cards take on its direction (here the settings' one).
+        await library.renameGroup("verbs", "Czech");
+        expect(library.groupDirections).toEqual({ words: "both" });
+        await library.removeGroup("words");
+        expect(library.groupDirections).toEqual({});
+        await library.load();
+        expect(library.groupDirections).toEqual({});
+    });
+
+    it("changes the direction of several cards at once, keeping each direction's schedule", async () => {
+        const a = await library.save({ frontText: "a", backText: "a", group: "one", direction: "both" });
+        const b = await library.save({ frontText: "b", backText: "b", group: "one" });
+        const studied = await library.review(a, 3, new Date(), true);
+        await library.setCardDirection([studied, b], "forward");
+        expect(library.cardsIn("one").map((c) => c.direction ?? "forward")).toEqual(["forward", "forward"]);
+        await library.setCardDirection(library.cardsIn("one"), "both");
+        await library.load();
+        expect(library.cardsIn("one").map((c) => c.direction)).toEqual(["both", "both"]);
+        // Back → front picks up where it was left.
+        expect(library.find("one", a["@id"])?.reverseReview).toEqual(studied.reverseReview);
+    });
+
+    it("changes cards as they are now, not as they were listed", async () => {
+        const a = await library.save({ frontText: "a", backText: "a", group: "one" });
+        const b = await library.save({ frontText: "b", backText: "b", group: "one" });
+        // Since the list was made, a was studied and b was deleted.
+        const studied = await library.review(a, 3);
+        await library.remove(b);
+        const changed = await library.setCardDirection([a, b], "both");
+        expect(changed).toEqual([{ id: a["@id"], group: "one", direction: "forward" }]);
+        expect(library.cards).toHaveLength(1);
+        expect(library.find("one", a["@id"])?.review).toEqual(studied.review);
+    });
+
     it("logs each review, and takes it back out on undo", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer", group: "food" });
         const at = new Date("2026-01-01T10:00:00.000Z");
