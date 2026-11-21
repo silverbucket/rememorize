@@ -58,6 +58,9 @@ devices.
   works out the rest from how your reviews go: the cards you are struggling
   with, the ones you are learning, know well, haven't started or added this
   week, in one group or across all of them.
+- **Regroup in a few taps.** Pick cards in a group or across all of them and
+  move them to another group, or a new one, with their schedules intact.
+  Rename a group, or merge it into another.
 - **Import and export.** Bring in cards from CSV or Anki's plain-text export.
   A daily limit on new cards keeps a big deck manageable, and reviews can
   come a few cards at a time. Export whenever you like.

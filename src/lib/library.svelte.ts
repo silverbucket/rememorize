@@ -372,11 +372,24 @@ export class Library {
     /** Rename a group. Onto the name of a group that exists, its cards join the ones there. */
     async renameGroup(from: string, to: string): Promise<void> {
         if (to === from) return;
-        const cards = this.cardsIn(from);
+        await this.moveCards(this.cardsIn(from), to);
+    }
+
+    /**
+     * Move cards to a group, each keeping its schedule. Cards already in it
+     * stay as they are. Nothing moves if one would overwrite another.
+     */
+    async moveCards(cards: Flashcard[], to: string): Promise<void> {
+        const moving = cards.filter((c) => c.group !== to);
         // A card is stored under its id, so one with the same id in the other group would be overwritten.
-        const clash = cards.find((c) => this.find(to, c["@id"]));
-        if (clash) throw new Error(`"${to}" already has a card with the same id as "${clash.frontText}".`);
-        for (const card of cards) await this.save({ ...card, group: to }, from);
+        const seen = new Set<string>();
+        for (const card of moving) {
+            if (this.find(to, card["@id"]) || seen.has(card["@id"])) {
+                throw new Error(`"${to}" already has a card with the same id as "${card.frontText}".`);
+            }
+            seen.add(card["@id"]);
+        }
+        for (const card of moving) await this.save({ ...card, group: to }, card.group);
     }
 
     async remove(card: Flashcard): Promise<void> {
