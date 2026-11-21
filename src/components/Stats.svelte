@@ -1,18 +1,38 @@
 <script lang="ts">
-    import { plural } from "../lib/format";
+    import { aboutDays, plural } from "../lib/format";
     import { library } from "../lib/state";
     import {
+        addDays,
+        bestDay,
+        COMEBACK_LAPSES,
         calendarWeeks,
+        comebacks,
+        DAY_PARTS,
         type DayStats,
         dayKey,
         forecast,
+        LONG_TERM_DAYS,
+        LONG_TERM_MILESTONES,
         lastDays,
+        learnedOverTime,
+        longestMemories,
+        longestStreak,
+        type Memory,
+        milestone,
+        progress,
+        REVIEW_MILESTONES,
         type Retention,
         retention,
         retentionByGroup,
+        retentionByTime,
+        retentionByWeek,
+        STREAK_MILESTONES,
+        type Stage,
         streak,
+        weekOverWeek,
     } from "../lib/stats";
     import BarChart, { type Bar } from "./BarChart.svelte";
+    import LineChart, { type Point } from "./LineChart.svelte";
 
     const WEEKS = 53;
     const DAYS = 30;
@@ -74,6 +94,111 @@
     const upcomingWeek = $derived(upcoming.slice(0, 7).reduce((sum, d) => sum + d.due, 0));
 
     const percent = (r: Retention) => (r.rate === undefined ? "—" : `${Math.round(r.rate * 100)}%`);
+    const count = new Intl.NumberFormat();
+    const fromKey = (key: string) => {
+        const [y, m, d] = key.split("-").map(Number);
+        return new Date(y, m - 1, d);
+    };
+
+    // What you'd remember now, and how far along the cards are.
+    const groupProgress = $derived(progress(library.cards, now));
+    const allProgress = $derived(groupProgress[0]);
+    const STAGES: { stage: Stage; label: string }[] = [
+        { stage: "new", label: "New" },
+        { stage: "learning", label: "Learning" },
+        { stage: "short", label: "Short-term" },
+        { stage: "long", label: "Long-term" },
+    ];
+    const share = (part: number, whole: number) => (whole === 0 ? 0 : Math.round((part / whole) * 100));
+
+    // Personal bests and what comes next.
+    const currentStreak = $derived(streak(log, now));
+    const longest = $derived(longestStreak(log));
+    const busiestDay = $derived(bestDay(log));
+    const longTerm = $derived(allProgress.stages.long);
+    const reviewsNext = $derived(milestone(log.length, REVIEW_MILESTONES).next);
+    const streakNext = $derived(milestone(currentStreak, STREAK_MILESTONES).next);
+    const longTermNext = $derived(milestone(longTerm, LONG_TERM_MILESTONES).next);
+
+    // This week against the one before.
+    const weeks2 = $derived(weekOverWeek(log, now));
+    const change = (current: number, before: number) =>
+        current === before ? undefined : current > before ? "up" : "down";
+    const retentionPoints = (r: Retention) => (r.rate === undefined ? undefined : Math.round(r.rate * 100));
+
+    // Retention, week by week.
+    const RETENTION_WEEKS = 12;
+    const weekly = $derived(retentionByWeek(log, now, RETENTION_WEEKS));
+    const weeklyPoints: Point[] = $derived(
+        weekly.map((w, i) => ({
+            key: dayKey(w.start),
+            value: w.retention.rate === undefined ? undefined : w.retention.rate * 100,
+            tick: i === weekly.length - 1 ? "This week" : i % 4 === 0 ? shortDay.format(w.start) : undefined,
+            text: `${i === weekly.length - 1 ? "This week" : `Week of ${shortDay.format(w.start)}`}: ${
+                w.retention.rate === undefined
+                    ? "no reviews"
+                    : `${percent(w.retention)} of ${plural(w.retention.reviews, "review")}`
+            }`,
+        })),
+    );
+    const weeklyLow = $derived(
+        Math.max(0, Math.floor(Math.min(100, ...weekly.flatMap((w) => (w.retention.rate === undefined ? [] : [w.retention.rate * 100]))) / 10) * 10 - 10),
+    );
+
+    // Cards learned, all time: a point a day from the first one.
+    const learned = $derived(learnedOverTime(library.cards));
+    const learnedPoints: Point[] = $derived.by(() => {
+        const first = learned.days[0];
+        if (!first) return [];
+        const totals = new Map(learned.days.map((d) => [d.key, d.total]));
+        // From the day before the first, so even a first day of study draws a line, from what came before.
+        const start = addDays(fromKey(first.key), -1);
+        const length = Math.round((fromKey(today).getTime() - start.getTime()) / 86_400_000) + 1;
+        let total = learned.undated;
+        return Array.from({ length }, (_, i) => {
+            const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+            const key = dayKey(date);
+            total = totals.get(key) ?? total;
+            return {
+                key,
+                value: total,
+                tick: i === 0 ? shortDay.format(date) : i === length - 1 ? "Today" : undefined,
+                text: `${dayName.format(date)}: ${plural(total, "card")} learned`,
+            };
+        });
+    });
+    const learnedTotal = $derived(learned.days.at(-1)?.total ?? learned.undated);
+
+    // Memories.
+    const longestKept = $derived(longestMemories(library.cards, 5));
+    const comeback = $derived(comebacks(library.cards).slice(0, 5));
+    const asked = (m: Memory) => (m.reverse ? m.card.backText : m.card.frontText);
+    const told = (m: Memory) => (m.reverse ? m.card.frontText : m.card.backText);
+
+    // When you remember best. Hidden until there are enough reviews to say.
+    const MIN_FOR_TIMES = 200;
+    const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const partName = (p: number) => `${DAY_PARTS[p]}–${DAY_PARTS[p] + 4}`;
+    const byTime = $derived(retentionByTime(log));
+    const timeLow = $derived(
+        Math.min(...byTime.grid.flat().flatMap((r) => (r.rate === undefined ? [] : [r.rate]))),
+    );
+    const timeHigh = $derived(
+        Math.max(...byTime.grid.flat().flatMap((r) => (r.rate === undefined ? [] : [r.rate]))),
+    );
+    /** 0 to 4, from the lowest retention in the grid to the highest. */
+    const timeLevel = (r: Retention) =>
+        r.rate === undefined ? 0 : timeHigh === timeLow ? 3 : 1 + Math.round(((r.rate - timeLow) / (timeHigh - timeLow)) * 3);
+    const partWords = ["at night", "early in the morning", "in the morning", "in the afternoon", "in the evening", "late in the evening"];
+    const bestAndWorst = $derived.by(() => {
+        const rated = byTime.parts.flatMap((r, p) => (r.rate === undefined ? [] : [{ p, rate: r.rate }]));
+        if (rated.length < 2) return undefined;
+        const sorted = [...rated].sort((a, b) => b.rate - a.rate);
+        const [best, worst] = [sorted[0], sorted.at(-1)];
+        // A gap of a few points is noise, not a pattern.
+        if (!worst || best.rate - worst.rate < 0.03) return undefined;
+        return { best, worst };
+    });
 </script>
 
 <div class="page-head">
@@ -108,6 +233,157 @@
             <dd>{percent(overall)}</dd>
         </div>
     </dl>
+
+    <section class="panel">
+        <h2>What you'd remember right now</h2>
+        <p class="muted sub">
+            For each card you've started, the chance you'd recall it today, added up. A card studied both ways
+            counts twice.
+        </p>
+        {#if allProgress.started === 0}
+            <p class="muted">Nothing to show yet.</p>
+        {:else}
+            <p class="recall">
+                <span class="big">{count.format(Math.round(allProgress.remembered))}</span>
+                <span class="of">of {plural(allProgress.started, "card")}</span>
+            </p>
+            {#if groupProgress.length > 2}
+                <table class="groups">
+                    <tbody>
+                        {#each groupProgress.slice(1).filter((g) => g.started > 0) as g (g.group)}
+                            <tr>
+                                <th scope="row" class="content">{g.group}</th>
+                                <td class="meter-cell">
+                                    <div class="meter"><div style:width="{(g.remembered / g.started) * 100}%"></div></div>
+                                </td>
+                                <td class="num">{Math.round(g.remembered)} / {g.started}</td>
+                            </tr>
+                        {/each}
+                    </tbody>
+                </table>
+            {/if}
+        {/if}
+    </section>
+
+    <section class="panel">
+        <h2>How far along your cards are</h2>
+        <p class="muted sub">
+            Long-term cards are ones you're expected to remember for {LONG_TERM_DAYS} days or more without a review.
+        </p>
+        {#if allProgress.total === 0}
+            <p class="muted">Nothing to show yet.</p>
+        {:else}
+            <p class="key muted" aria-hidden="true">
+                {#each STAGES as s (s.stage)}<span><i class="stage-{s.stage}"></i>{s.label}</span>{/each}
+            </p>
+            <table class="groups">
+                <thead>
+                    <tr><th scope="col">Group</th><td></td><th scope="col" class="num">Long-term</th></tr>
+                </thead>
+                <tbody>
+                    {#each groupProgress.length > 2 ? groupProgress : groupProgress.slice(0, 1) as g, i (i === 0 ? "" : g.group)}
+                        <tr class:all={i === 0}>
+                            <th scope="row" class:content={i > 0}>{g.group}</th>
+                            <td class="meter-cell">
+                                <div
+                                    class="stack"
+                                    role="img"
+                                    aria-label={STAGES.map((s) => `${g.stages[s.stage]} ${s.label.toLowerCase()}`).join(", ")}
+                                >
+                                    {#each STAGES as s (s.stage)}
+                                        {#if g.stages[s.stage] > 0}
+                                            <i class="stage-{s.stage}" style:flex-grow={g.stages[s.stage]}></i>
+                                        {/if}
+                                    {/each}
+                                </div>
+                            </td>
+                            <td class="num">{share(g.stages.long, g.total)}%</td>
+                        </tr>
+                    {/each}
+                </tbody>
+            </table>
+        {/if}
+    </section>
+
+    <section class="panel">
+        <h2>Personal bests</h2>
+        {#if log.length === 0}
+            <p class="muted sub">Nothing to show yet.</p>
+        {:else}
+            <ul class="badges">
+                <li class:new={longest.endedOn === today && longest.days > 1}>
+                    {#if longest.endedOn === today && longest.days > 1}<span class="pill">Today</span>{/if}
+                    <strong>{plural(longest.days, "day")}</strong>
+                    <span>Longest streak</span>
+                </li>
+                {#if busiestDay}
+                    <li class:new={busiestDay.key === today}>
+                        {#if busiestDay.key === today}<span class="pill">Today</span>{/if}
+                        <strong>{count.format(busiestDay.reviews)}</strong>
+                        <span>Most reviews in a day · {shortDay.format(fromKey(busiestDay.key))}</span>
+                    </li>
+                {/if}
+                <li>
+                    <strong>{count.format(log.length)}</strong>
+                    <span>{log.length === 1 ? "Review" : "Reviews"} in all</span>
+                </li>
+                <li>
+                    <strong>{count.format(longTerm)}</strong>
+                    <span>Long-term {longTerm === 1 ? "card" : "cards"}</span>
+                </li>
+                {#if streakNext}
+                    <li class="goal">
+                        <strong>{plural(streakNext, "day")}</strong>
+                        <span>Streak · {streakNext - currentStreak} to go</span>
+                    </li>
+                {/if}
+                {#if reviewsNext}
+                    <li class="goal">
+                        <strong>{count.format(reviewsNext)}</strong>
+                        <span>Reviews · {count.format(reviewsNext - log.length)} to go</span>
+                    </li>
+                {/if}
+                {#if longTermNext}
+                    <li class="goal">
+                        <strong>{count.format(longTermNext)}</strong>
+                        <span>Long-term cards · {longTermNext - longTerm} to go</span>
+                    </li>
+                {/if}
+            </ul>
+        {/if}
+    </section>
+
+    <section class="panel">
+        <h2>This week</h2>
+        <p class="muted sub">The last 7 days, compared with the 7 before.</p>
+        <dl class="compare">
+            {#each [
+                { label: "Reviews", now: weeks2.current.reviews, before: weeks2.previous.reviews, show: (v: number) => count.format(v), unit: "" },
+                {
+                    label: "Retention",
+                    now: retentionPoints(weeks2.current.retention),
+                    before: retentionPoints(weeks2.previous.retention),
+                    show: (v: number) => `${v}%`,
+                    unit: " pts",
+                },
+                { label: "New cards", now: weeks2.current.started, before: weeks2.previous.started, show: (v: number) => count.format(v), unit: "" },
+            ] as row (row.label)}
+                <div>
+                    <dt>{row.label}</dt>
+                    <dd>
+                        {row.now === undefined ? "—" : row.show(row.now)}
+                        {#if row.now !== undefined && row.before !== undefined && change(row.now, row.before)}
+                            <span class="delta {change(row.now, row.before)}">
+                                {change(row.now, row.before) === "up" ? "▲" : "▼"}
+                                {Math.abs(row.now - row.before)}{row.unit}
+                            </span>
+                        {/if}
+                    </dd>
+                    <dd class="was">was {row.before === undefined ? "—" : row.show(row.before)}</dd>
+                </div>
+            {/each}
+        </dl>
+    </section>
 
     <section class="panel">
         <h2>Reviews per day</h2>
@@ -165,6 +441,17 @@
     <section class="panel">
         <h2>Retention</h2>
         <p class="muted sub">Share of reviews you didn't rate Again.</p>
+        {#if log.length > 0}
+            <h3>Week by week</h3>
+            <LineChart
+                points={weeklyPoints}
+                min={weeklyLow}
+                max={100}
+                label={(v) => `${Math.round(v)}%`}
+                summary="{percent(weekly.at(-1)?.retention ?? { reviews: 0, rate: undefined })} this week"
+            />
+            <h3>By group</h3>
+        {/if}
         {#if groups.length === 0}
             <p class="muted">Nothing to show yet.</p>
         {:else}
@@ -189,6 +476,16 @@
     </section>
 
     <section class="panel">
+        <h2>Cards learned</h2>
+        <p class="muted sub">Running total of cards you've started, by the day you first reviewed them.</p>
+        {#if learnedPoints.length === 0}
+            <p class="muted">Nothing to show yet.</p>
+        {:else}
+            <LineChart points={learnedPoints} area summary="{plural(learnedTotal, 'card')} learned so far" />
+        {/if}
+    </section>
+
+    <section class="panel">
         <h2>New cards started</h2>
         <p class="muted sub">Per day, over the last {DAYS} days.</p>
         <BarChart bars={startedBars} summary="{plural(startedTotal, 'new card')} started in the last {DAYS} days" />
@@ -205,6 +502,83 @@
             summary="{plural(upcoming[0].due, 'card')} due by the end of today, {upcomingWeek} in the next 7 days"
         />
     </section>
+
+    <section class="panel">
+        <h2>Your longest-lasting memories</h2>
+        <p class="muted sub">The cards you're expected to remember longest without a review.</p>
+        {#if longestKept.length === 0}
+            <p class="muted">Nothing to show yet.</p>
+        {:else}
+            <ul class="memories">
+                {#each longestKept as m (`${m.card["@id"]}:${m.reverse}`)}
+                    <li>
+                        <span class="content term">{asked(m)}<span class="faint">{" → "}{told(m)}</span></span>
+                        <span class="muted when">{aboutDays(m.days)}</span>
+                    </li>
+                {/each}
+            </ul>
+        {/if}
+    </section>
+
+    <section class="panel">
+        <h2>Comeback cards</h2>
+        <p class="muted sub">
+            Cards you forgot {COMEBACK_LAPSES} times or more that are now long-term.
+        </p>
+        {#if comeback.length === 0}
+            <p class="muted">None yet. Cards you keep forgetting show up here once they stick.</p>
+        {:else}
+            <ul class="memories">
+                {#each comeback as m (`${m.card["@id"]}:${m.reverse}`)}
+                    <li>
+                        <span class="content term">{asked(m)}<span class="faint">{" → "}{told(m)}</span></span>
+                        <span class="muted when">Forgotten {m.lapses}×, now {aboutDays(m.days)}</span>
+                    </li>
+                {/each}
+            </ul>
+        {/if}
+    </section>
+
+    {#if log.length >= MIN_FOR_TIMES && (bestAndWorst || byTime.grid.flat().some((r) => r.rate !== undefined))}
+        <section class="panel">
+            <h2>When you remember best</h2>
+            <p class="muted sub">
+                Retention by weekday and time of day. The greener the square, the more you remembered. Blank squares have too few
+                reviews to say.
+            </p>
+            <div class="times" aria-hidden="true">
+                <span></span>
+                {#each DAY_PARTS as _, p (p)}<span class="part">{partName(p)}</span>{/each}
+                {#each byTime.grid as row, d (d)}
+                    <span class="weekday">{WEEKDAYS[d]}</span>
+                    {#each row as cell, p (p)}
+                        <span
+                            class="cell l{timeLevel(cell)}"
+                            title="{WEEKDAYS[d]} {partName(p)}: {cell.rate === undefined
+                                ? `${plural(cell.reviews, 'review')}, too few to say`
+                                : `${percent(cell)} of ${plural(cell.reviews, 'review')}`}"
+                            >{cell.rate === undefined ? "" : Math.round(cell.rate * 100)}</span
+                        >
+                    {/each}
+                {/each}
+            </div>
+            <ul class="visually-hidden">
+                {#each byTime.grid as row, d (d)}
+                    {#each row as cell, p (p)}
+                        {#if cell.rate !== undefined}<li>{WEEKDAYS[d]} {partName(p)}: {percent(cell)}</li>{/if}
+                    {/each}
+                {/each}
+            </ul>
+            {#if bestAndWorst}
+                <p class="insight">
+                    You remember <strong>{percent(byTime.parts[bestAndWorst.best.p])}</strong>
+                    {partWords[bestAndWorst.best.p]} ({partName(bestAndWorst.best.p)}h), and
+                    <strong>{percent(byTime.parts[bestAndWorst.worst.p])}</strong>
+                    {partWords[bestAndWorst.worst.p]} ({partName(bestAndWorst.worst.p)}h).
+                </p>
+            {/if}
+        </section>
+    {/if}
 {/if}
 
 <style>
@@ -440,6 +814,288 @@
         font-variant-numeric: tabular-nums;
     }
 
+    h3 {
+        margin: 1.25rem 0 0.6rem;
+        font-size: 0.875rem;
+        font-weight: 650;
+        color: var(--text-muted);
+    }
+
+    .sub + h3 {
+        margin-top: 0;
+    }
+
+    .recall {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0.25rem 0.6rem;
+        margin: 0;
+    }
+
+    .big {
+        font-family: var(--font-content);
+        font-size: 3rem;
+        font-weight: 500;
+        line-height: 1;
+        font-variant-numeric: lining-nums tabular-nums;
+    }
+
+    .of {
+        font-family: var(--font-content);
+        font-size: 1.35rem;
+        color: var(--text-muted);
+    }
+
+    .recall + .groups {
+        margin-top: 1rem;
+    }
+
+    /* Card stages: one hue for how well a card is known, amber while it is still being learned. */
+    .stage-new {
+        background: var(--surface-3);
+    }
+
+    .stage-learning {
+        background: var(--hard);
+    }
+
+    .stage-short {
+        background: color-mix(in oklab, var(--accent) 45%, var(--surface-3));
+    }
+
+    .stage-long {
+        background: var(--accent);
+    }
+
+    .key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem 1rem;
+        margin: 0 0 0.75rem;
+        font-size: 0.82rem;
+    }
+
+    .key i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        margin-right: 0.35rem;
+        border-radius: 2.5px;
+    }
+
+    .stack {
+        display: flex;
+        gap: 2px;
+        height: 10px;
+        border-radius: 5px;
+        overflow: hidden;
+    }
+
+    .stack i {
+        flex-basis: 0;
+        min-width: 3px;
+    }
+
+    .badges {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+        gap: 0.6rem;
+        margin: 1rem 0 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .badges li {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        padding: 0.8rem 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface-2);
+    }
+
+    .badges strong {
+        font-family: var(--font-content);
+        font-size: 1.5rem;
+        font-weight: 500;
+        line-height: 1.1;
+        font-variant-numeric: lining-nums tabular-nums;
+    }
+
+    .badges span {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+    }
+
+    .badges li.new {
+        border-color: var(--accent);
+        background: var(--accent-subtle);
+    }
+
+    .badges .pill {
+        position: absolute;
+        top: 0.6rem;
+        right: 0.7rem;
+        font-size: 0.68rem;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--accent-text);
+    }
+
+    .badges li.goal {
+        border-style: dashed;
+        background: transparent;
+    }
+
+    .badges li.goal strong {
+        color: var(--text-muted);
+    }
+
+    .compare {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        margin: 0;
+    }
+
+    .compare div {
+        padding: 0 1rem;
+    }
+
+    .compare div:first-child {
+        padding-left: 0;
+    }
+
+    .compare div + div {
+        border-left: 1px solid var(--border);
+    }
+
+    .compare dt {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .compare dd {
+        margin: 0.15rem 0 0;
+        font-family: var(--font-content);
+        font-size: 2rem;
+        font-weight: 500;
+        line-height: 1.1;
+        font-variant-numeric: lining-nums tabular-nums;
+    }
+
+    .compare .delta {
+        font-family: var(--font-ui);
+        font-size: 0.85rem;
+        font-weight: 650;
+        white-space: nowrap;
+    }
+
+    .delta.up {
+        color: var(--good);
+    }
+
+    .delta.down {
+        color: var(--again);
+    }
+
+    .compare .was {
+        font-family: var(--font-ui);
+        font-size: 0.8rem;
+        color: var(--text-faint);
+    }
+
+    .memories {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .memories li {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 1rem;
+        padding: 0.6rem 0;
+    }
+
+    .memories li + li {
+        border-top: 1px solid var(--border);
+    }
+
+    .term {
+        min-width: 0;
+        font-size: 1.1rem;
+        overflow-wrap: anywhere;
+    }
+
+    .term .faint {
+        font-size: 0.95rem;
+        color: var(--text-faint);
+    }
+
+    .when {
+        flex: none;
+        font-size: 0.875rem;
+        text-align: right;
+    }
+
+    .times {
+        display: grid;
+        grid-template-columns: 2.25rem repeat(6, 1fr);
+        gap: 3px;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+    }
+
+    .times .part {
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .times .weekday {
+        align-self: center;
+    }
+
+    .cell {
+        display: grid;
+        place-items: center;
+        height: 1.9rem;
+        border-radius: 3px;
+        background: var(--surface-3);
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .cell.l1 {
+        background: color-mix(in oklab, var(--accent) 22%, var(--surface-3));
+    }
+
+    .cell.l2 {
+        background: color-mix(in oklab, var(--accent) 42%, var(--surface-3));
+    }
+
+    .cell.l3 {
+        background: color-mix(in oklab, var(--accent) 62%, var(--surface-3));
+        color: var(--surface);
+    }
+
+    .cell.l4 {
+        background: var(--accent);
+        color: var(--surface);
+    }
+
+    .insight {
+        margin: 1rem 0 0;
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius);
+        background: var(--accent-subtle);
+        font-size: 0.95rem;
+    }
+
     .swipe {
         display: none;
         margin-top: 0.4rem;
@@ -481,6 +1137,18 @@
 
         .meter-cell {
             width: 28%;
+        }
+
+        .compare div {
+            padding: 0 0.6rem;
+        }
+
+        .compare dd {
+            font-size: 1.5rem;
+        }
+
+        .big {
+            font-size: 2.5rem;
         }
 
         .all th {

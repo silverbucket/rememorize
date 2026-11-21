@@ -223,3 +223,30 @@ export function formatInterval(ms: number): string {
     const years = days / 365;
     return `${Number.isInteger(Math.round(years * 10) / 10) ? Math.round(years) : years.toFixed(1)}y`;
 }
+
+/** The memory model's view of one direction's schedule. */
+function memoryOf(review: ReviewState) {
+    return {
+        stability: review.stability,
+        stabilityFast: review.stabilityFast ?? review.stability,
+        difficulty: review.difficulty,
+    };
+}
+
+/** Chance (0–1) of recalling one direction of a card at `now`. 0 for a direction never studied. */
+export function recallChance(card: Flashcard, now = new Date(), reverse = false): number {
+    const review = stateOf(card, reverse);
+    if (!review || review.state === 0) return 0;
+    const since = review.lastReview ? (now.getTime() - new Date(review.lastReview).getTime()) / 86_400_000 : 0;
+    return scheduler.model.forgettingCurve(memoryOf(review), Math.max(0, since));
+}
+
+/**
+ * How many days after its last review one direction of a card is expected
+ * to stay remembered (recall above 90%). 0 for a direction never studied.
+ */
+export function memoryDays(card: Flashcard, reverse = false): number {
+    const review = stateOf(card, reverse);
+    if (!review || review.state === 0) return 0;
+    return scheduler.model.nextInterval(memoryOf(review), 0.9);
+}
