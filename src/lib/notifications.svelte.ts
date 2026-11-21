@@ -571,6 +571,7 @@ export class Reminders {
             REMINDER_DAYS,
             away ? soon : [],
             lastSoon,
+            library.quietFrom,
         );
         const signature = JSON.stringify([
             plan.map((r) => [r.at.getTime(), r.count]),

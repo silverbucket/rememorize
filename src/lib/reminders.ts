@@ -8,16 +8,18 @@
  *
  * Cards don't come due once a day. One answered in the evening comes back in
  * the evening, and one that was missed comes back within minutes. So a day
- * has a first reminder at the time the user chose, and later ones, on the
- * hour from then, when more cards have come due since.
+ * has a first reminder when the user's quiet hours end, and later ones, on
+ * the hour from then, when more cards have come due since. None go out
+ * during quiet hours: what comes due then waits for the next day's first.
  */
 
 import type { PushKeys } from "./webpush";
 
 /** How many days ahead reminders are scheduled. They stop after that until the app is opened again. */
 export const REMINDER_DAYS = 30;
-/** A day's later reminders stop this many hours after its first. What comes due after that waits for the next day's. */
-const WINDOW_HOURS = 12;
+/** Quiet hours are this long unless the user says otherwise: they start this many hours before a day's first reminder. */
+const QUIET_HOURS = 10;
+const DAY_MINUTES = 24 * 60;
 /** Later reminders in one list are at least this far apart, which makes three for a day the app stays closed. */
 const GAP_MS = 6 * 60 * 60 * 1000;
 /**
@@ -96,7 +98,8 @@ export interface Reminder {
 
 /**
  * The reminders for the next `days` days. `time` ("HH:MM", local) is when a
- * day's first one goes out, and `countAt` gives the cards due at a moment.
+ * day's first one goes out, which is when quiet hours end, and `quietFrom`
+ * when they start. `countAt` gives the cards due at a moment.
  *
  * - The first reminder of a day goes out whenever cards are due at that time.
  * - A later one goes out, on the hour from the first, once more cards are due
@@ -111,6 +114,9 @@ export interface Reminder {
  *   away) get one reminder between them, when the last of a batch is due.
  *   It comes at least half an hour after `lastSoon`, the one that last went
  *   out, and so do the day's later reminders.
+ * - None go out during quiet hours. A day's later reminders stop when they
+ *   start, and a batch's reminder that would fall in them is dropped: its
+ *   cards are counted in the next day's first.
  */
 export function planReminders(
     now: Date,
@@ -119,8 +125,13 @@ export function planReminders(
     days = REMINDER_DAYS,
     soon: Date[] = [],
     lastSoon?: Date,
+    quietFrom = defaultQuietFrom(time),
 ): Reminder[] {
     const [hours, minutes] = time.split(":").map(Number);
+    // The minutes from quiet hours ending to them starting again. The same start and end is no quiet hours at all.
+    const awake = (toMinutes(quietFrom) - (hours * 60 + minutes) + DAY_MINUTES) % DAY_MINUTES || DAY_MINUTES;
+    const quiet = (at: Date) =>
+        (at.getHours() * 60 + at.getMinutes() - (hours * 60 + minutes) + DAY_MINUTES) % DAY_MINUTES >= awake;
     // Built from local date parts, so a clock change doesn't move a reminder.
     const slot = (day: number, hour: number) =>
         new Date(now.getFullYear(), now.getMonth(), now.getDate() + day, hours + hour, minutes);
@@ -143,7 +154,7 @@ export function planReminders(
         const floor = gone ? gone.getTime() + SOON_FLOOR_MS : 0;
         const at = new Date(Math.max(end, floor));
         const count = countAt(at);
-        if (count > countAt(now)) early.push({ at, count, last: false, soon: true });
+        if (!quiet(at) && count > countAt(now)) early.push({ at, count, last: false, soon: true });
     }
     const batches = [...early.map((r) => r.at.getTime()), ...(gone ? [gone.getTime()] : [])];
     /** The most cards those early reminders have told of by `at`. */
@@ -156,9 +167,11 @@ export function planReminders(
         if (begun) shown ??= countAt(now);
         let told = begun ? (shown as number) : 0;
         let previous: number | undefined;
-        for (let hour = 0; hour <= (day < DETAILED_DAYS ? WINDOW_HOURS : 0); hour++) {
+        for (let hour = 0; hour === 0 || (day < DETAILED_DAYS && hour * 60 < awake); hour++) {
             const at = slot(day, hour);
             if (at.getTime() <= now.getTime()) continue;
+            // A clock change can move one into quiet hours.
+            if (quiet(at)) continue;
             if (previous !== undefined && at.getTime() - previous < GAP_MS) continue;
             if (
                 hour === 0
@@ -180,6 +193,17 @@ export function planReminders(
     const last = all.at(-1);
     if (last) last.last = true;
     return all;
+}
+
+const toMinutes = (time: string) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+};
+
+/** When quiet hours start for someone who has only chosen when they end ("HH:MM"). */
+export function defaultQuietFrom(time: string): string {
+    const start = (toMinutes(time) - QUIET_HOURS * 60 + DAY_MINUTES) % DAY_MINUTES;
+    return `${String(Math.floor(start / 60)).padStart(2, "0")}:${String(start % 60).padStart(2, "0")}`;
 }
 
 /**

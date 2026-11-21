@@ -1,8 +1,8 @@
 import type { CardDirection } from "remotestorage-module-flashcards";
 
 /**
- * The review limits, the direction new cards are studied in, the time of a
- * day's first reminder and the server that sends reminders. They are stored in the app's own folder (see Library), so
+ * The review limits, the direction new cards are studied in, the quiet
+ * hours for reminders and the server that sends reminders. They are stored in the app's own folder (see Library), so
  * they sync; localStorage only remembers the last limits this browser used.
  */
 
@@ -10,7 +10,10 @@ export const DEFAULT_NEW_PER_DAY = 20;
 export const MAX_NEW_PER_DAY = 9999;
 /** The most cards in one review, reviews and new together; `null` is no limit. */
 export const DEFAULT_CARDS_PER_REVIEW = null;
-/** When a day's first reminder goes out, in the local time of the device that schedules it. */
+/**
+ * When quiet hours end, which is when a day's first reminder goes out, in the
+ * local time of the device that schedules it.
+ */
 export const DEFAULT_REMINDER_TIME = "09:00";
 /** The direction a new card is studied in when neither its group nor the settings say otherwise. */
 export const DEFAULT_DIRECTION: CardDirection = "forward";
@@ -51,8 +54,10 @@ const CARDS_PER_DAY_KEY = "rememorize:cardsPerDay";
 export interface AppSettings {
     newCardsPerDay?: number;
     cardsPerReview?: number | null;
-    /** "HH:MM", 24-hour. */
+    /** When quiet hours end and a day's first reminder goes out: "HH:MM", 24-hour. */
     reminderTime?: string;
+    /** When quiet hours start, "HH:MM". Without it they are the ten hours before `reminderTime`. */
+    quietFrom?: string;
     /** The address of the user's own reminder server. Empty for the app's usual one. */
     reminderServer?: string;
     /** The direction new cards are studied in. */
@@ -72,6 +77,7 @@ export const appSettingsSchema = {
         /** Older versions' daily card limit; read as the review size if there's none yet. */
         cardsPerDay: { type: ["integer", "null"], minimum: 0 },
         reminderTime: { type: "string", pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
+        quietFrom: { type: "string", pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
         reminderServer: { type: "string" },
         direction: { enum: DIRECTIONS },
         groupDirections: { type: "object", additionalProperties: { enum: DIRECTIONS } },
@@ -93,6 +99,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
         settings.cardsPerReview = parseCardsPerReview(perReview);
     }
     if (typeof v.reminderTime === "string" && TIME.test(v.reminderTime)) settings.reminderTime = v.reminderTime;
+    if (typeof v.quietFrom === "string" && TIME.test(v.quietFrom)) settings.quietFrom = v.quietFrom;
     if (typeof v.reminderServer === "string") {
         const server = v.reminderServer.trim() && webAddress(v.reminderServer.trim());
         if (server !== undefined) settings.reminderServer = server;
@@ -134,10 +141,10 @@ export function parseCardsPerReview(value: unknown): number | null {
     return n === undefined ? null : Math.max(1, n);
 }
 
-/** A time of day as "HH:MM"; anything else gives the default. */
-export function parseReminderTime(value: unknown): string {
+/** A time of day as "HH:MM"; anything else gives `fallback`. */
+export function parseReminderTime(value: unknown, fallback = DEFAULT_REMINDER_TIME): string {
     const text = String(value ?? "").trim();
-    return TIME.test(text) ? text : DEFAULT_REMINDER_TIME;
+    return TIME.test(text) ? text : fallback;
 }
 
 /** A reminder server's address. Blank gives the usual one; nothing if it isn't a web address. */
