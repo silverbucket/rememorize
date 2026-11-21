@@ -28,3 +28,11 @@ export function formatDateTime(iso: string | undefined): string {
 export function plural(count: number, one: string, many = `${one}s`): string {
     return `${count} ${count === 1 ? one : many}`;
 }
+
+/** A span of days in words: "9 days", "14 months", "2.5 years". */
+export function aboutDays(days: number): string {
+    if (days < 60) return plural(Math.max(1, Math.round(days)), "day");
+    if (days < 730) return plural(Math.round(days / 30.44), "month");
+    const years = Math.round((days / 365.25) * 10) / 10;
+    return `${Number.isInteger(years) ? years : years.toFixed(1)} years`;
+}

@@ -88,7 +88,8 @@ test("a group can be renamed, and renamed onto another group to merge them", asy
     await expect(page.locator(".groups li")).toContainText("2 cards");
     // The reviews made before the merge are counted under the group the card is in now.
     await page.goto("/#/stats");
-    await expect(page.getByRole("row", { name: "Czech" })).toContainText("100%");
+    const retention = page.locator("section", { has: page.getByRole("heading", { name: "Retention" }) });
+    await expect(retention.getByRole("row", { name: "Czech" })).toContainText("100%");
     await expect(page.getByText("Verbs")).toHaveCount(0);
 });
 
@@ -498,7 +499,7 @@ test("reviews of a few cards at a time, and the home page counts new cards apart
     await page.getByRole("button", { name: "Review 1 more card" }).click();
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("You reviewed 1 card.")).toBeVisible();
+    await expect(page.locator(".summary div").filter({ hasText: "Reviewed" }).locator("dd")).toHaveText("1");
     await expect(page.getByRole("button", { name: /more card/ })).toHaveCount(0);
 
     // Clearing the field turns the limit off again.

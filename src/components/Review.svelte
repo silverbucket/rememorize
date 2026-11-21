@@ -16,6 +16,17 @@
         stateOf,
     } from "../lib/scheduler";
     import { library } from "../lib/state";
+    import {
+        bestDay,
+        progress as cardProgress,
+        LONG_TERM_DAYS,
+        LONG_TERM_MILESTONES,
+        longestStreak,
+        milestone,
+        REVIEW_MILESTONES,
+        stageOf,
+        streak,
+    } from "../lib/stats";
     import { inView, labelOf, type ViewId } from "../lib/views";
     import Icon from "./Icon.svelte";
 
@@ -41,6 +52,10 @@
     let error = $state("");
     let reviewed = $state(0);
     let tally = $state<Record<Grade, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
+    /** Records as they stood when this review started, to tell which ones it beat. */
+    let startedWith: { reviews: number; longest: number; best: number; longTerm: number } | undefined = $state();
+    /** Cards (one key per direction) that became long-term in this review. */
+    let grown: string[] = $state([]);
     /** False once this review has been left: a rating still being saved must not act on the page that replaced it. */
     let mounted = true;
     /** The most recent rating, so it can be undone. */
@@ -123,8 +138,49 @@
         });
     });
 
+    function records() {
+        return {
+            reviews: library.log.length,
+            longest: longestStreak(library.log).days,
+            best: bestDay(library.log)?.reviews ?? 0,
+            longTerm: cardProgress(library.cards, library.now)[0].stages.long,
+        };
+    }
+
+    /** What to celebrate on the wrap-up: cards that became long-term, the streak, and records beaten. */
+    const wins = $derived.by(() => {
+        if (live.length > 0 || reviewed === 0 || !startedWith) return [];
+        const out: { icon: "sprout" | "flame" | "star"; text: string; detail?: string }[] = [];
+        const now = records();
+        const before = startedWith;
+        if (grown.length > 0)
+            out.push({
+                icon: "sprout",
+                text: `${plural(grown.length, "card")} ${grown.length === 1 ? "is" : "are"} now long-term`,
+                detail: `You're expected to remember ${grown.length === 1 ? "it" : "them"} for ${LONG_TERM_DAYS} days or more.`,
+            });
+        const days = streak(library.log, library.now);
+        if (days > 1)
+            out.push({
+                icon: "flame",
+                text: `${days}-day streak`,
+                detail: now.longest > before.longest && days === now.longest ? "Your longest yet." : undefined,
+            });
+        const reviews = milestone(now.reviews, REVIEW_MILESTONES).reached;
+        if (reviews && reviews !== milestone(before.reviews, REVIEW_MILESTONES).reached)
+            out.push({ icon: "star", text: `${reviews.toLocaleString()} reviews in all` });
+        const longTerm = milestone(now.longTerm, LONG_TERM_MILESTONES).reached;
+        if (longTerm && longTerm !== milestone(before.longTerm, LONG_TERM_MILESTONES).reached)
+            out.push({ icon: "star", text: `${longTerm.toLocaleString()} long-term cards` });
+        if (before.best > 0 && now.best > before.best)
+            out.push({ icon: "star", text: `Your busiest day yet: ${now.best.toLocaleString()} reviews` });
+        return out;
+    });
+
     /** Start another review of what is still due, as if the page had just opened. */
     function nextBatch() {
+        startedWith = undefined;
+        grown = [];
         reviewed = 0;
         tally = { 1: 0, 2: 0, 3: 0, 4: 0 };
         last = undefined;
@@ -147,7 +203,10 @@
         try {
             // Same time as the previewed intervals, so the rating matches its label.
             const now = revealedAt;
+            startedWith ??= records();
+            const wasLong = stageOf(card, reverse) === "long";
             const updated = await library.review(card, g, now, reverse);
+            if (!wasLong && stageOf(updated, reverse) === "long") grown = [...grown, key];
             reviewed += 1;
             tally[g] += 1;
             last = { before: card, reverse, grade: g, queue: queueBefore, later: laterBefore };
@@ -173,9 +232,11 @@
         if (!last || busy) return;
         busy = true;
         error = "";
-        const { before, grade: g, queue: previous, later: previousLater } = last;
+        const { before: card, grade: g, queue: previous, later: previousLater } = last;
         try {
-            await library.undoReview(before, last.reverse);
+            await library.undoReview(card, last.reverse);
+            const undone = itemKey({ card, reverse: last.reverse });
+            grown = grown.filter((k) => k !== undone);
             queue = previous;
             later = previousLater;
             reviewed -= 1;
@@ -308,7 +369,10 @@
             {#if reviewed > 0}
                 <span class="seal"><Icon name="check" size={26} /></span>
                 <h2>Done for now</h2>
-                <p>You reviewed {plural(reviewed, "card")}.</p>
+                <dl class="summary">
+                    <div><dt>Reviewed</dt><dd>{reviewed}</dd></div>
+                    <div><dt>Remembered</dt><dd>{Math.round(((reviewed - tally[1]) / reviewed) * 100)}%</dd></div>
+                </dl>
                 <ul class="tally" aria-label="Your ratings">
                     {#each GRADES as g (g.grade)}
                         <li class="g{g.grade}" style:flex-grow={tally[g.grade]} class:none={tally[g.grade] === 0}>
@@ -317,6 +381,16 @@
                         </li>
                     {/each}
                 </ul>
+                {#if wins.length > 0}
+                    <ul class="wins">
+                        {#each wins as win (win.text)}
+                            <li>
+                                <span class="win-icon {win.icon}"><Icon name={win.icon} size={18} /></span>
+                                <span><strong>{win.text}</strong>{#if win.detail}<br /><span class="muted">{win.detail}</span>{/if}</span>
+                            </li>
+                        {/each}
+                    </ul>
+                {/if}
             {:else if within.length === 0}
                 <h2>No cards to review</h2>
                 <p>Add some cards first.</p>
@@ -740,6 +814,74 @@
     .tally strong {
         color: var(--text);
         font-variant-numeric: tabular-nums;
+    }
+
+    .summary {
+        display: flex;
+        margin: 0.25rem 0 0;
+    }
+
+    .summary div {
+        padding-right: 1.5rem;
+    }
+
+    .summary div + div {
+        padding-left: 1.5rem;
+        border-left: 1px solid var(--border);
+    }
+
+    .summary dt {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .summary dd {
+        margin: 0;
+        font-family: var(--font-content);
+        font-size: 2rem;
+        font-weight: 500;
+        line-height: 1.1;
+        font-variant-numeric: lining-nums tabular-nums;
+    }
+
+    .wins {
+        display: grid;
+        gap: 0.5rem;
+        width: 100%;
+        margin: 0 0 0.5rem;
+        padding: 0;
+        list-style: none;
+    }
+
+    .wins li {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.65rem 0.85rem;
+        border-radius: var(--radius);
+        background: var(--surface-2);
+        font-size: 0.95rem;
+        line-height: 1.35;
+    }
+
+    .wins .muted {
+        font-size: 0.85rem;
+    }
+
+    .win-icon {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        background: var(--accent-subtle);
+        color: var(--accent-text);
+    }
+
+    .win-icon.flame {
+        background: color-mix(in oklab, var(--hard) 16%, transparent);
+        color: var(--hard);
     }
 
     .done-actions {
