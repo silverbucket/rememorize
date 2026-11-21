@@ -543,7 +543,7 @@
         <section class="panel">
             <h2>When you remember best</h2>
             <p class="muted sub">
-                Retention by weekday and time of day. Darker means you remembered more. Blank squares have too few
+                Retention by weekday and time of day. The greener the square, the more you remembered. Blank squares have too few
                 reviews to say.
             </p>
             <div class="times" aria-hidden="true">
