@@ -167,10 +167,10 @@
                 detail: now.longest > before.longest && days === now.longest ? "Your longest yet." : undefined,
             });
         const reviews = milestone(now.reviews, REVIEW_MILESTONES).reached;
-        if (reviews && reviews !== milestone(before.reviews, REVIEW_MILESTONES).reached)
+        if (reviews && reviews > (milestone(before.reviews, REVIEW_MILESTONES).reached ?? 0))
             out.push({ icon: "star", text: `${reviews.toLocaleString()} reviews in all` });
         const longTerm = milestone(now.longTerm, LONG_TERM_MILESTONES).reached;
-        if (longTerm && longTerm !== milestone(before.longTerm, LONG_TERM_MILESTONES).reached)
+        if (longTerm && longTerm > (milestone(before.longTerm, LONG_TERM_MILESTONES).reached ?? 0))
             out.push({ icon: "star", text: `${longTerm.toLocaleString()} long-term cards` });
         if (before.best > 0 && now.best > before.best)
             out.push({ icon: "star", text: `Your busiest day yet: ${now.best.toLocaleString()} reviews` });

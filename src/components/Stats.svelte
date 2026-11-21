@@ -2,6 +2,7 @@
     import { aboutDays, plural } from "../lib/format";
     import { library } from "../lib/state";
     import {
+        addDays,
         bestDay,
         COMEBACK_LAPSES,
         calendarWeeks,
@@ -150,9 +151,9 @@
         const first = learned.days[0];
         if (!first) return [];
         const totals = new Map(learned.days.map((d) => [d.key, d.total]));
-        const start = fromKey(first.key);
-        const span = Math.round((fromKey(today).getTime() - start.getTime()) / 86_400_000) + 1;
-        const length = Math.max(2, span);
+        // From the day before the first, so even a first day of study draws a line, from what came before.
+        const start = addDays(fromKey(first.key), -1);
+        const length = Math.round((fromKey(today).getTime() - start.getTime()) / 86_400_000) + 1;
         let total = learned.undated;
         return Array.from({ length }, (_, i) => {
             const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
@@ -280,7 +281,7 @@
                     <tr><th scope="col">Group</th><td></td><th scope="col" class="num">Long-term</th></tr>
                 </thead>
                 <tbody>
-                    {#each groupProgress.length > 2 ? groupProgress : groupProgress.slice(0, 1) as g, i (g.group)}
+                    {#each groupProgress.length > 2 ? groupProgress : groupProgress.slice(0, 1) as g, i (i === 0 ? "" : g.group)}
                         <tr class:all={i === 0}>
                             <th scope="row" class:content={i > 0}>{g.group}</th>
                             <td class="meter-cell">
@@ -538,7 +539,7 @@
         {/if}
     </section>
 
-    {#if log.length >= MIN_FOR_TIMES}
+    {#if log.length >= MIN_FOR_TIMES && byTime.grid.flat().some((r) => r.rate !== undefined)}
         <section class="panel">
             <h2>When you remember best</h2>
             <p class="muted sub">

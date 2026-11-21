@@ -70,6 +70,10 @@
                     <path class="line" d={line(run)} />
                 {/each}
             </svg>
+            <!-- A point with no neighbours draws no line: mark it instead. -->
+            {#each runs.filter((run) => run.length === 1 && run[0].i !== marked) as [point] (point.i)}
+                <span class="dot lone" style:left="{(x(point.i) / W) * 100}%" style:top="{(y(point.v) / H) * 100}%"></span>
+            {/each}
             {#if marked >= 0}
                 <span
                     class="dot"
@@ -171,6 +175,13 @@
         background: var(--accent);
         box-shadow: 0 0 0 2px var(--surface);
         pointer-events: none;
+    }
+
+    .dot.lone {
+        width: 6px;
+        height: 6px;
+        margin: -3px 0 0 -3px;
+        box-shadow: none;
     }
 
     .slots {
