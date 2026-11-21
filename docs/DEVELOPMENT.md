@@ -130,13 +130,16 @@ How it fits together:
    system shows it without running any of the app's code (Declarative Web
    Push). Elsewhere `public/push-sw.js` shows it.
 
-A day has a first reminder at the time set in Settings, whenever cards are
-due then. Cards also come due during the day: one answered in the evening
-comes back in the evening, and one that was missed comes back within minutes.
-So later reminders follow, on the hour counted from the first, when more
-cards are due than the user was last told. They are at least six hours apart
-and stop twelve hours after the first, which makes three for a day the app
-stays closed. Opening the app plans the list again from what it shows then,
+A day has a first reminder when the quiet hours set in Settings end,
+whenever cards are due then. Cards also come due during the day: one answered
+in the evening comes back in the evening, and one that was missed comes back
+within minutes. So later reminders follow, on the hour counted from the
+first, when more cards are due than the user was last told. They are at least
+six hours apart and stop when quiet hours start, which makes three for a day
+the app stays closed. Nothing goes out during quiet hours, not even the
+reminder for cards answered Hard or Again: those are counted in the next
+morning's first. Until the start is set, quiet hours are the ten hours
+before they end. Opening the app plans the list again from what it shows then,
 so a card that comes back after a review is announced on the next hour. Only
 the nearest ten days get later reminders: the server holds 60 messages for a
 device. `planReminders` in `src/lib/reminders.ts` has the rules.

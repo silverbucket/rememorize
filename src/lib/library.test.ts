@@ -397,6 +397,27 @@ describe("Library", () => {
         expect(other.reminderTime).toBe("18:30");
     });
 
+    it("saves when quiet hours start, ten hours before they end until it is set", async () => {
+        expect(library.quietFrom).toBe("23:00");
+        await library.setReminderTime("07:00");
+        expect(library.quietFrom).toBe("21:00");
+        await library.setQuietFrom("22:30");
+        await library.setQuietFrom("not a time");
+        expect(library.quietFrom).toBe("22:30");
+        expect(await rs.scope("/rememorize/").getObject("settings", false)).toMatchObject({
+            reminderTime: "07:00",
+            quietFrom: "22:30",
+        });
+        const other = new Library(rs);
+        await other.load();
+        expect(other.quietFrom).toBe("22:30");
+        // Cleared before one was set, it keeps following the end.
+        const fresh = new Library(rs);
+        await fresh.setQuietFrom("");
+        await fresh.setReminderTime("06:00");
+        expect(fresh.quietFrom).toBe("20:00");
+    });
+
     it("saves a reminder server of the user's own, and the usual one as none", async () => {
         const usual = library.reminderServer;
         expect(usual).toBe("https://sockethub.silverbucket.net");
