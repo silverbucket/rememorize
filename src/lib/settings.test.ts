@@ -95,6 +95,8 @@ describe("normalizeAppSettings", () => {
         expect(normalizeAppSettings({ newCardsPerDay: -1, cardsPerReview: "x" })).toEqual({});
         expect(normalizeAppSettings({ reminderTime: "18:15" })).toEqual({ reminderTime: "18:15" });
         expect(normalizeAppSettings({ reminderTime: "6pm" })).toEqual({});
+        expect(normalizeAppSettings({ quietFrom: "22:30" })).toEqual({ quietFrom: "22:30" });
+        expect(normalizeAppSettings({ quietFrom: "10pm" })).toEqual({});
         expect(normalizeAppSettings({ reminderServer: "https://hub.example/" })).toEqual({
             reminderServer: "https://hub.example",
         });

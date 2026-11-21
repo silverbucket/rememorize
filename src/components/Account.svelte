@@ -94,6 +94,29 @@
         input.value = library.reminderTime;
     }
 
+    async function setQuietFrom(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        reminderError = "";
+        try {
+            await library.setQuietFrom(input.value);
+        } catch (e) {
+            reminderError = `Could not save the time: ${e instanceof Error ? e.message : String(e)}`;
+        }
+        input.value = library.quietFrom;
+    }
+
+    const minutesOf = (time: string) => {
+        const [hours, minutes] = time.split(":").map(Number);
+        return hours * 60 + minutes;
+    };
+    /** Quiet hours on a day from midnight to midnight, as percentages: one stretch, or two when they cross midnight. */
+    const quietBands = $derived.by(() => {
+        const from = (minutesOf(library.quietFrom) / 1440) * 100;
+        const to = (minutesOf(library.reminderTime) / 1440) * 100;
+        if (from === to) return [];
+        return from < to ? [[from, to]] : [[0, to], [from, 100]];
+    });
+
     async function setReminderServer(event: Event) {
         const input = event.currentTarget as HTMLInputElement;
         await reminders.setServer(input.value);
@@ -274,23 +297,41 @@
             <span class="dot" aria-hidden="true"></span>
             <span>Reminders are on for this device.</span>
         </p>
-        <div class="row">
-            <label for="reminder-time">First reminder at</label>
+        <h3 class="title next" id="quiet-hours">Quiet hours</h3>
+        <div class="row wrap" role="group" aria-labelledby="quiet-hours">
+            <span>From</span>
             <input
-                id="reminder-time"
                 class="field time"
                 type="time"
+                aria-label="Quiet hours start"
+                value={library.quietFrom}
+                onchange={setQuietFrom}
+            />
+            <span>to</span>
+            <input
+                class="field time"
+                type="time"
+                aria-label="Quiet hours end"
                 value={library.reminderTime}
                 onchange={setReminderTime}
             />
         </div>
+        <div class="day" aria-hidden="true">
+            <div class="track">
+                {#each quietBands as [from, to] (from)}
+                    <div class="quiet" style:left="{from}%" style:width="{to - from}%"></div>
+                {/each}
+            </div>
+            <div class="hours"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+        </div>
         <p class="muted">
-            A day's first reminder comes at this time. When more cards come due after you last had Rememorize
-            open, another follows within the hour. With the app left closed they are at least six hours apart,
-            and none come later than twelve hours after the first.
+            Nothing arrives during quiet hours. What comes due during them is counted in one reminder when they
+            end. The rest of the day, another follows when more cards come due than you last saw: cards you
+            answered Hard or Again get one shortly after you put Rememorize away, and the others come at least six
+            hours apart while it stays closed.
         </p>
         <p class="muted">
-            The time is the same on every device you connect, and follows the clock of the one you used last.
+            Quiet hours are the same on every device you connect, and follow the clock of the one you used last.
         </p>
         <p class="muted">
             Reminders are planned a month ahead and renewed each time you open Rememorize, so they stop if it stays
@@ -501,6 +542,45 @@
 
     .time {
         width: auto;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .row.wrap {
+        flex-wrap: wrap;
+    }
+
+    h3.title {
+        margin-bottom: 0;
+    }
+
+    /* A day from midnight to midnight, quiet hours hatched. */
+    .day {
+        display: grid;
+        gap: 0.3rem;
+        max-width: 38rem;
+    }
+
+    .track {
+        position: relative;
+        height: 0.75rem;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--accent-subtle);
+    }
+
+    .quiet {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        background: repeating-linear-gradient(135deg, var(--border-strong) 0 3px, var(--surface) 3px 7px);
+    }
+
+    .hours {
+        display: flex;
+        justify-content: space-between;
+        color: var(--text-faint);
+        font-size: 0.75rem;
         font-variant-numeric: tabular-nums;
     }
 

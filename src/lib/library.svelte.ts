@@ -19,6 +19,7 @@ import {
     SETTINGS_PATH,
     type Settings,
 } from "remotestorage-module-flashcards";
+import { defaultQuietFrom } from "./reminders";
 import type { RSWithModules } from "./rs";
 import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
 import {
@@ -98,8 +99,13 @@ export class Library {
      */
     cardsPerReview: number | null = $state(DEFAULT_CARDS_PER_REVIEW);
 
-    /** When a day's first reminder goes out ("HH:MM"). Synced; change it with `setReminderTime()`. */
+    /** When quiet hours end and a day's first reminder goes out ("HH:MM"). Synced; change it with `setReminderTime()`. */
     reminderTime = $state(DEFAULT_REMINDER_TIME);
+    #quietFrom: string | undefined = $state();
+    /** When quiet hours start ("HH:MM"). Synced; change it with `setQuietFrom()`. */
+    get quietFrom(): string {
+        return this.#quietFrom ?? defaultQuietFrom(this.reminderTime);
+    }
     /** The server that sends reminders. Synced; change it with `setReminderServer()`. */
     reminderServer = $state(DEFAULT_REMINDER_SERVER);
 
@@ -192,6 +198,7 @@ export class Library {
             this.#log = {};
             // Saved with the account, and gone from this browser with it.
             this.reminderTime = DEFAULT_REMINDER_TIME;
+            this.#quietFrom = undefined;
             this.reminderServer = DEFAULT_REMINDER_SERVER;
             this.direction = DEFAULT_DIRECTION;
             this.groupDirections = {};
@@ -379,6 +386,12 @@ export class Library {
         await this.#changeSettings({ reminderTime: parseReminderTime(value) });
     }
 
+    /** Change when quiet hours start on every device. Anything that isn't a time changes nothing. */
+    async setQuietFrom(value: string): Promise<void> {
+        const quietFrom = parseReminderTime(value, "");
+        if (quietFrom) await this.#changeSettings({ quietFrom });
+    }
+
     /** Send reminders through another server on every device. Blank goes back to the usual one. */
     async setReminderServer(value: string): Promise<void> {
         const server = parseReminderServer(value);
@@ -393,6 +406,7 @@ export class Library {
         if ("newCardsPerDay" in changes) previous.newCardsPerDay = this.newPerDay;
         if ("cardsPerReview" in changes) previous.cardsPerReview = this.cardsPerReview;
         if ("reminderTime" in changes) previous.reminderTime = this.reminderTime;
+        if ("quietFrom" in changes) previous.quietFrom = this.quietFrom;
         if ("reminderServer" in changes) previous.reminderServer = this.reminderServer;
         if ("direction" in changes) previous.direction = this.direction;
         const hadOwn = this.#ownNewPerDay;
@@ -585,6 +599,7 @@ export class Library {
             saveCardsPerReview(this.cardsPerReview);
         }
         if (settings.reminderTime !== undefined) this.reminderTime = parseReminderTime(settings.reminderTime);
+        if (settings.quietFrom !== undefined) this.#quietFrom = parseReminderTime(settings.quietFrom, this.quietFrom);
         if (settings.reminderServer !== undefined) {
             this.reminderServer = parseReminderServer(settings.reminderServer) ?? DEFAULT_REMINDER_SERVER;
         }

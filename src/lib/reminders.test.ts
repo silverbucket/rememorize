@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { listDevices, normalizeDevice, planReminders, reminderMessage, STALE_MS, testMessage } from "./reminders";
+import {
+    defaultQuietFrom,
+    listDevices,
+    normalizeDevice,
+    planReminders,
+    reminderMessage,
+    STALE_MS,
+    testMessage,
+} from "./reminders";
 
 const APP = "https://app.example/";
 const at = (day: number, hours: number, minutes = 0) => new Date(2026, 10, day, hours, minutes);
@@ -84,8 +92,8 @@ describe("later reminders in a day", () => {
         ]);
     });
 
-    it("leaves what comes due late in the evening for the next morning", () => {
-        const plan = planReminders(at(20, 8), "09:00", dueFrom(at(19, 12), at(20, 21, 30)), 2);
+    it("leaves what comes due in quiet hours for the next morning", () => {
+        const plan = planReminders(at(20, 8), "09:00", dueFrom(at(19, 12), at(20, 21, 30)), 2, [], undefined, "21:00");
         expect(times(plan)).toEqual([
             [at(20, 9), 1],
             [at(21, 9), 2],
@@ -188,6 +196,47 @@ describe("later reminders in a day", () => {
             [at(20, 8), 2],
             [at(20, 20), 2],
         ]);
+    });
+
+    it("sends nothing during quiet hours", () => {
+        // Quiet from 22:00 to 08:00, and a card comes due every hour.
+        const hourly = Array.from({ length: 24 * 3 }, (_, hour) => at(20, hour, 10));
+        const plan = planReminders(at(20, 7), "08:00", dueFrom(...hourly), 2, [], undefined, "22:00");
+        expect(plan.map((r) => r.at)).toEqual([at(20, 8), at(20, 14), at(20, 20), at(21, 8), at(21, 14), at(21, 20)]);
+    });
+
+    it("keeps quiet hours that end on the same day they start", () => {
+        const hourly = Array.from({ length: 24 * 2 }, (_, hour) => at(20, hour, 10));
+        const plan = planReminders(at(20, 7), "08:00", dueFrom(...hourly), 1, [], undefined, "03:00");
+        expect(plan.map((r) => r.at)).toEqual([at(20, 8), at(20, 14), at(20, 20), at(21, 2)]);
+    });
+
+    it("drops a reminder for cards coming back in minutes when it would fall in quiet hours", () => {
+        const soon = [at(20, 22, 5)];
+        const plan = planReminders(at(20, 21, 55), "08:00", dueFrom(at(19, 12), ...soon), 1, soon, undefined, "22:00");
+        // Those cards are counted in the morning's first reminder instead.
+        expect(times(plan)).toEqual([[at(21, 8), 2]]);
+    });
+
+    it("still sends one for cards coming back in minutes before quiet hours start", () => {
+        const soon = [at(20, 21, 40)];
+        const plan = planReminders(at(20, 21, 30), "08:00", dueFrom(at(19, 12), ...soon), 1, soon, undefined, "22:00");
+        expect(times(plan)).toEqual([
+            [at(20, 21, 40), 2],
+            [at(21, 8), 2],
+        ]);
+    });
+
+    it("has no quiet hours when they start and end at the same time", () => {
+        const hourly = Array.from({ length: 24 * 2 }, (_, hour) => at(20, hour, 10));
+        const plan = planReminders(at(20, 7), "08:00", dueFrom(...hourly), 1, [], undefined, "08:00");
+        expect(plan.map((r) => r.at)).toEqual([at(20, 8), at(20, 14), at(20, 20), at(21, 2)]);
+    });
+
+    it("starts quiet hours ten hours before they end unless told otherwise", () => {
+        expect(defaultQuietFrom("09:00")).toBe("23:00");
+        expect(defaultQuietFrom("08:30")).toBe("22:30");
+        expect(defaultQuietFrom("20:00")).toBe("10:00");
     });
 
     it("gives only the nearest ten days more than one reminder", () => {

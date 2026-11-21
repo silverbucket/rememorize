@@ -234,8 +234,8 @@ test("turning reminders on shows a notification and schedules a month of them", 
 
     // So does the time of day, which is saved for every device.
     await page.goto("/#/account");
-    await page.getByLabel("First reminder at").fill("18:30");
-    await page.getByLabel("First reminder at").blur();
+    await page.getByLabel("Quiet hours end").fill("18:30");
+    await page.getByLabel("Quiet hours end").blur();
     await expect
         .poll(() => {
             const at = new Date(scheduled(hub, address(1))?.[0].deliverAt ?? 0);
@@ -256,7 +256,9 @@ test("turning reminders on shows a notification and schedules a month of them", 
     const before = posted.length;
     await page.reload();
     await expect(page.getByText("Reminders are on for this device.")).toBeVisible();
-    await expect(page.getByLabel("First reminder at")).toHaveValue("18:30");
+    await expect(page.getByLabel("Quiet hours end")).toHaveValue("18:30");
+    // Quiet hours start ten hours before they end until they are given a start of their own.
+    await expect(page.getByLabel("Quiet hours start")).toHaveValue("08:30");
     await expect.poll(() => posted.slice(before).some((m) => m.type === "schedule")).toBe(true);
     // The same subscription as before: nothing subscribed again.
     expect(posted.every((m) => m.target.id === address(1))).toBe(true);
@@ -329,8 +331,8 @@ test("cards that come back in minutes get a reminder once the app is put away", 
     // The day's first reminder went out two hours ago, whatever time the test runs at.
     const earlier = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const time = `${String(earlier.getHours()).padStart(2, "0")}:${String(earlier.getMinutes()).padStart(2, "0")}`;
-    await page.getByLabel("First reminder at").fill(time);
-    await page.getByLabel("First reminder at").blur();
+    await page.getByLabel("Quiet hours end").fill(time);
+    await page.getByLabel("Quiet hours end").blur();
     // Both cards are on screen now, so today has nothing new to say: the next reminder is tomorrow's first.
     const next = () => new Date(scheduled(hub, address(1))?.[0]?.deliverAt ?? 0).getTime();
     const hours = (ms: number) => (ms - Date.now()) / (60 * 60 * 1000);
