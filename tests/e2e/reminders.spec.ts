@@ -5,7 +5,7 @@
  * The service worker is the real one.
  */
 import { expect, type Page, test } from "@playwright/test";
-import { SOCKETHUB_URL } from "../../playwright.config";
+import { SOCKETHUB_URL, TIMING } from "../../playwright.config";
 import { createDevice, type TestDevice } from "../device";
 import { addCard, connect, createUser } from "./helpers";
 
@@ -173,8 +173,48 @@ const putAway = (page: Page) =>
         document.dispatchEvent(new Event("visibilitychange"));
     });
 
-// The app sends a changed list once the cards have been left alone for 20 seconds.
+// The app sends a changed list once the cards have been left alone for a while: `TIMING.quiet`, in this build.
 const RESEND = { timeout: 30_000 };
+
+/** Long enough for the app to have sent a changed list, if it were going to. */
+const QUIET = TIMING.quiet * 3;
+
+/**
+ * Resolves once the page's storage server has taken a change at a path. Ask before making the change:
+ * it goes up with the next sync.
+ */
+const stored = (page: Page, path: string, method = "PUT") =>
+    page.waitForResponse((r) => r.request().method() === method && r.url().includes(path) && r.ok(), RESEND);
+
+/** Resolves once the page has fetched the record of the device at `endpoint` from its storage server. */
+const fetchedDevice = (page: Page, endpoint: string) =>
+    page.waitForResponse(
+        async (r) =>
+            r.request().method() === "GET" &&
+            /\/rememorize\/devices\/[^/]+$/.test(r.url()) &&
+            r.ok() &&
+            (await r.json()).endpoint === endpoint,
+        { timeout: 90_000 },
+    );
+
+/** Resolves once the page has fetched a list of what the app keeps on its storage server that has no device in it. */
+const fetchedNoDevices = (page: Page) =>
+    page.waitForResponse(
+        async (r) =>
+            r.request().method() === "GET" &&
+            r.url().endsWith("/rememorize/") &&
+            r.ok() &&
+            !(await r.text()).includes('"devices/"'),
+        RESEND,
+    );
+
+/** Keep the app from sending a changed list by itself from here on: the timer it waits on never starts. */
+const holdQuietTimer = (page: Page) =>
+    page.evaluate((quiet) => {
+        const set = window.setTimeout.bind(window);
+        window.setTimeout = ((handler: TimerHandler, ms?: number, ...rest: unknown[]) =>
+            ms === quiet ? 0 : set(handler, ms, ...rest)) as typeof window.setTimeout;
+    }, TIMING.quiet);
 
 test("turning reminders on shows a notification and schedules a month of them", async ({ page }) => {
     const device = createDevice();
@@ -225,8 +265,14 @@ test("turning reminders on shows a notification and schedules a month of them", 
     expect(read(device, items[29].content).notification.body).toBe(
         "This is the last reminder until you open Rememorize again.",
     );
-    // Nothing the server is given says who the user is or what a reminder says.
-    expect(JSON.stringify(posted)).not.toMatch(/cards due|Animals|pes|kočka/);
+    // Nothing the server is given says who the user is or what a reminder says. Every message is one only
+    // the device can read, and those are left out of the search: text that short turns up in a month of
+    // encrypted messages by chance.
+    for (const content of [hello?.object.content, ...items.map((item) => item.content)]) {
+        expect(read(device, content).notification.title).toMatch(/cards due|Reminders are on/);
+    }
+    const readable = JSON.stringify(posted, (key, value) => (key === "content" ? undefined : value));
+    expect(readable).not.toMatch(/cards due|Animals|pes|kočka/);
 
     // A review changes what the reminders should say.
     await reviewOne(page, "Animals");
@@ -313,6 +359,8 @@ test("putting the app away sends a change that was still waiting", async ({ page
 
     const outlived = () => page.evaluate(() => (window as unknown as { outlived: boolean[] }).outlived);
     expect(await outlived()).not.toContain(true);
+    // Only putting the app away can send it, then.
+    await holdQuietTimer(page);
     await reviewOne(page, "Animals");
     await putAway(page);
     await expect.poll(() => nextTitle(hub, device, address(1)), { timeout: 5_000 }).toBe("1 card due");
@@ -343,9 +391,10 @@ test("cards that come back in minutes get a reminder once the app is put away", 
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Again/ }).click();
 
-    // Not while the app is open: it comes back there by itself.
-    await page.waitForTimeout(25_000);
-    expect(hours(next())).toBeGreaterThan(21);
+    // Not while the app is open: it comes back there by itself. The list sent then says so on the next
+    // hour, an hour after the last one the day could have had, and not in a minute.
+    await expect.poll(() => hours(next()), RESEND).toBeLessThan(21);
+    expect(hours(next())).toBeGreaterThan(0.5);
     await putAway(page);
 
     // Once it is put away: when it comes back (a minute after Again), not on the next hour, and saying both are due.
@@ -600,8 +649,8 @@ test("a move to another server that fails halfway is finished without opening th
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
     await page.goto("/#/account");
     await turnOn(page);
-    // Past the app's first half minute, when it brings the reminders up to date once regardless.
-    await page.waitForTimeout(31_000);
+    // Past the wait for a first sync, after which the app brings the reminders up to date once regardless.
+    await page.waitForTimeout(TIMING.freshWait + 1_000);
 
     // The browser's notification service fails just as this browser subscribes for the new server,
     // with its subscription for the old one already given up.
@@ -658,12 +707,9 @@ test("an address that can't send reminders is refused, and nothing changes", asy
     expect(usual.posted.every((m) => m.target.id === address(1))).toBe(true);
 });
 
-test("the service worker shows a reminder that arrives while the app is closed", async ({ page }, testInfo) => {
-    // Notifications on screen are shared by every browser on the machine, so two runs at once close each
-    // other's. This is the only test that shows any, and a service worker is the same at any screen size.
-    // Any other test opening the app clears them too, as opening the app should, so a push is sent again
-    // until its notification is seen.
-    test.skip(testInfo.project.name !== "desktop", "runs once, in the desktop project");
+test("the service worker shows a reminder that arrives while the app is closed", async ({ page }) => {
+    // Notifications on screen are shared by every browser on the machine. Any other test opening the app
+    // clears them, as opening the app should, so a push is sent again until its notification is seen.
     await page.context().grantPermissions(["notifications"]);
     await page.goto("/");
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => {}));
@@ -721,10 +767,11 @@ test("disconnecting storage turns this browser's reminders off", async ({ page }
     const user = await createUser();
     await addCard(page, { front: "mít", back: "to have", group: "Verbs" });
     await connect(page, user);
+    // This device's record reaches storage, where the account's other devices find it.
+    const listed = stored(page, "/rememorize/devices/");
     await turnOn(page);
     expect(scheduled(hub, address(1))).toHaveLength(30);
-    // Long enough for this device's record to reach storage, where the account's other devices find it.
-    await page.waitForTimeout(15_000);
+    await listed;
 
     // The reminders are about that account's cards, and its other devices would go on scheduling them.
     let asked = "";
@@ -742,10 +789,13 @@ test("disconnecting storage turns this browser's reminders off", async ({ page }
     // The account heard of it: connected again, this browser finds no device left to schedule for.
     // (It would schedule for its old self as it would for any other device.)
     const before = hub.posted.length;
+    const synced = fetchedNoDevices(page);
     await connect(page, user);
+    // Before going anywhere: what a page fetched can't be read once it has been left.
+    await synced;
     await page.goto("/");
     await expect(page.getByText("Verbs")).toBeVisible({ timeout: 30_000 });
-    await page.waitForTimeout(15_000);
+    await page.waitForTimeout(QUIET);
     expect(hub.posted.slice(before)).toEqual([]);
 });
 
@@ -785,10 +835,11 @@ test("a review on one device corrects the reminders of another", async ({ browse
     await expect(phone.locator(".groups li").filter({ hasText: "Verbs" }).locator(".badge.fresh")).toHaveText("2 new", {
         timeout: 30_000,
     });
+    const reviewed = stored(phone, "/flashcards/Verbs/");
     await reviewOne(phone, "Verbs");
     await expect.poll(() => nextTitle(fromPhone, phoneDevice, address(1)), RESEND).toBe("1 card due");
-    // Long enough for the review to reach storage.
-    await phone.waitForTimeout(15_000);
+    // The review reaches storage.
+    await reviewed;
 
     // Opened again, the laptop still has the cards as it last saw them. It waits for its
     // sync before scheduling, so the first thing it sends doesn't undo the phone's list.
@@ -799,10 +850,12 @@ test("a review on one device corrects the reminders of another", async ({ browse
 
     // Once the phone turns its reminders off, the laptop stops scheduling for it.
     await phone.goto("/#/account");
+    const heard = fetchedNoDevices(laptop);
     await phone.getByRole("button", { name: "Turn off" }).click();
     await expect(phone.getByRole("button", { name: "Turn on reminders" })).toBeVisible();
-    // Long enough for the phone's change to arrive, and for the laptop to have sent a list if it were going to.
-    await laptop.waitForTimeout(35_000);
+    // The phone's change arrives, and the laptop has the time to send a list if it were going to.
+    await heard;
+    await laptop.waitForTimeout(QUIET);
     const afterOff = fromLaptop.posted.length;
     await reviewOne(laptop, "Verbs");
     await putAway(laptop);
@@ -852,14 +905,22 @@ test("a reminder server chosen on one device is taken up by the others", async (
 
     // Once the new server can be reached, the phone moves over by itself.
     ownFromPhone.down = false;
+    const moved = fetchedDevice(laptop, address(2));
     await phone.reload();
     await expect.poll(() => nextTitle(ownFromPhone, phoneDevice, address(2)), { timeout: 60_000 }).toBe("2 cards due");
     expect(scheduled(usualFromPhone, address(1))).toEqual([]);
     await phone.goto("/#/account");
     await expect(phone.getByLabel("Reminder server")).toHaveValue(OWN);
     await expect(phone.getByText("Reminders are on for this device.")).toBeVisible();
-    // Long enough for the phone's new subscription to reach storage, and the laptop.
-    await phone.waitForTimeout(25_000);
+    // The phone's new subscription reaches storage, and the laptop. So has its review.
+    await moved;
+    await laptop.goto("/");
+    await expect(laptop.locator(".groups li").filter({ hasText: "Verbs" }).locator(".badge.fresh")).toHaveText(
+        "2 new",
+        {
+            timeout: 30_000,
+        },
+    );
 
     // From then on the laptop's reviews reach the phone through the new server.
     await reviewOne(laptop, "Verbs");

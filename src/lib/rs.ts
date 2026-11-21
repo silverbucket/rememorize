@@ -26,6 +26,10 @@ export const rs = new RemoteStorage({
     logging: typeof window !== "undefined" && window.localStorage?.getItem("rememorize:debug") === "1",
 }) as RSWithModules;
 
+// A build can ask for more frequent syncs than every ten seconds, as the one the end-to-end tests run against does.
+const syncMs = Number(import.meta.env.VITE_SYNC_MS);
+if (syncMs) rs.setSyncInterval(syncMs);
+
 const authorize = rs.authorize.bind(rs);
 rs.authorize = (options) => {
     try {

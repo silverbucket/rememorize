@@ -22,13 +22,22 @@ const PORT = Number(process.env.E2E_PORT || 4317);
  */
 export const SOCKETHUB_URL = process.env.VITE_SOCKETHUB_URL || "http://localhost:10550";
 
+/**
+ * How long the build under test waits, in milliseconds, where the app itself waits much longer: before
+ * sending a changed list of reminders (20s), for a first sync before scheduling from what it has (30s),
+ * and between syncs (10s; remoteStorage.js takes no less than 2s). A test that has to sit one out
+ * waits by these.
+ */
+export const TIMING = { quiet: 1_000, freshWait: 10_000, sync: 2_000 };
+
 export default defineConfig({
     testDir: "./tests/e2e",
     fullyParallel: true,
+    // Playwright would use half the cores, which on a CI runner is two.
+    workers: process.env.CI ? 4 : undefined,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 1 : 0,
     reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : [["list"]],
-    // Sync tests wait on rs.js's 10s sync interval.
     timeout: 60_000,
     expect: { timeout: 10_000 },
     use: {
@@ -39,13 +48,19 @@ export default defineConfig({
     },
     projects: [
         { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-        { name: "mobile", use: { ...devices["Pixel 7"] } },
+        // Sync and reminders don't depend on the size of the screen, so they run once, in the desktop project.
+        { name: "mobile", use: { ...devices["Pixel 7"] }, testIgnore: /(sync|reminders)\.spec\.ts/ },
     ],
     webServer: {
         command: `bun run build && bun run preview -- --host localhost --port ${PORT} --strictPort`,
         url: `http://localhost:${PORT}`,
         reuseExistingServer: !process.env.CI,
-        env: { VITE_SOCKETHUB_URL: SOCKETHUB_URL },
+        env: {
+            VITE_SOCKETHUB_URL: SOCKETHUB_URL,
+            VITE_QUIET_MS: String(TIMING.quiet),
+            VITE_FRESH_WAIT_MS: String(TIMING.freshWait),
+            VITE_SYNC_MS: String(TIMING.sync),
+        },
         timeout: 120_000,
     },
 });

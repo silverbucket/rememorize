@@ -5,7 +5,8 @@
 import { expect, test } from "@playwright/test";
 import { acceptDialogs, addCard, connect, createUser, RS_HOST } from "./helpers";
 
-// One sync interval is 10s; leave room for a couple.
+// The build under test syncs every couple of seconds (see TIMING in playwright.config.ts); this leaves
+// room for a slow machine.
 const SYNC_TIMEOUT = 30_000;
 
 test("cards made before connecting are uploaded, and changes flow both ways", async ({ browser }) => {
