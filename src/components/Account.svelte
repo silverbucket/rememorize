@@ -392,7 +392,25 @@
     </div>
 </section>
 
-<p class="muted version">Rememorize {__APP_VERSION__}</p>
+<section class="panel">
+    <h2>About</h2>
+    <p>
+        Rate each answer and Rememorize works out when you'll next see the card. Cards you know come back less and less
+        often, and cards you miss come back soon. It brings each card back while you're still likely to remember it.
+    </p>
+    <p class="muted">
+        Scheduling uses <a href="https://github.com/open-spaced-repetition/awesome-fsrs/wiki/ABC-of-FSRS" target="_blank" rel="noreferrer"
+            >FSRS</a
+        >, the open-source spaced repetition algorithm that Anki also uses. It learns from your ratings how quickly you
+        forget each card.
+    </p>
+    <p class="muted">
+        Rememorize {__APP_VERSION__} ·
+        <a href="https://github.com/silverbucket/rememorize" target="_blank" rel="noreferrer">Source code</a>
+        · Free software under the
+        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer">GPL-3.0 or later</a>
+    </p>
+</section>
 
 <style>
     section {
@@ -526,13 +544,6 @@
     .segments input:focus-visible + span {
         outline: 2px solid var(--accent);
         outline-offset: 1px;
-    }
-
-    .version {
-        margin-top: 2rem;
-        font-size: 0.85rem;
-        text-align: center;
-        color: var(--text-faint);
     }
 
     @media (max-width: 560px) {
