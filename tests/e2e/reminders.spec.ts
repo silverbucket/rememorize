@@ -318,7 +318,7 @@ test("putting the app away sends a change that was still waiting", async ({ page
     expect((await outlived()).at(-1)).toBe(true);
 });
 
-test("a card that comes back in minutes gets a reminder when it does", async ({ page }) => {
+test("cards that come back in minutes get a reminder once the app is put away", async ({ page }) => {
     const device = createDevice();
     const hub = await standIn(page, device);
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
@@ -340,9 +340,13 @@ test("a card that comes back in minutes gets a reminder when it does", async ({ 
     await page.goto("/#/review/Animals");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Again/ }).click();
+
+    // Not while the app is open: it comes back there by itself.
+    await page.waitForTimeout(25_000);
+    expect(hours(next())).toBeGreaterThan(21);
     await putAway(page);
 
-    // When it comes back (a minute after Again), not on the next hour, and saying both are due.
+    // Once it is put away: when it comes back (a minute after Again), not on the next hour, and saying both are due.
     await expect.poll(() => hours(next()), { timeout: 5_000 }).toBeLessThanOrEqual(2 / 60);
     const items = scheduled(hub, address(1)) ?? [];
     expect(read(device, items[0].content).notification.title).toBe("2 cards due");
