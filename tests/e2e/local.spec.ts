@@ -694,6 +694,8 @@ test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
 
     await expect(page.getByRole("heading", { name: "Czech animals" })).toBeVisible();
     await expect(page.getByText("voda, studená")).toBeVisible();
+    // The file gives no direction, so they're studied both ways.
+    await expect(page.getByTitle("Studied both ways")).toHaveCount(3);
 
     // Importing the same file again adds nothing.
     await page.goto("/#/import");
@@ -708,8 +710,8 @@ test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
     const exported = await (await download).path();
     const { readFileSync } = await import("node:fs");
     const text = readFileSync(exported, "utf8");
-    expect(text).toContain("pes,dog,barks,Czech animals");
-    expect(text).toContain('"voda, studená",cold water,,Czech animals');
+    expect(text).toContain("pes,dog,barks,Czech animals,both");
+    expect(text).toContain('"voda, studená",cold water,,Czech animals,both');
 });
 
 test("a JSON backup restores cards with their review progress", async ({ page, browser }) => {
@@ -813,6 +815,8 @@ test("tapping the card shows the answer, but its hint button only shows the hint
     await expect(page.locator(".side.back")).toHaveCount(0);
 
     const top = async () => (await page.locator(".side.front").boundingBox())?.y;
+    // Measured once the card has finished being dealt in, which moves it.
+    await page.locator(".faces").evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
     const before = await top();
     await page.locator(".side.front").click();
     await expect(page.locator(".side.back")).toHaveText("dog");

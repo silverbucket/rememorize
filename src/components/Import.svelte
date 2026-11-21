@@ -25,7 +25,10 @@
     const parsed: { result?: ParsedImport; error?: string } = $derived.by(() => {
         if (!text) return {};
         try {
-            return { result: parseImport(text, fileName, defaultGroup.trim() || "Imported") };
+            // Rows without a direction are studied both ways, unless their group has a direction of its own.
+            const directionFor = (group: string) =>
+                Object.hasOwn(library.groupDirections, group) ? library.groupDirections[group] : "both";
+            return { result: parseImport(text, fileName, defaultGroup.trim() || "Imported", directionFor) };
         } catch (e) {
             return { error: e instanceof Error ? e.message : String(e) };
         }
@@ -113,7 +116,9 @@
                 <dt>CSV or tab-separated</dt>
                 <dd>
                     One card per line: front, back, then optionally hint and group. A header row (front, back, hint,
-                    group) lets the columns come in any order. Anki's “Notes in Plain Text” export works as-is.
+                    group, direction) lets the columns come in any order. Cards without a direction (forward, reverse
+                    or both) are studied both ways, or the way their group's new cards are. Anki's “Notes in Plain
+                    Text” export works as-is.
                 </dd>
             </div>
             <div>

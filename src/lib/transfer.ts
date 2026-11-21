@@ -2,12 +2,17 @@
  * Import and export.
  *
  * - JSON export is a full backup (ids, review state, timestamps).
- * - CSV/TSV is for moving cards between apps: front, back, hint, group, and
- *   the study direction when a card isn't plain front → back.
+ * - CSV/TSV is for moving cards between apps: front, back, hint, group and
+ *   study direction. A row without a direction gets one from `directionFor`.
  *   Anki's "Notes in Plain Text" export (tab-separated, `#` header lines)
  *   imports as-is.
  */
-import { type Flashcard, type FlashcardInput, normalizeFlashcard } from "remotestorage-module-flashcards";
+import {
+    type CardDirection,
+    type Flashcard,
+    type FlashcardInput,
+    normalizeFlashcard,
+} from "remotestorage-module-flashcards";
 
 export const EXPORT_FORMAT = "rememorize-export";
 
@@ -41,17 +46,10 @@ export function exportJson(cards: Flashcard[], now = new Date()): string {
 }
 
 export function exportCsv(cards: Flashcard[]): string {
-    // The direction column only appears when some card uses it.
-    const directions = cards.some((c) => c.direction);
+    // Always written: a row without one imports as studied both ways.
     const rows = [
-        ["front", "back", "hint", "group", ...(directions ? ["direction"] : [])],
-        ...cards.map((c) => [
-            c.frontText,
-            c.backText,
-            c.hint ?? "",
-            c.group,
-            ...(directions ? [c.direction ?? "forward"] : []),
-        ]),
+        ["front", "back", "hint", "group", "direction"],
+        ...cards.map((c) => [c.frontText, c.backText, c.hint ?? "", c.group, c.direction ?? "forward"]),
     ];
     return `${rows.map((r) => r.map(csvField).join(",")).join("\r\n")}\r\n`;
 }
@@ -63,14 +61,22 @@ function csvField(value: string): string {
 // ---------------------------------------------------------------------------
 // Import
 
-/** Parse an import file. `defaultGroup` is used for CSV rows without a group. */
-export function parseImport(text: string, fileName: string, defaultGroup: string): ParsedImport {
+/**
+ * Parse an import file. `defaultGroup` is used for CSV rows without a group,
+ * and `directionFor` (given the row's group) for rows without a direction.
+ */
+export function parseImport(
+    text: string,
+    fileName: string,
+    defaultGroup: string,
+    directionFor: (group: string) => CardDirection = () => "both",
+): ParsedImport {
     const trimmed = text.replace(/^﻿/, "").trimStart();
     const extension = /\.([^.]+)$/.exec(fileName.toLowerCase())?.[1];
     // The extension decides the format; only guess from content when it doesn't say.
     const isJson = extension === "json" || (extension !== "csv" && extension !== "tsv" && /^[[{]/.test(trimmed));
     if (isJson) return parseJsonImport(trimmed);
-    return parseDelimitedImport(trimmed, defaultGroup, extension);
+    return parseDelimitedImport(trimmed, defaultGroup, directionFor, extension);
 }
 
 function parseJsonImport(text: string): ParsedImport {
@@ -127,7 +133,12 @@ interface Columns {
 const ANKI_HEADER =
     /^#(separator|html|tags|columns|notetype|deck|guid|notetype column|deck column|tags column|guid column):/i;
 
-function parseDelimitedImport(text: string, defaultGroup: string, extension?: string): ParsedImport {
+function parseDelimitedImport(
+    text: string,
+    defaultGroup: string,
+    directionFor: (group: string) => CardDirection,
+    extension?: string,
+): ParsedImport {
     // Anki puts settings in `#key:value` lines at the top.
     const lines = text.split(/\r?\n/);
     let separator: string | undefined;
@@ -176,7 +187,10 @@ function parseDelimitedImport(text: string, defaultGroup: string, extension?: st
         const hint = columns.hint !== undefined ? record[columns.hint]?.trim() : "";
         if (hint) card.hint = hint;
         const direction = columns.direction !== undefined ? record[columns.direction]?.trim().toLowerCase() : "";
-        if (direction === "reverse" || direction === "both") card.direction = direction;
+        card.direction =
+            direction === "forward" || direction === "reverse" || direction === "both"
+                ? direction
+                : directionFor(group);
         result.rows.push({ source: line, card });
     }
     return result;

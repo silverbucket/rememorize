@@ -41,8 +41,14 @@ describe("CSV round trip", () => {
         expect(parsed.format).toBe("csv");
         expect(parsed.skipped).toEqual([]);
         expect(parsed.rows.map((r) => r.card)).toEqual([
-            { frontText: "pivo", backText: "beer", group: "food" },
-            { frontText: 'a "quoted", text', backText: "line\nbreak", hint: "spaced", group: "x" },
+            { frontText: "pivo", backText: "beer", group: "food", direction: "forward" },
+            {
+                frontText: 'a "quoted", text',
+                backText: "line\nbreak",
+                hint: "spaced",
+                group: "x",
+                direction: "forward",
+            },
         ]);
     });
 });
@@ -51,14 +57,16 @@ describe("parseImport (CSV/TSV)", () => {
     it("uses positional columns without a header and the default group", () => {
         const parsed = parseImport("pes,dog\nkočka,cat,meows\n", "x.csv", "Animals");
         expect(parsed.rows.map((r) => r.card)).toEqual([
-            { frontText: "pes", backText: "dog", group: "Animals" },
-            { frontText: "kočka", backText: "cat", hint: "meows", group: "Animals" },
+            { frontText: "pes", backText: "dog", group: "Animals", direction: "both" },
+            { frontText: "kočka", backText: "cat", hint: "meows", group: "Animals", direction: "both" },
         ]);
     });
 
     it("reads named columns in any order", () => {
         const parsed = parseImport("Group,Hint,Back,Front\nfood,,beer,pivo\n", "x.csv", "Imported");
-        expect(parsed.rows.map((r) => r.card)).toEqual([{ frontText: "pivo", backText: "beer", group: "food" }]);
+        expect(parsed.rows.map((r) => r.card)).toEqual([
+            { frontText: "pivo", backText: "beer", group: "food", direction: "both" },
+        ]);
     });
 
     it("uses the file extension to pick the format", () => {
@@ -151,11 +159,26 @@ describe("study direction in CSV", () => {
         const csv = exportCsv([card("a"), card("b", "reverse"), card("c", "both")]);
         expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction");
         const parsed = parseImport(csv, "cards.csv", "Imported");
-        expect(parsed.rows.map((r) => r.card.direction)).toEqual([undefined, "reverse", "both"]);
+        expect(parsed.rows.map((r) => r.card.direction)).toEqual(["forward", "reverse", "both"]);
     });
 
-    it("leaves the column out when no card uses it", () => {
-        expect(exportCsv([card("a")]).split("\r\n")[0]).toBe("front,back,hint,group");
+    it("writes the column even when every card is front → back, so they stay that way", () => {
+        const csv = exportCsv([card("a")]);
+        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction");
+        expect(parseImport(csv, "cards.csv", "Imported").rows[0].card.direction).toBe("forward");
+    });
+
+    it("studies a row without a direction both ways, unless told otherwise for its group", () => {
+        const text = "front,back,group,direction\na,x,g,\nb,x,h,REVERSE\nc,x,h,\n";
+        expect(parseImport(text, "x.csv", "I").rows.map((r) => r.card.direction)).toEqual(["both", "reverse", "both"]);
+        // Without a direction column too, as in Anki's export.
+        expect(parseImport("a,x\n", "x.csv", "I").rows[0].card.direction).toBe("both");
+        const own = (group: string) => (group === "h" ? "forward" : "both");
+        expect(parseImport(text, "x.csv", "I", own).rows.map((r) => r.card.direction)).toEqual([
+            "both",
+            "reverse",
+            "forward",
+        ]);
     });
 });
 
