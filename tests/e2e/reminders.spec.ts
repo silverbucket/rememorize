@@ -177,7 +177,7 @@ const putAway = (page: Page) =>
 const RESEND = { timeout: 30_000 };
 
 /** Long enough for the app to have sent a changed list, if it were going to. */
-const QUIET = TIMING.quiet * 2;
+const QUIET = TIMING.quiet * 3;
 
 /**
  * Resolves once the page's storage server has taken a change at a path. Ask before making the change:
@@ -197,9 +197,24 @@ const fetchedDevice = (page: Page, endpoint: string) =>
         { timeout: 90_000 },
     );
 
-/** Resolves once the page has fetched a changed list of what the app keeps on its storage server. */
-const fetchedAppFolder = (page: Page) =>
-    page.waitForResponse((r) => r.request().method() === "GET" && r.url().endsWith("/rememorize/") && r.ok(), RESEND);
+/** Resolves once the page has fetched a list of what the app keeps on its storage server that has no device in it. */
+const fetchedNoDevices = (page: Page) =>
+    page.waitForResponse(
+        async (r) =>
+            r.request().method() === "GET" &&
+            r.url().endsWith("/rememorize/") &&
+            r.ok() &&
+            !(await r.text()).includes('"devices/"'),
+        RESEND,
+    );
+
+/** Keep the app from sending a changed list by itself from here on: the timer it waits on never starts. */
+const holdQuietTimer = (page: Page) =>
+    page.evaluate((quiet) => {
+        const set = window.setTimeout.bind(window);
+        window.setTimeout = ((handler: TimerHandler, ms?: number, ...rest: unknown[]) =>
+            ms === quiet ? 0 : set(handler, ms, ...rest)) as typeof window.setTimeout;
+    }, TIMING.quiet);
 
 test("turning reminders on shows a notification and schedules a month of them", async ({ page }) => {
     const device = createDevice();
@@ -250,8 +265,10 @@ test("turning reminders on shows a notification and schedules a month of them", 
     expect(read(device, items[29].content).notification.body).toBe(
         "This is the last reminder until you open Rememorize again.",
     );
-    // Nothing the server is given says who the user is or what a reminder says.
-    expect(JSON.stringify(posted)).not.toMatch(/cards due|Animals|pes|kočka/);
+    // Nothing the server is given says who the user is or what a reminder says. What it can't read is
+    // left out: text that short turns up in a month of encrypted messages by chance.
+    const readable = JSON.stringify(posted, (key, value) => (key === "content" ? undefined : value));
+    expect(readable).not.toMatch(/cards due|Animals|pes|kočka/);
 
     // A review changes what the reminders should say.
     await reviewOne(page, "Animals");
@@ -338,6 +355,8 @@ test("putting the app away sends a change that was still waiting", async ({ page
 
     const outlived = () => page.evaluate(() => (window as unknown as { outlived: boolean[] }).outlived);
     expect(await outlived()).not.toContain(true);
+    // Only putting the app away can send it, then.
+    await holdQuietTimer(page);
     await reviewOne(page, "Animals");
     await putAway(page);
     await expect.poll(() => nextTitle(hub, device, address(1)), { timeout: 5_000 }).toBe("1 card due");
@@ -756,24 +775,22 @@ test("disconnecting storage turns this browser's reminders off", async ({ page }
         asked = dialog.message();
         void dialog.accept();
     });
-    const unlisted = stored(page, "/rememorize/devices/", "DELETE");
     await page.getByRole("button", { name: "Disconnect" }).click();
     await expect(page.getByLabel("Connect your storage")).toBeVisible();
-    // The account heard of it.
-    await unlisted;
     expect(asked).toContain("its reminders are turned off");
     await expect(page.getByRole("button", { name: "Turn on reminders" })).toBeVisible();
     expect(scheduled(hub, address(1))).toEqual([]);
     expect(await page.evaluate(() => localStorage.getItem("test:subscription"))).toBeNull();
 
-    // Connected again, this browser finds no device left to schedule for.
+    // The account heard of it: connected again, this browser finds no device left to schedule for.
     // (It would schedule for its old self as it would for any other device.)
     const before = hub.posted.length;
-    const synced = fetchedAppFolder(page);
+    const synced = fetchedNoDevices(page);
     await connect(page, user);
+    // Before going anywhere: what a page fetched can't be read once it has been left.
+    await synced;
     await page.goto("/");
     await expect(page.getByText("Verbs")).toBeVisible({ timeout: 30_000 });
-    await synced;
     await page.waitForTimeout(QUIET);
     expect(hub.posted.slice(before)).toEqual([]);
 });
@@ -829,7 +846,7 @@ test("a review on one device corrects the reminders of another", async ({ browse
 
     // Once the phone turns its reminders off, the laptop stops scheduling for it.
     await phone.goto("/#/account");
-    const heard = fetchedAppFolder(laptop);
+    const heard = fetchedNoDevices(laptop);
     await phone.getByRole("button", { name: "Turn off" }).click();
     await expect(phone.getByRole("button", { name: "Turn on reminders" })).toBeVisible();
     // The phone's change arrives, and the laptop has the time to send a list if it were going to.
