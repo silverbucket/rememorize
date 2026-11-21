@@ -4,6 +4,7 @@
     import { formatDateTime, fromNow } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { itemsOf, stateOf } from "../lib/scheduler";
+    import { DIRECTION_LABELS, isDirection } from "../lib/settings";
     import { library } from "../lib/state";
     import Icon from "./Icon.svelte";
 
@@ -16,7 +17,9 @@
     let backText = $state(initial?.backText ?? "");
     let hint = $state(initial?.hint ?? "");
     let group = $state(initial?.group ?? untrack(() => initialGroup) ?? "");
-    let direction: CardDirection = $state(initial?.direction ?? "forward");
+    /** A direction picked here; until one is, a new card is studied the way its group's new cards are. */
+    let chosen: CardDirection | undefined = $state(initial ? (initial.direction ?? "forward") : undefined);
+    const direction: CardDirection = $derived(chosen ?? library.directionFor(group.trim()));
     let saving = $state(false);
     let error = $state("");
 
@@ -99,10 +102,15 @@
     <!-- Not wrapped in the label: the options would become part of its name. -->
     <div class="labelled">
         <label for="direction">Study direction</label>
-        <select id="direction" class="field" bind:value={direction}>
-            <option value="forward">Front → back</option>
-            <option value="reverse">Back → front</option>
-            <option value="both">Both ways</option>
+        <select
+            id="direction"
+            class="field"
+            value={direction}
+            onchange={(e) => isDirection(e.currentTarget.value) && (chosen = e.currentTarget.value)}
+        >
+            {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
+                <option {value}>{label}</option>
+            {/each}
         </select>
         {#if direction === "both"}
             <small class="note">Each direction has its own schedule. You won't see both on the same day.</small>

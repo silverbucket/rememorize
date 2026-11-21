@@ -1,6 +1,8 @@
+import type { CardDirection } from "remotestorage-module-flashcards";
+
 /**
- * The review limits, the time of a day's first reminder and the server that
- * sends reminders. They are stored in the app's own folder (see Library), so
+ * The review limits, the direction new cards are studied in, the time of a
+ * day's first reminder and the server that sends reminders. They are stored in the app's own folder (see Library), so
  * they sync; localStorage only remembers the last limits this browser used.
  */
 
@@ -10,6 +12,15 @@ export const MAX_NEW_PER_DAY = 9999;
 export const DEFAULT_CARDS_PER_REVIEW = null;
 /** When a day's first reminder goes out, in the local time of the device that schedules it. */
 export const DEFAULT_REMINDER_TIME = "09:00";
+/** The direction a new card is studied in when neither its group nor the settings say otherwise. */
+export const DEFAULT_DIRECTION: CardDirection = "forward";
+/** The directions a card can be studied in, as the app names them. */
+export const DIRECTION_LABELS: Record<CardDirection, string> = {
+    forward: "Front → back",
+    reverse: "Back → front",
+    both: "Both ways",
+};
+const DIRECTIONS = Object.keys(DIRECTION_LABELS) as CardDirection[];
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** A web address as it is kept: no trailing slash, and https unless it says otherwise. Nothing if it isn't one. */
@@ -44,6 +55,10 @@ export interface AppSettings {
     reminderTime?: string;
     /** The address of the user's own reminder server. Empty for the app's usual one. */
     reminderServer?: string;
+    /** The direction new cards are studied in. */
+    direction?: CardDirection;
+    /** A group's own direction for new cards, by group name, where it differs from `direction`. */
+    groupDirections?: Record<string, CardDirection>;
     updatedAt?: string;
 }
 
@@ -58,6 +73,8 @@ export const appSettingsSchema = {
         cardsPerDay: { type: ["integer", "null"], minimum: 0 },
         reminderTime: { type: "string", pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$" },
         reminderServer: { type: "string" },
+        direction: { enum: DIRECTIONS },
+        groupDirections: { type: "object", additionalProperties: { enum: DIRECTIONS } },
         updatedAt: { type: "string", format: "date-time" },
     },
 };
@@ -80,8 +97,20 @@ export function normalizeAppSettings(value: unknown): AppSettings {
         const server = v.reminderServer.trim() && webAddress(v.reminderServer.trim());
         if (server !== undefined) settings.reminderServer = server;
     }
+    if (isDirection(v.direction)) settings.direction = v.direction;
+    if (typeof v.groupDirections === "object" && v.groupDirections !== null) {
+        settings.groupDirections = Object.fromEntries(
+            Object.entries(v.groupDirections).filter((entry): entry is [string, CardDirection] =>
+                isDirection(entry[1]),
+            ),
+        );
+    }
     if (typeof v.updatedAt === "string") settings.updatedAt = v.updatedAt;
     return settings;
+}
+
+export function isDirection(value: unknown): value is CardDirection {
+    return DIRECTIONS.includes(value as CardDirection);
 }
 
 function parseCount(text: string): number | undefined {

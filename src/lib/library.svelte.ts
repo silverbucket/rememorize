@@ -8,6 +8,7 @@
  * - Settings live in the app's own folder, `/rememorize/`, not with the cards.
  */
 import {
+    type CardDirection,
     type Flashcard,
     type FlashcardInput,
     LOG_FOLDER,
@@ -24,6 +25,7 @@ import {
     type AppSettings,
     appSettingsSchema,
     DEFAULT_CARDS_PER_REVIEW,
+    DEFAULT_DIRECTION,
     DEFAULT_NEW_PER_DAY,
     DEFAULT_REMINDER_SERVER,
     DEFAULT_REMINDER_TIME,
@@ -100,6 +102,14 @@ export class Library {
     reminderTime = $state(DEFAULT_REMINDER_TIME);
     /** The server that sends reminders. Synced; change it with `setReminderServer()`. */
     reminderServer = $state(DEFAULT_REMINDER_SERVER);
+
+    /** The direction new cards are studied in. Synced; change it with `setDirection()`. */
+    direction: CardDirection = $state(DEFAULT_DIRECTION);
+    /**
+     * Groups whose new cards are studied in a direction of their own, by
+     * name. Synced; change one with `setGroupDirection()`.
+     */
+    groupDirections: Record<string, CardDirection> = $state({});
 
     cards = $derived(Object.values(this.#cards));
 
@@ -183,6 +193,8 @@ export class Library {
             // Saved with the account, and gone from this browser with it.
             this.reminderTime = DEFAULT_REMINDER_TIME;
             this.reminderServer = DEFAULT_REMINDER_SERVER;
+            this.direction = DEFAULT_DIRECTION;
+            this.groupDirections = {};
             void this.load();
         });
         rs.on("network-offline", () => {
@@ -288,6 +300,57 @@ export class Library {
         return card;
     }
 
+    /** The direction a new card in this group is studied in: the group's own, else the one in the settings. */
+    directionFor(group: string): CardDirection {
+        return this.groupDirections[group] ?? this.direction;
+    }
+
+    /** Study cards in another direction. Each keeps the schedule it has for each direction. */
+    async setCardDirection(cards: Flashcard[], direction: CardDirection): Promise<void> {
+        for (const card of cards) {
+            if ((card.direction ?? "forward") !== direction) await this.save({ ...card, direction }, card.group);
+        }
+    }
+
+    /** Change the direction new cards are studied in, on every device. */
+    async setDirection(value: CardDirection): Promise<void> {
+        await this.#changeSettings({ direction: value });
+    }
+
+    /**
+     * Give a group's new cards a direction of their own, on every device, or
+     * (with `undefined`) go back to the one in the settings.
+     */
+    async setGroupDirection(group: string, value: CardDirection | undefined): Promise<void> {
+        await this.#changeGroupDirections({ [group]: value });
+    }
+
+    /**
+     * Change some groups' directions (`undefined` takes one out), applied at
+     * once and put back if the write fails. Other groups are kept as stored,
+     * so a change made on another device meanwhile isn't lost.
+     */
+    async #changeGroupDirections(changes: Record<string, CardDirection | undefined>): Promise<void> {
+        const previous = this.groupDirections;
+        const apply = (base: Record<string, CardDirection>) => {
+            const next = { ...base };
+            for (const [group, value] of Object.entries(changes)) {
+                if (value === undefined) delete next[group];
+                else next[group] = value;
+            }
+            return next;
+        };
+        this.groupDirections = apply(previous);
+        try {
+            await this.#queueSettings(async (stored) => ({
+                groupDirections: apply(normalizeAppSettings(stored).groupDirections ?? {}),
+            }));
+        } catch (e) {
+            this.groupDirections = previous;
+            throw e;
+        }
+    }
+
     /** Change the daily new-card limit on every device. */
     async setNewPerDay(value: number): Promise<void> {
         await this.#changeSettings({ newCardsPerDay: parseNewPerDay(value) });
@@ -318,6 +381,7 @@ export class Library {
         if ("cardsPerReview" in changes) previous.cardsPerReview = this.cardsPerReview;
         if ("reminderTime" in changes) previous.reminderTime = this.reminderTime;
         if ("reminderServer" in changes) previous.reminderServer = this.reminderServer;
+        if ("direction" in changes) previous.direction = this.direction;
         const hadOwn = this.#ownNewPerDay;
         // Applied before the write finishes, so it holds even if the page is left straight away.
         this.#applySettings(changes);
@@ -372,7 +436,14 @@ export class Library {
     /** Rename a group. Onto the name of a group that exists, its cards join the ones there. */
     async renameGroup(from: string, to: string): Promise<void> {
         if (to === from) return;
+        // Merged into a group that exists, the cards join it: its direction stays.
+        const merging = this.groups.some((g) => g.name === to);
         await this.moveCards(this.cardsIn(from), to);
+        if (this.groupDirections[from] === undefined) return;
+        await this.#changeGroupDirections({
+            [from]: undefined,
+            ...(merging ? {} : { [to]: this.groupDirections[from] }),
+        }).catch(() => {});
     }
 
     /**
@@ -406,6 +477,9 @@ export class Library {
             if (card.group !== group) next[key] = card;
         }
         this.#cards = next;
+        if (this.groupDirections[group] !== undefined) {
+            await this.#changeGroupDirections({ [group]: undefined }).catch(() => {});
+        }
     }
 
     /** Record a review of one direction of a card and store the rescheduled card. */
@@ -501,6 +575,8 @@ export class Library {
         if (settings.reminderServer !== undefined) {
             this.reminderServer = parseReminderServer(settings.reminderServer) ?? DEFAULT_REMINDER_SERVER;
         }
+        if (settings.direction !== undefined) this.direction = settings.direction;
+        if (settings.groupDirections !== undefined) this.groupDirections = settings.groupDirections;
     }
 
     /** The new-card limit as older versions stored it, which counts only until the app has its own. */

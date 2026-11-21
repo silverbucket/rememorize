@@ -105,6 +105,15 @@ describe("normalizeAppSettings", () => {
         expect(normalizeAppSettings(undefined)).toEqual({});
     });
 
+    it("keeps the directions new cards are studied in, and drops ones it doesn't know", () => {
+        expect(normalizeAppSettings({ direction: "both" })).toEqual({ direction: "both" });
+        expect(normalizeAppSettings({ direction: "sideways" })).toEqual({});
+        expect(normalizeAppSettings({ groupDirections: { Czech: "both", maths: "up", capitals: "reverse" } })).toEqual({
+            groupDirections: { Czech: "both", capitals: "reverse" },
+        });
+        expect(normalizeAppSettings({ groupDirections: "both" })).toEqual({});
+    });
+
     it("takes an older version's daily card limit as the review size", () => {
         expect(normalizeAppSettings({ cardsPerDay: 20 })).toEqual({ cardsPerReview: 20 });
         expect(normalizeAppSettings({ cardsPerDay: 0 })).toEqual({ cardsPerReview: 1 });

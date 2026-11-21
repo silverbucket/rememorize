@@ -574,6 +574,59 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await expect(page.getByRole("row", { name: /Back → front/ })).toContainText("not reviewed yet");
 });
 
+test("new cards take a direction from the settings or their group, and many cards change at once", async ({ page }) => {
+    // The settings' direction is what a new card starts with.
+    await page.goto("/#/account");
+    await page.getByLabel("Study new cards").selectOption("Both ways");
+    await page.goto("/#/new?group=Czech");
+    await expect(page.getByLabel("Study direction")).toHaveValue("both");
+    await page.getByLabel("Front").fill("pivo");
+    await page.getByLabel("Back").fill("beer");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
+    // One card can still be studied another way.
+    await page.goto("/#/new?group=Czech");
+    await page.getByLabel("Front").fill("voda");
+    await page.getByLabel("Back").fill("water");
+    await page.getByLabel("Study direction").selectOption("Front → back");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByTitle("Studied both ways")).toHaveCount(1);
+
+    // A group's own direction, offered to the cards already in it.
+    const own = page.getByLabel("New cards here");
+    await expect(own).toHaveValue("");
+    await own.selectOption("Back → front");
+    const offer = page.getByRole("status").filter({ hasText: "Study the 2 cards already here back → front too?" });
+    await offer.getByRole("button", { name: "Change both" }).click();
+    await expect(page.getByTitle("Studied back → front")).toHaveCount(2);
+    await expect(page.getByRole("status").filter({ hasText: "2 cards now studied back → front" })).toBeVisible();
+    // Undo gives each card back the direction it had.
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByTitle("Studied both ways")).toHaveCount(1);
+    await expect(page.getByTitle("Studied back → front")).toHaveCount(0);
+
+    // New cards in the group take its direction, from the group page and after a reload.
+    await page.reload();
+    await expect(own).toHaveValue("reverse");
+    await page.getByRole("link", { name: "Add card" }).click();
+    await expect(page.getByLabel("Study direction")).toHaveValue("reverse");
+    // Typed into another group, it's that group's (here the settings') direction.
+    await page.getByLabel("Group", { exact: true }).fill("Capitals");
+    await expect(page.getByLabel("Study direction")).toHaveValue("both");
+
+    // Picked cards change direction together.
+    await page.goto("/#/group/Czech");
+    await page.getByRole("button", { name: "Select", exact: true }).click();
+    const bar = page.getByRole("toolbar", { name: "Selected cards" });
+    await bar.getByRole("button", { name: "Select all" }).click();
+    await bar.getByRole("button", { name: "Direction…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Study 2 cards" });
+    await dialog.getByRole("button", { name: /Front → back/ }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("status").filter({ hasText: "1 card now studied front → back" })).toBeVisible();
+    await expect(page.locator(".direction")).toHaveCount(0);
+});
+
 test("statistics follow reviews", async ({ page }) => {
     const tile = (label: string) => page.locator(".tile").filter({ hasText: label }).locator("dd");
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
