@@ -177,7 +177,7 @@ const putAway = (page: Page) =>
 const RESEND = { timeout: 30_000 };
 
 /** Long enough for the app to have sent a changed list, if it were going to. */
-const QUIET = TIMING.quiet * 3;
+const QUIET = TIMING.quiet * 2;
 
 /**
  * Resolves once the page's storage server has taken a change at a path. Ask before making the change:
@@ -186,12 +186,20 @@ const QUIET = TIMING.quiet * 3;
 const stored = (page: Page, path: string, method = "PUT") =>
     page.waitForResponse((r) => r.request().method() === method && r.url().includes(path) && r.ok(), RESEND);
 
-/** Resolves once the page has fetched a device's record from its storage server, as it does when it has changed. */
-const fetchedDevice = (page: Page) =>
+/** Resolves once the page has fetched the record of the device at `endpoint` from its storage server. */
+const fetchedDevice = (page: Page, endpoint: string) =>
     page.waitForResponse(
-        (r) => r.request().method() === "GET" && /\/rememorize\/devices\/[^/]+$/.test(r.url()) && r.ok(),
+        async (r) =>
+            r.request().method() === "GET" &&
+            /\/rememorize\/devices\/[^/]+$/.test(r.url()) &&
+            r.ok() &&
+            (await r.json()).endpoint === endpoint,
         { timeout: 90_000 },
     );
+
+/** Resolves once the page has fetched a changed list of what the app keeps on its storage server. */
+const fetchedAppFolder = (page: Page) =>
+    page.waitForResponse((r) => r.request().method() === "GET" && r.url().endsWith("/rememorize/") && r.ok(), RESEND);
 
 test("turning reminders on shows a notification and schedules a month of them", async ({ page }) => {
     const device = createDevice();
@@ -748,21 +756,25 @@ test("disconnecting storage turns this browser's reminders off", async ({ page }
         asked = dialog.message();
         void dialog.accept();
     });
+    const unlisted = stored(page, "/rememorize/devices/", "DELETE");
     await page.getByRole("button", { name: "Disconnect" }).click();
     await expect(page.getByLabel("Connect your storage")).toBeVisible();
+    // The account heard of it.
+    await unlisted;
     expect(asked).toContain("its reminders are turned off");
     await expect(page.getByRole("button", { name: "Turn on reminders" })).toBeVisible();
     expect(scheduled(hub, address(1))).toEqual([]);
     expect(await page.evaluate(() => localStorage.getItem("test:subscription"))).toBeNull();
 
-    // The account heard of it: connected again, this browser finds no device left to schedule for.
+    // Connected again, this browser finds no device left to schedule for.
     // (It would schedule for its old self as it would for any other device.)
     const before = hub.posted.length;
+    const synced = fetchedAppFolder(page);
     await connect(page, user);
     await page.goto("/");
     await expect(page.getByText("Verbs")).toBeVisible({ timeout: 30_000 });
-    // The cards arrived with a sync; the device list would have come with it or the next one.
-    await page.waitForTimeout(2 * TIMING.sync + QUIET);
+    await synced;
+    await page.waitForTimeout(QUIET);
     expect(hub.posted.slice(before)).toEqual([]);
 });
 
@@ -817,12 +829,12 @@ test("a review on one device corrects the reminders of another", async ({ browse
 
     // Once the phone turns its reminders off, the laptop stops scheduling for it.
     await phone.goto("/#/account");
-    const unlisted = stored(phone, "/rememorize/devices/", "DELETE");
+    const heard = fetchedAppFolder(laptop);
     await phone.getByRole("button", { name: "Turn off" }).click();
     await expect(phone.getByRole("button", { name: "Turn on reminders" })).toBeVisible();
-    await unlisted;
-    // Long enough for the phone's change to arrive, and for the laptop to have sent a list if it were going to.
-    await laptop.waitForTimeout(2 * TIMING.sync + QUIET);
+    // The phone's change arrives, and the laptop has the time to send a list if it were going to.
+    await heard;
+    await laptop.waitForTimeout(QUIET);
     const afterOff = fromLaptop.posted.length;
     await reviewOne(laptop, "Verbs");
     await putAway(laptop);
@@ -872,15 +884,22 @@ test("a reminder server chosen on one device is taken up by the others", async (
 
     // Once the new server can be reached, the phone moves over by itself.
     ownFromPhone.down = false;
-    const moved = fetchedDevice(laptop);
+    const moved = fetchedDevice(laptop, address(2));
     await phone.reload();
     await expect.poll(() => nextTitle(ownFromPhone, phoneDevice, address(2)), { timeout: 60_000 }).toBe("2 cards due");
     expect(scheduled(usualFromPhone, address(1))).toEqual([]);
     await phone.goto("/#/account");
     await expect(phone.getByLabel("Reminder server")).toHaveValue(OWN);
     await expect(phone.getByText("Reminders are on for this device.")).toBeVisible();
-    // The phone's new subscription reaches storage, and the laptop.
+    // The phone's new subscription reaches storage, and the laptop. So has its review.
     await moved;
+    await laptop.goto("/");
+    await expect(laptop.locator(".groups li").filter({ hasText: "Verbs" }).locator(".badge.fresh")).toHaveText(
+        "2 new",
+        {
+            timeout: 30_000,
+        },
+    );
 
     // From then on the laptop's reviews reach the phone through the new server.
     await reviewOne(laptop, "Verbs");

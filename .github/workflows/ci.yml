@@ -5,10 +5,10 @@ on:
     branches: [master]
   pull_request:
 
-# A newer push to a pull request replaces the run for the one before it.
+# A newer push to a pull request replaces the run for the one before it. Every push to master runs.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   check:

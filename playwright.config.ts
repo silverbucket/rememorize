@@ -28,7 +28,7 @@ export const SOCKETHUB_URL = process.env.VITE_SOCKETHUB_URL || "http://localhost
  * and between syncs (10s; remoteStorage.js takes no less than 2s). A test that has to sit one out
  * waits by these.
  */
-export const TIMING = { quiet: 1_000, freshWait: 10_000, sync: 2_000 };
+export const TIMING = { quiet: 2_000, freshWait: 10_000, sync: 2_000 };
 
 export default defineConfig({
     testDir: "./tests/e2e",
