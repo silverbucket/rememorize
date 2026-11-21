@@ -454,7 +454,8 @@
         Rememorize is closed.
     </p>
     <p class="muted">
-        <strong>Rememorize</strong> {__APP_VERSION__} · © 2026 Nick Jennings<br />
+        <strong>Rememorize</strong> {__APP_VERSION__} · © 2026 Nick Jennings ·
+        <a href="https://silverbucket.net" target="_blank" rel="noreferrer">silverbucket.net</a><br />
         <a href="https://github.com/silverbucket/rememorize" target="_blank" rel="noreferrer">Source code</a>
         · Free software under the
         <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer">GPL-3.0 or later</a>
