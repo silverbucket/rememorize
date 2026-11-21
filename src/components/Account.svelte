@@ -405,10 +405,18 @@
         forget each card.
     </p>
     <p class="muted">
-        Rememorize {__APP_VERSION__} ·
+        Rememorize is an <a href="https://unhosted.org" target="_blank" rel="noreferrer">unhosted</a> web app: there is
+        no Rememorize server holding your cards. They stay in your browser, or in a
+        <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> account you own, which
+        syncs them across your devices. Reminders are sent by
+        <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a>, so they arrive even while
+        Rememorize is closed.
+    </p>
+    <p class="muted">
         <a href="https://github.com/silverbucket/rememorize" target="_blank" rel="noreferrer">Source code</a>
         · Free software under the
-        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer">GPL-3.0 or later</a>
+        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer">GPL-3.0 or later</a><br />
+        Rememorize {__APP_VERSION__}
     </p>
 </section>
 
