@@ -265,8 +265,12 @@ test("turning reminders on shows a notification and schedules a month of them", 
     expect(read(device, items[29].content).notification.body).toBe(
         "This is the last reminder until you open Rememorize again.",
     );
-    // Nothing the server is given says who the user is or what a reminder says. What it can't read is
-    // left out: text that short turns up in a month of encrypted messages by chance.
+    // Nothing the server is given says who the user is or what a reminder says. Every message is one only
+    // the device can read, and those are left out of the search: text that short turns up in a month of
+    // encrypted messages by chance.
+    for (const content of [hello?.object.content, ...items.map((item) => item.content)]) {
+        expect(read(device, content).notification.title).toMatch(/cards due|Reminders are on/);
+    }
     const readable = JSON.stringify(posted, (key, value) => (key === "content" ? undefined : value));
     expect(readable).not.toMatch(/cards due|Animals|pes|kočka/);
 
