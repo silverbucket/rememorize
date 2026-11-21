@@ -306,7 +306,7 @@ test("review session schedules cards", async ({ page }) => {
     await expect(page.locator(".when").first()).toHaveText(/^in /);
 });
 
-test("a card answered Again or Hard waits out its time before it comes back", async ({ page }) => {
+test("a card answered Again comes back before the review ends, and one answered Hard doesn't", async ({ page }) => {
     await page.clock.install();
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
     await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
@@ -314,25 +314,22 @@ test("a card answered Again or Hard waits out its time before it comes back", as
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Again/ }).click();
 
-    // It leaves: the other card is next, and then the review is done for now.
+    // It leaves: the other card is next. With nothing else left, it comes back rather than ending the review.
     await expect(page.locator(".side.front")).toHaveText("kočka");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText(/Next card comes back in 1 minute/)).toBeVisible();
-
-    // Once its time is up, it is back.
-    await page.clock.fastForward("02:00");
     await expect(page.locator(".side.front")).toHaveText("pes");
 
-    // Hard on a card being learned waits minutes too, longer than Again.
+    // Still wrong, and nothing else left: it comes straight back, until it is remembered.
     await page.getByRole("button", { name: /Show answer/ }).click();
-    await expect(page.getByRole("button", { name: /Hard/ })).toContainText(/\dm/);
-    await page.getByRole("button", { name: /Hard/ }).click();
-    await expect(page.getByText(/Next card comes back in \d+ minutes/)).toBeVisible();
-    await page.clock.fastForward("01:30");
-    await expect(page.locator(".side.front")).toHaveCount(0);
-    await page.clock.fastForward("20:00");
+    await page.getByRole("button", { name: /Again/ }).click();
+    await expect(page.getByRole("button", { name: /Show answer/ })).toBeVisible();
     await expect(page.locator(".side.front")).toHaveText("pes");
+
+    // Hard: remembered, so it keeps its schedule and the review is done.
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Hard/ }).click();
+    await expect(page.getByText("Done for now")).toBeVisible();
 });
 
 test("undo the last rating", async ({ page, isMobile }) => {
@@ -664,8 +661,8 @@ test("statistics follow reviews", async ({ page }) => {
     await page.goto("/#/review");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Again/ }).click();
-    // Saved, and the card waits a minute before it comes round again.
-    await expect(page.getByText(/Next card comes back in/)).toBeVisible();
+    // Saved, and the card comes round again, its answer hidden.
+    await expect(page.getByRole("button", { name: /Show answer/ })).toBeVisible();
 
     // Recorded, and still there after a reload.
     await page.goto("/#/stats");

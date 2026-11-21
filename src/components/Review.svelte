@@ -32,16 +32,13 @@
 
     let { group, show }: { group?: string; show?: ViewId } = $props();
 
-    /** Cards rated "Again" (or still in learning steps) come back this session, once their time is up. */
-    const REQUEUE_WITHIN_MS = 20 * 60 * 1000;
-
     const within = $derived(group ? library.cardsIn(group) : library.cards);
     const scope = $derived(show ? within.filter((c) => inView(c, show, library.now)) : within);
     /** What is being reviewed, for the heading: the group, the view, or both. */
     const title = $derived([group, show && labelOf(show)].filter(Boolean).join(" · "));
 
     let queue: ReviewItem[] = $state([]);
-    /** Cards that come back in this review once they are due again (after a Hard or Again), soonest first. */
+    /** Cards rated Again, which come back in this review once they are due again, soonest first. */
     let later: ReviewItem[] = $state([]);
     let started = $state(false);
     // Reveal and hint state belong to one card, so they reset if sync swaps it.
@@ -112,12 +109,16 @@
                 (reminders.state === "on" ? " Reminders will tell you when cards are due." : ""),
     );
 
-    /** Bring back the cards in `later` whose time is up. */
+    /**
+     * Bring back the cards in `later` whose time is up. Once nothing else is left, they all come back
+     * rather than ending the review: it isn't over until every card in it has been remembered.
+     */
     function bringBack() {
         const now = Date.now();
         clock = now;
-        const ready = waitingLive.filter((i) => dueAt(i) <= now);
-        later = waitingLive.filter((i) => dueAt(i) > now);
+        const isReady = (i: ReviewItem) => live.length === 0 || dueAt(i) <= now;
+        const ready = waitingLive.filter(isReady);
+        later = waitingLive.filter((i) => !isReady(i));
         if (ready.length === 0) return;
         queue = [...queue, ...ready.filter((r) => !queue.some((q) => itemKey(q) === itemKey(r)))];
     }
@@ -212,11 +213,9 @@
             last = { before: card, reverse, grade: g, queue: queueBefore, later: laterBefore };
             queue = live.filter((i) => itemKey(i) !== key);
             const back = { card: updated, reverse };
-            // It waits out its time, Hard longer than Again, instead of coming straight back.
-            if (dueAt(back) - now.getTime() <= REQUEUE_WITHIN_MS) {
-                later = [...later, back].sort((a, b) => dueAt(a) - dueAt(b));
-                clock = Date.now();
-            }
+            // Forgotten: it comes back once its time is up, or sooner if nothing else is left.
+            if (g === 1) later = [...later, back];
+            bringBack();
             revealedFor = "";
             hintFor = "";
             // A long answer may have been scrolled down to reach the buttons; the next card starts at the top.
