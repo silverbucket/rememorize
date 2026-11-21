@@ -318,7 +318,7 @@ test("putting the app away sends a change that was still waiting", async ({ page
     expect((await outlived()).at(-1)).toBe(true);
 });
 
-test("a card that comes back the same day gets a reminder on the next hour", async ({ page }) => {
+test("a card that comes back in minutes gets a reminder when it does", async ({ page }) => {
     const device = createDevice();
     const hub = await standIn(page, device);
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
@@ -342,10 +342,9 @@ test("a card that comes back the same day gets a reminder on the next hour", asy
     await page.getByRole("button", { name: /Again/ }).click();
     await putAway(page);
 
-    // Within the hour, on the hour counted from the first reminder, and saying both are due.
-    await expect.poll(() => hours(next()), { timeout: 5_000 }).toBeLessThanOrEqual(1);
+    // When it comes back (a minute after Again), not on the next hour, and saying both are due.
+    await expect.poll(() => hours(next()), { timeout: 5_000 }).toBeLessThanOrEqual(2 / 60);
     const items = scheduled(hub, address(1)) ?? [];
-    expect(new Date(items[0].deliverAt).getMinutes()).toBe(earlier.getMinutes());
     expect(read(device, items[0].content).notification.title).toBe("2 cards due");
     // Tomorrow's first reminder is still there.
     expect(hours(new Date(items[1].deliverAt).getTime())).toBeGreaterThan(21);
