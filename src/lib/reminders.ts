@@ -25,10 +25,15 @@ const GAP_MS = 6 * 60 * 60 * 1000;
  * which keeps the whole list within what the server holds for a device (60).
  */
 const DETAILED_DAYS = 10;
-/** Cards coming back within this long (after a Hard or Again) get a reminder of their own, right when they're due. */
-export const SOON_MS = 60 * 60 * 1000;
-/** Those reminders are at least this far apart, so a review full of Again answers isn't a stream of them. */
-const SOON_GAP_MS = 5 * 60 * 1000;
+/**
+ * Cards coming back within this long of the app being put away (after a Hard
+ * or Again) get one reminder of their own, for all of them.
+ */
+export const SOON_MS = 15 * 60 * 1000;
+/** Cards coming back less than this far apart are one batch: its reminder waits for the last of them. */
+const BATCH_GAP_MS = 5 * 60 * 1000;
+/** A batch's reminder comes at least this long after the one before it, even when the app was opened in between. */
+const SOON_FLOOR_MS = 30 * 60 * 1000;
 /** The most reminders a server holds for one device. */
 const MAX_REMINDERS = 60;
 /** A device not seen for this long is taken off the list. It puts itself back when it is next opened. */
@@ -85,6 +90,8 @@ export interface Reminder {
     count: number;
     /** The last one scheduled: it says that reminders stop here. */
     last: boolean;
+    /** The one for cards coming back in minutes. */
+    soon?: true;
 }
 
 /**
@@ -100,6 +107,10 @@ export interface Reminder {
  * - Spacing is counted within one list. Opening the app plans a new one from
  *   what it shows then, so a card that comes back after a review is announced
  *   on the next hour, however recent the reminder before it.
+ * - Cards coming back in minutes (`soon`, given only once the app is put
+ *   away) get one reminder between them, when the last of a batch is due.
+ *   It comes at least half an hour after `lastSoon`, the one that last went
+ *   out, and so do the day's later reminders.
  */
 export function planReminders(
     now: Date,
@@ -107,6 +118,7 @@ export function planReminders(
     countAt: (at: Date) => number,
     days = REMINDER_DAYS,
     soon: Date[] = [],
+    lastSoon?: Date,
 ): Reminder[] {
     const [hours, minutes] = time.split(":").map(Number);
     // Built from local date parts, so a clock change doesn't move a reminder.
@@ -114,18 +126,26 @@ export function planReminders(
         new Date(now.getFullYear(), now.getMonth(), now.getDate() + day, hours + hour, minutes);
     const plan: Reminder[] = [];
     let shown: number | undefined;
-    // A card answered Hard or Again comes back in minutes: say so when it does, not on the next hour.
+    // Cards answered Hard or Again come back in minutes: say so once, when the last of them is back.
     const early: Reminder[] = [];
-    let said = soon.length > 0 ? countAt(now) : 0;
-    for (const at of [...soon].sort((a, b) => a.getTime() - b.getTime())) {
-        if (at.getTime() <= now.getTime() || at.getTime() - now.getTime() > SOON_MS) continue;
-        const previous = early.at(-1);
-        if (previous && at.getTime() - previous.at.getTime() < SOON_GAP_MS) continue;
+    // One that is still ahead is being replaced, so it doesn't count.
+    const gone = lastSoon && lastSoon.getTime() <= now.getTime() ? lastSoon : undefined;
+    const back = soon
+        .map((at) => at.getTime())
+        .filter((at) => at > now.getTime() && at - now.getTime() <= SOON_MS)
+        .sort((a, b) => a - b);
+    if (back.length > 0) {
+        let end = back[0];
+        for (const at of back.slice(1)) {
+            if (at - end >= BATCH_GAP_MS) break;
+            end = at;
+        }
+        const floor = gone ? gone.getTime() + SOON_FLOOR_MS : 0;
+        const at = new Date(Math.max(end, floor));
         const count = countAt(at);
-        if (count <= said) continue;
-        early.push({ at, count, last: false });
-        said = count;
+        if (count > countAt(now)) early.push({ at, count, last: false, soon: true });
     }
+    const batches = [...early.map((r) => r.at.getTime()), ...(gone ? [gone.getTime()] : [])];
     /** The most cards those early reminders have told of by `at`. */
     const toldEarly = (at: Date) =>
         Math.max(0, ...early.filter((r) => r.at.getTime() <= at.getTime()).map((r) => r.count));
@@ -140,7 +160,14 @@ export function planReminders(
             const at = slot(day, hour);
             if (at.getTime() <= now.getTime()) continue;
             if (previous !== undefined && at.getTime() - previous < GAP_MS) continue;
-            if (early.some((r) => r.at.getTime() === at.getTime())) continue;
+            if (
+                hour === 0
+                    ? batches.includes(at.getTime())
+                    : batches.some((b) => Math.abs(at.getTime() - b) < SOON_FLOOR_MS)
+            ) {
+                // A follow-up isn't hard on the heels of a batch's reminder: what comes due meanwhile waits for a later one.
+                continue;
+            }
             const count = countAt(at);
             // The first of a day says what is due even if that was said the evening before.
             if (hour === 0 ? count === 0 : count <= Math.max(told, toldEarly(at))) continue;

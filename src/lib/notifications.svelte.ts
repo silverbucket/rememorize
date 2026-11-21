@@ -37,6 +37,10 @@ const WANTED_KEY = "rememorize:reminders";
 /** The server this browser subscribed with, kept so a move to another one is noticed. */
 const SERVER_KEY = "rememorize:reminderServer";
 const DEVICE_KEY = "rememorize:deviceId";
+/** When the last reminder for cards coming back in minutes went out, so the next keeps its distance. */
+const LAST_SOON_KEY = "rememorize:lastSoon";
+/** The one planned and still ahead, which counts once its time has passed. */
+const PENDING_SOON_KEY = "rememorize:pendingSoon";
 const DEVICES = "devices/";
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A device writes its record again this often, to show it is still in use. */
@@ -169,6 +173,8 @@ export class Reminders {
     #last = 0;
     /** Sends that have failed in a row. */
     #failures = 0;
+    /** Whether the run after the one in progress is wanted at once (see `#pump`). */
+    #urgent = false;
     /** Whether the cards are as new as storage has them: always, without an account; after the first sync, with one. */
     #fresh = false;
 
@@ -186,6 +192,9 @@ export class Reminders {
             } else if (this.#dirty) {
                 // The app is being put away: send what is waiting now, there may be no later.
                 this.#pump(true);
+            } else if (dueBetween(library.cards, new Date(), new Date(Date.now() + SOON_MS)).length > 0) {
+                // Cards coming back in minutes were left out while it was open.
+                this.changed(true);
             }
         };
         const online = () => this.changed(true);
@@ -321,7 +330,10 @@ export class Reminders {
      */
     #pump(now = false): void {
         // The run in progress starts another when it ends, if something changed meanwhile.
-        if (this.#syncing) return;
+        if (this.#syncing) {
+            this.#urgent ||= now;
+            return;
+        }
         clearTimeout(this.#timer);
         this.#timer = undefined;
         const wait =
@@ -356,7 +368,9 @@ export class Reminders {
             .finally(() => {
                 this.#syncing = false;
                 this.#last = Date.now();
-                if (this.#dirty) this.#pump();
+                const urgent = this.#urgent;
+                this.#urgent = false;
+                if (this.#dirty) this.#pump(urgent);
             });
     }
 
@@ -540,12 +554,23 @@ export class Reminders {
         if (devices.length === 0) return;
         const now = new Date();
         const soon = dueBetween(library.cards, now, new Date(now.getTime() + SOON_MS));
+        // Nothing about them while the app is open: they show up in it. Putting it away sends them.
+        const away = document.visibilityState === "hidden";
+        const stored = (key: string) => {
+            const at = Date.parse(read(key));
+            return Number.isNaN(at) ? undefined : new Date(at);
+        };
+        // A batch's reminder planned earlier has gone out once its time has passed.
+        const pending = stored(PENDING_SOON_KEY);
+        const sent = stored(LAST_SOON_KEY);
+        const lastSoon = pending && pending <= now && (!sent || pending > sent) ? pending : sent;
         const plan = planReminders(
             now,
             library.reminderTime,
             (at) => library.todayIn(library.cards, at).length,
             REMINDER_DAYS,
-            soon,
+            away ? soon : [],
+            lastSoon,
         );
         const signature = JSON.stringify([
             plan.map((r) => [r.at.getTime(), r.count]),
@@ -573,6 +598,9 @@ export class Reminders {
         }
         if (failure) throw failure;
         this.#sent = signature;
+        // The one that went out keeps the next back; one replaced before its time doesn't.
+        write(LAST_SOON_KEY, lastSoon && lastSoon <= now ? lastSoon.toISOString() : "");
+        write(PENDING_SOON_KEY, plan.find((r) => r.soon)?.at.toISOString() ?? "");
     }
 }
 

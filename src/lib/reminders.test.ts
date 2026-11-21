@@ -101,33 +101,73 @@ describe("later reminders in a day", () => {
         ]);
     });
 
-    it("still says on the hour what came due after the early reminders", () => {
-        // At 14:50, cards come back at 14:52, 14:54 (too soon after for a reminder of its own) and 15:10.
-        const due = dueFrom(at(20, 14, 52), at(20, 14, 54), at(20, 15, 10));
-        const plan = planReminders(at(20, 14, 50), "09:00", due, 1, [at(20, 14, 52), at(20, 14, 54), at(20, 15, 10)]);
+    it("tells of a batch once, when the last of it is back, and of what comes later on the hour", () => {
+        // Put away at 14:50: cards come back at 14:52 and 14:54, one batch, and 15:40 on its own.
+        const due = dueFrom(at(20, 14, 52), at(20, 14, 54), at(20, 15, 40));
+        const plan = planReminders(at(20, 14, 50), "09:00", due, 1, [at(20, 14, 52), at(20, 14, 54), at(20, 15, 40)]);
         expect(times(plan)).toEqual([
-            [at(20, 14, 52), 1],
-            [at(20, 15), 2],
-            [at(20, 15, 10), 3],
+            // 15:00 is too soon after the batch's reminder.
+            [at(20, 14, 54), 2],
+            [at(20, 16), 3],
             [at(21, 9), 3],
         ]);
     });
 
-    it("keeps reminders for cards coming back a few minutes apart, and the list within what a server holds", () => {
+    it("ends a batch at the first gap of five minutes", () => {
+        const soon = [at(20, 12, 1), at(20, 12, 4), at(20, 12, 8), at(20, 12, 13)];
+        const plan = planReminders(at(20, 12), "09:00", dueFrom(...soon), 1, soon);
+        expect(times(plan)[0]).toEqual([at(20, 12, 8), 3]);
+    });
+
+    it("waits no longer than a quarter of an hour for a batch that keeps growing", () => {
         const soon = Array.from({ length: 40 }, (_, i) => at(20, 12, i + 1));
-        const plan = planReminders(
-            at(20, 12),
-            "09:00",
-            (when) => (when.getHours() === 12 ? when.getMinutes() : 40),
-            30,
-            soon,
-        );
-        expect(times(plan).slice(0, 3)).toEqual([
-            [at(20, 12, 1), 1],
-            [at(20, 12, 6), 6],
-            [at(20, 12, 11), 11],
+        const plan = planReminders(at(20, 12), "09:00", dueFrom(...soon), 30, soon);
+        expect(times(plan).slice(0, 2)).toEqual([
+            [at(20, 12, 15), 15],
+            [at(20, 13), 40],
         ]);
+        expect(plan.filter((r) => r.soon)).toHaveLength(1);
         expect(plan.length).toBeLessThanOrEqual(60);
+    });
+
+    it("keeps a batch's reminder half an hour after the one before it", () => {
+        // A reminder went out at 12:10; the app was opened, and put away again at 12:20.
+        const soon = [at(20, 12, 21), at(20, 12, 23)];
+        const plan = planReminders(at(20, 12, 20), "09:00", dueFrom(...soon), 1, soon, at(20, 12, 10));
+        expect(times(plan)[0]).toEqual([at(20, 12, 40), 2]);
+    });
+
+    it("keeps the day's first reminder near a batch's reminder that went out", () => {
+        // A batch's reminder went out at 8:50; a card comes due at 9:10.
+        const due = dueFrom(at(20, 8, 40), at(20, 9, 10), at(20, 10, 10));
+        const plan = planReminders(at(20, 8, 55), "09:00", due, 1, [], at(20, 8, 50));
+        expect(times(plan)).toEqual([
+            [at(20, 9), 1],
+            [at(20, 15), 3],
+        ]);
+    });
+
+    it("keeps follow-ups half an hour after a batch's reminder that went out", () => {
+        // A batch's reminder went out at 14:54, the app was opened at 14:56, and a card comes due at 14:58.
+        const due = dueFrom(at(20, 14, 58));
+        const plan = planReminders(at(20, 14, 56), "09:00", due, 1, [], at(20, 14, 54));
+        expect(times(plan)).toEqual([
+            [at(20, 16), 1],
+            [at(21, 9), 1],
+        ]);
+    });
+
+    it("doesn't hold a batch back for a reminder that hasn't gone out yet", () => {
+        const soon = [at(20, 12, 21)];
+        const plan = planReminders(at(20, 12, 20), "09:00", dueFrom(...soon), 1, soon, at(20, 12, 25));
+        expect(times(plan)[0]).toEqual([at(20, 12, 21), 1]);
+    });
+
+    it("leaves cards coming back later than a quarter of an hour to the hourly reminders", () => {
+        const soon = [at(20, 12, 20)];
+        const plan = planReminders(at(20, 12), "09:00", dueFrom(...soon), 1, soon);
+        expect(plan.some((r) => r.soon)).toBe(false);
+        expect(times(plan)[0]).toEqual([at(20, 13), 1]);
     });
 
     it("doesn't announce again what the app was showing when it was last open", () => {
