@@ -16,7 +16,7 @@
     import { onDestroy, tick } from "svelte";
     import { fromNow, plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
-    import { isBuried, isDue, isNew, itemsOf, nextDue, stateOf } from "../lib/scheduler";
+    import { canStudyExtra, isBuried, isDue, isNew, itemsOf, nextDue, stateOf } from "../lib/scheduler";
     import { DIRECTION_LABELS } from "../lib/settings";
     import { library } from "../lib/state";
     import { inView, labelOf, type ViewId, viewCounts } from "../lib/views";
@@ -52,6 +52,8 @@
     const starting = $derived(today.filter((i) => isNew(i.card, i.reverse)).length);
     /** Whether it takes more than one review to get through what's due. */
     const capped = $derived(due < today.length);
+    /** Nothing is due, but there are cards to study anyway: new ones past the daily limit, or learned ones early. */
+    const extra = $derived(due === 0 && canStudyExtra(cards, library.now));
 
     let query = $state("");
     const needle = $derived(query.trim().toLocaleLowerCase());
@@ -245,6 +247,9 @@
             <a class="btn primary" href={href.review(group, show)}>
                 {group === undefined ? `Review ${due} together` : `Review ${plural(due, "card")}`}
             </a>
+        {:else if extra}
+            <!-- A choice, not something due: quieter than a review. -->
+            <a class="btn tonal" href={href.extra(group, show)}>Study extra</a>
         {/if}
     </div>
 </div>

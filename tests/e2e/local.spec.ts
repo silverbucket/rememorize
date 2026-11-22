@@ -487,6 +487,50 @@ test("daily limit on new cards", async ({ page }) => {
     await expect(start).toHaveAccessibleName("Review Numbers, 1 card");
 });
 
+test("extra study past the daily limit", async ({ page }) => {
+    for (const [front, back] of [
+        ["jedna", "one"],
+        ["dva", "two"],
+        ["tři", "three"],
+    ]) {
+        await addCard(page, { front, back, group: "Numbers" });
+    }
+    await page.goto("/#/account");
+    await page.getByLabel("New cards per day").fill("2");
+    await page.getByLabel("New cards per day").blur();
+    await page.goto("/");
+    await page
+        .locator(".today")
+        .getByRole("link", { name: /^Review Numbers/ })
+        .click();
+    for (let i = 0; i < 2; i++) {
+        await page.getByRole("button", { name: /Show answer/ }).click();
+        await page.getByRole("button", { name: /Easy/ }).click();
+    }
+    // Today's are done. More can be studied on purpose, but leaving stays the main way on.
+    await expect(page.getByRole("link", { name: "Back to your cards" })).toHaveClass(/primary/);
+    await expect(page.getByRole("link", { name: "Study 1 extra card" })).toBeVisible();
+    await page.goto("/");
+    await expect(page.getByText("1 card not started yet: more start tomorrow, or study extra now.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Study extra cards in Numbers" })).toBeVisible();
+
+    // The group offers it too, and it opens a review of its own that a reload keeps.
+    await page.goto("/#/group/Numbers");
+    await page.getByRole("link", { name: "Study extra" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Numbers · Extra$/);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Numbers · Extra$/);
+    // Only the card held back by the limit: the others were studied today, so they aren't brought back.
+    await expect(page.getByText("1 card left")).toBeVisible();
+    await expect(page.locator(".side.front")).toHaveText("tři");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByText("Extra study done")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Study/ })).toHaveCount(0);
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Study extra cards in Numbers" })).toHaveCount(0);
+});
+
 test("reviews of a few cards at a time, and the home page counts new cards apart", async ({ page }) => {
     for (const [front, back] of [
         ["jedna", "one"],

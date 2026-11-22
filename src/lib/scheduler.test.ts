@@ -1,6 +1,16 @@
 import type { Flashcard } from "remotestorage-module-flashcards";
 import { describe, expect, it } from "vitest";
-import { dueItems, formatInterval, isDue, nextDue, previewIntervals, rate, startedOn } from "./scheduler";
+import {
+    canStudyExtra,
+    dueItems,
+    extraItems,
+    formatInterval,
+    isDue,
+    nextDue,
+    previewIntervals,
+    rate,
+    startedOn,
+} from "./scheduler";
 
 const NOW = new Date("2026-03-01T12:00:00.000Z");
 
@@ -242,5 +252,37 @@ describe("reversed cards", () => {
         const c = card({ direction: "reverse" });
         const due = new Date(rate(c, 3, NOW, true).reverseReview?.due ?? 0).getTime();
         expect(previewIntervals(c, NOW, true)[3]).toBe(formatInterval(due - NOW.getTime()));
+    });
+});
+
+describe("extraItems", () => {
+    const DAY = 86_400_000;
+    // Learned a while ago and not due for weeks.
+    const learned = (id: string) => rate(card({ "@id": id }), 4, new Date(NOW.getTime() - DAY));
+    // Rated Again just now: still being learned, back in minutes.
+    const learning = (id: string) => rate(card({ "@id": id }), 1, NOW);
+
+    it("offers new cards past the daily limit, then learned cards early, never ones still being learned", () => {
+        const cards = [learned("l"), learning("x"), card({ "@id": "a" }), card({ "@id": "b" })];
+        expect(dueItems(cards, NOW, 0)).toEqual([]);
+        const picked = extraItems(cards, 10, NOW).map((i) => i.card["@id"]);
+        expect(picked.slice(0, 2).sort()).toEqual(["a", "b"]);
+        expect(picked.slice(2)).toEqual(["l"]);
+        expect(canStudyExtra(cards, NOW)).toBe(true);
+        expect(canStudyExtra([learning("x")], NOW)).toBe(false);
+        // One reviewed today isn't brought back again.
+        expect(canStudyExtra([rate(card({ "@id": "t" }), 4, NOW)], NOW)).toBe(false);
+    });
+
+    it("takes a random handful, each card once", () => {
+        const cards = Array.from({ length: 50 }, (_, i) => card({ "@id": `c${i}`, direction: "both" }));
+        const picked = extraItems(cards, 20, NOW);
+        expect(picked).toHaveLength(20);
+        expect(new Set(picked.map((i) => i.card["@id"])).size).toBe(20);
+        // The order comes from the shuffle: one that never swaps keeps the cards as they were, another doesn't.
+        const ids = (random: () => number) => extraItems(cards, 20, NOW, random).map((i) => i.card["@id"]);
+        const first = cards.slice(0, 20).map((c) => c["@id"]);
+        expect(ids(() => 0.999)).toEqual(first);
+        expect(ids(() => 0.5)).not.toEqual(first);
     });
 });

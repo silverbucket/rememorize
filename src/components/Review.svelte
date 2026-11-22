@@ -5,6 +5,7 @@
     import { reminders } from "../lib/notifications.svelte";
     import { href } from "../lib/router.svelte";
     import {
+        extraItems,
         GRADES,
         type Grade,
         heldUntilTomorrow,
@@ -30,13 +31,25 @@
     import { inView, labelOf, type ViewId } from "../lib/views";
     import Icon from "./Icon.svelte";
 
-    /** `from` says the review was started on the home page, or carried on from another group's: home is where it ends. */
-    let { group, show, from }: { group?: string; show?: ViewId; from?: "home" } = $props();
+    /**
+     * `from` says the review was started on the home page, or carried on from another group's: home is where it ends.
+     * `extra` is extra study: random cards beyond what is due, for when today's are done and you want more.
+     */
+    let { group, show, from, extra = false }: { group?: string; show?: ViewId; from?: "home"; extra?: boolean } =
+        $props();
+
+    /** How many cards one round of extra study takes, unless the review size is smaller. */
+    const EXTRA_CARDS = 20;
 
     const within = $derived(group ? library.cardsIn(group) : library.cards);
     const scope = $derived(show ? within.filter((c) => inView(c, show, library.now)) : within);
-    /** What is being reviewed, for the heading: the group, the view, or both. */
-    const title = $derived([group, show && labelOf(show)].filter(Boolean).join(" · "));
+    /** What is being reviewed, for the heading: the group, the view, or both, and whether it is extra study. */
+    const title = $derived(
+        [group, show && labelOf(show), extra && (group || show ? "Extra" : "Extra study")]
+            .filter(Boolean)
+            .join(" · "),
+    );
+    const extraSize = $derived(Math.min(EXTRA_CARDS, library.cardsPerReview ?? EXTRA_CARDS));
 
     let queue: ReviewItem[] = $state([]);
     /** Cards rated Again, which come back in this review once they are due again, soonest first. */
@@ -127,7 +140,9 @@
      * so the button that carries on to the next group doesn't contradict it.
      */
     const doneTitle = $derived(
-        waiting > 0
+        extra
+            ? "Extra study done"
+            : waiting > 0
             ? "Done for now"
             : group !== undefined && !show
               ? `${group} done`
@@ -189,7 +204,7 @@
         if (started || !library.loaded) return;
         const cards = scope;
         untrack(() => {
-            queue = library.dueIn(cards, new Date(), share);
+            queue = extra ? extraItems(cards, extraSize, new Date()) : library.dueIn(cards, new Date(), share);
             // A card already back in the queue isn't also waiting to come back.
             later = later.filter((l) => !queue.some((q) => itemKey(q) === itemKey(l)));
             started = true;
@@ -235,7 +250,10 @@
         return out;
     });
 
-    /** Start another review of what is still due, as if the page had just opened. */
+    /** Cards an extra round could take once this review is over: none are held back by the daily limit. */
+    const extraLeft = $derived(live.length === 0 ? extraItems(scope, extraSize, library.now).length : 0);
+
+    /** Start another review, as if the page had just opened: of what is still due, or another round of extra study. */
     function nextBatch() {
         startedWith = undefined;
         grown = [];
@@ -475,6 +493,9 @@
             {:else if within.length === 0}
                 <h2>No cards to review</h2>
                 <p>Add some cards first.</p>
+            {:else if extra}
+                <h2>Nothing more to study</h2>
+                <p class="muted">Every card here is either still being learned or was just studied.</p>
             {:else}
                 <h2>Nothing due</h2>
             {/if}
@@ -498,9 +519,13 @@
         <!-- Where to go next, apart from the summary and at the bottom of a phone's screen, like the answer buttons. -->
         <div class="done-actions">
             {#if waiting > 0}
-                <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>
-                    Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
-                </button>
+                {@const label = `Review ${plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}`}
+                <!-- Cards that came due during extra study are a review of their own, not another extra round. -->
+                {#if extra}
+                    <a class="btn primary" href={href.review(group, show, from)}>{label}</a>
+                {:else}
+                    <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>{label}</button>
+                {/if}
             {:else if nextGroup}
                 <!-- How much of the day is left, where the next step is taken. -->
                 <p class="muted left-today">
@@ -529,6 +554,19 @@
                     {/if}
                     <a href={href.account()}>Change the limit</a>
                 </p>
+            {/if}
+            <!--
+                Today's are done, but more can be studied: new cards past the daily limit, or learned ones early.
+                It is a choice, not the next thing to do, so leaving stays the main button.
+            -->
+            {#if waiting === 0 && !nextGroup && extraLeft > 0}
+                {#if extra}
+                    <button class="btn tonal" type="button" onclick={nextBatch} disabled={busy}>
+                        Study {plural(extraLeft, "more card")}
+                    </button>
+                {:else}
+                    <a class="btn tonal" href={href.extra(group, show, from)}>Study {plural(extraLeft, "extra card")}</a>
+                {/if}
             {/if}
             <a class="btn" class:primary={waiting === 0 && !nextGroup} href={back}>Back to {backName}</a>
         </div>

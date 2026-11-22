@@ -12,6 +12,7 @@
  *
  * The card lists and the review take `?show=:view` to keep to one view (see `views.ts`).
  * A review started from the home page says so with `?from=home`, and ends back there.
+ * `?extra=1` is extra study: random cards beyond what is due and the daily limit.
  *
  *   #/account              storage connection
  *   #/import[?from=settings]  import cards from a file (and where to go back to)
@@ -25,7 +26,7 @@ export type Route =
     | { name: "group"; group: string; show?: ViewId }
     | { name: "edit"; group: string; id: string }
     | { name: "new"; group?: string }
-    | { name: "review"; group?: string; show?: ViewId; from?: "home" }
+    | { name: "review"; group?: string; show?: ViewId; from?: "home"; extra?: true }
     | { name: "account" }
     | { name: "import"; from?: "settings" }
     | { name: "stats" };
@@ -56,7 +57,10 @@ export function parseHash(hash: string): Route {
         }
         case "review": {
             const from = params.get("from") === "home" ? { from: "home" as const } : {};
-            return a ? { name: "review", group: a, ...show, ...from } : { name: "review", ...show, ...from };
+            const extra = params.get("extra") === "1" ? { extra: true as const } : {};
+            return a
+                ? { name: "review", group: a, ...show, ...from, ...extra }
+                : { name: "review", ...show, ...from, ...extra };
         }
         case "account":
             return { name: "account" };
@@ -85,6 +89,9 @@ export const href = {
     newCard: (group?: string) => (group ? `#/new?group=${enc(group)}` : "#/new"),
     review: (group?: string, show?: ViewId, from?: "home") =>
         `${group ? `#/review/${enc(group)}` : "#/review"}${query({ show, from })}`,
+    /** Extra study of some cards, beyond what is due today. */
+    extra: (group?: string, show?: ViewId, from?: "home") =>
+        `${group ? `#/review/${enc(group)}` : "#/review"}${query({ show, from, extra: "1" })}`,
     account: () => "#/account",
     import: (from?: "settings") => (from ? `#/import?from=${from}` : "#/import"),
     stats: () => "#/stats",
