@@ -869,6 +869,30 @@ test("a review keeps to one group, and offers the next group when it ends", asyn
     await expect(page.getByRole("heading", { name: "Ready to review" })).toHaveCount(0);
 });
 
+test("a review from the home page starts its group's share of today's new cards", async ({ page }) => {
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await addCard(page, { front: "voda", back: "water", group: "Drinks" });
+    await addCard(page, { front: "pivo", back: "beer", group: "Drinks" });
+    await page.goto("/#/account");
+    await page.getByLabel("New cards per day").fill("2");
+    await page.getByLabel("New cards per day").press("Enter");
+    await page.getByLabel("New cards per day").blur();
+
+    // Two new cards today: one for each group, though Drinks has two it could start.
+    await page.goto("/");
+    await expect(page.locator(".today .headline")).toHaveText("2 cards ready to review");
+    await page.getByRole("link", { name: "Review Drinks, 1 card" }).click();
+    await expect(page.getByText("1 card left")).toBeVisible();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByRole("heading", { name: "Drinks done" })).toBeVisible();
+
+    // The other group still has the card it was promised.
+    await expect(page.getByText("1 card ready in 1 other group")).toBeVisible();
+    await page.getByRole("link", { name: "Review Animals, 1 card" }).click();
+    await expect(page.locator(".side.front")).toHaveText("pes");
+});
+
 test("tapping the card shows the answer, but its hint button only shows the hint", async ({ page }) => {
     await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks" });
     await page.goto("/#/review");

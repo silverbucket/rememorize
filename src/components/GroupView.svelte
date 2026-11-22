@@ -155,7 +155,8 @@
 
     async function turned(change: Redirected) {
         if (gone) return;
-        stopSelecting();
+        // From Group settings with nothing being picked, focus stays where its dialog put it back.
+        if (selecting) stopSelecting();
         redirected = change;
     }
 

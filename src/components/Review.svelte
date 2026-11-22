@@ -30,7 +30,7 @@
     import { inView, labelOf, type ViewId } from "../lib/views";
     import Icon from "./Icon.svelte";
 
-    /** `from` says the review was started on the home page, which is then where it ends. */
+    /** `from` says the review was started on the home page, or carried on from another group's: home is where it ends. */
     let { group, show, from }: { group?: string; show?: ViewId; from?: "home" } = $props();
 
     const within = $derived(group ? library.cardsIn(group) : library.cards);
@@ -85,8 +85,17 @@
     /** Where `back` leads, for its label. */
     const backName = $derived(from === "home" ? "your cards" : (group ?? "all cards"));
     const held = $derived(heldUntilTomorrow(scope, library.now));
+    /**
+     * The new cards this review may start. Offered among the other groups, it takes the group's share of
+     * today's, which is what its button counted. Opened from the group's own page, it takes all that are left.
+     */
+    const share = $derived(
+        from === "home" && group !== undefined && !show
+            ? (library.ready.find((g) => g.name === group)?.starting ?? 0)
+            : undefined,
+    );
     /** Cards still due once this review is over: they didn't fit in it, and can make the next one. */
-    const waiting = $derived(live.length === 0 ? library.todayIn(scope, library.now).length : 0);
+    const waiting = $derived(live.length === 0 ? library.todayIn(scope, library.now, share).length : 0);
     /**
      * The group to carry on with once this one is done: a review keeps to one group,
      * and the next one is a tap away. Not offered from a view, which is a review of its own kind.
@@ -109,7 +118,9 @@
     /** Nothing is left to review anywhere: the day's reviews are done, or done until more come due. */
     const dayDone = $derived(waiting === 0 && library.ready.length === 0);
     /** Whether to say when the next review is: later today always, a later day only when nothing new starts before it. */
-    const comeBack = $derived(!!soonest && (moreToday || (library.newWaiting === 0 && held === 0)));
+    const comeBack = $derived(
+        !!soonest && (moreToday || (library.newWaiting === 0 && heldUntilTomorrow(library.cards, library.now) === 0)),
+    );
 
     /**
      * What the wrap-up is called. One group done is not the day done: it says which,
@@ -127,7 +138,7 @@
     /** The groups still to review once this one is done, and what their reviews hold. */
     const left = $derived(library.ready.filter((g) => g.name !== group));
     const groupsLeft = $derived(left.length);
-    const cardsLeft = $derived(left.reduce((sum, g) => sum + g.due, 0));
+    const cardsLeft = $derived(left.reduce((sum, g) => sum + g.reviews + (g.starting ?? 0), 0));
     /** How far through the session: ratings given, out of those plus what is left. */
     const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
     const dueAt = (i: ReviewItem) => new Date(stateOf(i.card, i.reverse)?.due ?? 0).getTime();
@@ -178,7 +189,7 @@
         if (started || !library.loaded) return;
         const cards = scope;
         untrack(() => {
-            queue = library.dueIn(cards, new Date());
+            queue = library.dueIn(cards, new Date(), share);
             // A card already back in the queue isn't also waiting to come back.
             later = later.filter((l) => !queue.some((q) => itemKey(q) === itemKey(l)));
             started = true;
@@ -502,7 +513,7 @@
                     <p class="next-up">Next up</p>
                     <a
                         class="btn primary"
-                        href={href.review(nextGroup.name, undefined, from)}
+                        href={href.review(nextGroup.name, undefined, "home")}
                         aria-label="Review {nextGroup.name}, {plural(nextGroup.due, 'card')}"
                     >
                         <span class="what">Review {nextGroup.name}</span>

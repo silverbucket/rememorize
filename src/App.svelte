@@ -98,7 +98,7 @@
                 <CardEditor group={route.group} />
             {/key}
         {:else if route.name === "review"}
-            {#key href.review(route.group, route.show)}
+            {#key href.review(route.group, route.show, route.from)}
                 <Review group={route.group} show={route.show} from={route.from} />
             {/key}
         {:else if route.name === "account"}

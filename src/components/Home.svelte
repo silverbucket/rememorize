@@ -49,7 +49,7 @@
     const moreToday = $derived(!!next && next.toDateString() === library.now.toDateString());
 
     /** A group with nothing due could still be given today's new cards. */
-    const canStartElsewhere = $derived(library.newRemaining > 0 && rest.some((g) => notStartedIn(g.name) > 0));
+    const canStartElsewhere = $derived(library.newRemaining > 0 && rest.some((g) => g.fresh > 0));
 
     /** The group the next card to come due is in. */
     const soonestGroup = $derived(
@@ -119,8 +119,10 @@
                                 The next card is due {fromNow(next.toISOString(), library.now)}.
                             {/if}
                         {:else if library.newWaiting > 0}
-                            {plural(viewCounts(library.cards, library.now).new, "card")} not started yet: more start
-                            tomorrow.
+                            <!-- What waits can be only the other side of cards already started: none of those is "not started". -->
+                            {@const unstarted = viewCounts(library.cards, library.now).new}
+                            {#if unstarted > 0}{plural(unstarted, "card")} not started yet: more{:else}More new cards{/if}
+                            start tomorrow.
                         {:else if next}
                             The next card is due {fromNow(next.toISOString(), library.now)}.
                         {:else}
@@ -200,18 +202,18 @@
                                 {waiting} not started{/if}{#if due}, <span class:soon={ready.length === 0 && group.name === soonestGroup}>next review {fromNow(due.toISOString(), library.now)}</span>{/if}
                         </span>
                         <!-- Today's new cards can go to this group instead: said on the row that does it. -->
-                        {#if waiting > 0 && library.newRemaining > 0}
+                        {#if group.fresh > 0 && library.newRemaining > 0}
                             <span class="meta instead">
                                 {#if takers}
                                     Today's {plural(library.newRemaining, "new card")}
                                     {library.newRemaining === 1 ? "is" : "are"} set for <strong>{takers}</strong>. You can start
-                                    {waiting >= library.newRemaining
+                                    {group.fresh >= library.newRemaining
                                         ? library.newRemaining === 1
                                             ? "it"
                                             : "them"
-                                        : waiting} here instead.
+                                        : group.fresh} here instead.
                                 {:else}
-                                    You can start today's {plural(Math.min(waiting, library.newRemaining), "new card")} here.
+                                    You can start today's {plural(Math.min(group.fresh, library.newRemaining), "new card")} here.
                                 {/if}
                             </span>
                         {/if}
