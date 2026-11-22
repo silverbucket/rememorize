@@ -78,11 +78,25 @@ export class Library {
     /** The log entry of the latest review made here, for undo. */
     #lastLogged: ReviewLogEntry | undefined;
     #loadGeneration = 0;
+    /**
+     * Cards changed while a load reads the cache, by key (`undefined` when
+     * removed). The load lays them over what it read, which can be older.
+     */
+    #changedWhileLoading: Map<string, Flashcard | undefined> | undefined;
+    /** The card folders as a plain client, to count what they list. */
+    #cardFolders: BaseClient;
+    #counting = false;
+    #countedAt = 0;
 
     loaded = $state(false);
     status: ConnectionStatus = $state("local");
     userAddress = $state("");
     syncing = $state(false);
+    /**
+     * Cards the storage lists, whether or not they have reached this device
+     * yet. Counted from the cached folder listings while a sync runs.
+     */
+    listed = $state(0);
     offline = $state(false);
     error = $state("");
     /** Ticks every minute so due counts stay current. */
@@ -120,6 +134,13 @@ export class Library {
     groupDirections: Record<string, CardDirection> = $state({});
 
     cards = $derived(Object.values(this.#cards));
+
+    /**
+     * Cards still on their way from storage, while a sync runs. Already
+     * synced cards stay on this device, so a sync that stops (the app is
+     * closed or in the background) carries on from here next time.
+     */
+    toSync = $derived(this.syncing ? Math.max(0, this.listed - this.cards.length) : 0);
 
     /** Every recorded review, oldest first. */
     log = $derived(
@@ -196,6 +217,7 @@ export class Library {
     constructor(rs: RSWithModules, options: { newPerDay?: number; cardsPerReview?: number | null } = {}) {
         this.#rs = rs;
         this.#app = rs.scope("/rememorize/");
+        this.#cardFolders = rs.scope("/flashcards/");
         this.#app.declareType("settings", appSettingsSchema);
         if (options.newPerDay !== undefined) this.newPerDay = options.newPerDay;
         if (options.cardsPerReview !== undefined) this.cardsPerReview = options.cardsPerReview;
@@ -222,6 +244,7 @@ export class Library {
             this.status = "local";
             this.userAddress = "";
             this.syncing = false;
+            this.listed = 0;
             // Disconnecting wipes the local cache; caching has to be
             // re-enabled for the next session.
             rs.caching.enable("/flashcards/");
@@ -244,6 +267,11 @@ export class Library {
         });
         rs.on("sync-started", () => {
             this.syncing = true;
+            void this.#countListed();
+        });
+        // A folder listing may have just arrived, and with it more cards to come.
+        rs.on("sync-req-done", () => {
+            if (Date.now() - this.#countedAt > 2000) void this.#countListed();
         });
         rs.on("sync-done", () => {
             this.syncing = false;
@@ -266,6 +294,8 @@ export class Library {
     /** Reload every card, and the settings, from the local cache. */
     async load(): Promise<void> {
         const generation = ++this.#loadGeneration;
+        const changed = new Map<string, Flashcard | undefined>();
+        this.#changedWhileLoading = changed;
         try {
             const [cards, settings, log] = await Promise.all([
                 this.#rs.flashcards.getAll(false),
@@ -280,11 +310,19 @@ export class Library {
             this.#log = days;
             const next: Record<string, Flashcard> = {};
             for (const card of cards) next[keyOf(card.group, card["@id"])] = card;
+            // Cards that sync or this tab changed while the cache was being read.
+            for (const [key, card] of changed) {
+                if (card) next[key] = card;
+                else delete next[key];
+            }
             this.#cards = next;
         } catch (e) {
             this.error = `Could not load cards: ${messageOf(e)}`;
         } finally {
-            if (generation === this.#loadGeneration) this.loaded = true;
+            if (generation === this.#loadGeneration) {
+                this.loaded = true;
+                this.#changedWhileLoading = undefined;
+            }
         }
     }
 
@@ -336,10 +374,10 @@ export class Library {
     /** Create or update a card. Pass `previousGroup` when editing an existing card. */
     async save(input: FlashcardInput, previousGroup?: string): Promise<Flashcard> {
         const card = await this.#rs.flashcards.store(input, { previousGroup });
-        const next = { ...this.#cards };
-        if (previousGroup !== undefined) delete next[keyOf(previousGroup, card["@id"])];
-        next[keyOf(card.group, card["@id"])] = card;
-        this.#cards = next;
+        const changes: [string, Flashcard | undefined][] = [];
+        if (previousGroup !== undefined) changes.push([keyOf(previousGroup, card["@id"]), undefined]);
+        changes.push([keyOf(card.group, card["@id"]), card]);
+        this.#changeCards(changes);
         return card;
     }
 
@@ -528,18 +566,12 @@ export class Library {
 
     async remove(card: Flashcard): Promise<void> {
         await this.#rs.flashcards.remove(card.group, card["@id"]);
-        const next = { ...this.#cards };
-        delete next[keyOf(card.group, card["@id"])];
-        this.#cards = next;
+        this.#changeCards([[keyOf(card.group, card["@id"]), undefined]]);
     }
 
     async removeGroup(group: string): Promise<void> {
         await this.#rs.flashcards.removeGroup(group);
-        const next: Record<string, Flashcard> = {};
-        for (const [key, card] of Object.entries(this.#cards)) {
-            if (card.group !== group) next[key] = card;
-        }
-        this.#cards = next;
+        this.#changeCards(this.cardsIn(group).map((card) => [keyOf(group, card["@id"]), undefined]));
         if (this.groupDirections[group] !== undefined) {
             await this.#changeGroupDirections({ [group]: undefined }).catch(() => {});
         }
@@ -682,14 +714,42 @@ export class Library {
         if (slash <= 0 || path.endsWith("/")) return;
         const group = path.slice(0, slash);
         const id = path.slice(slash + 1);
-        const next = { ...this.#cards };
         const card = event.newValue === undefined ? undefined : normalizeFlashcard(event.newValue);
-        if (card) {
-            next[keyOf(group, id)] = { ...card, group };
-        } else {
-            delete next[keyOf(group, id)];
+        this.#changeCards([[keyOf(group, id), card && { ...card, group }]]);
+    }
+
+    /** Add, replace or (with `undefined`) remove cards by key. */
+    #changeCards(changes: [string, Flashcard | undefined][]): void {
+        const next = { ...this.#cards };
+        for (const [key, card] of changes) {
+            if (card) next[key] = card;
+            else delete next[key];
+            this.#changedWhileLoading?.set(key, card);
         }
         this.#cards = next;
+    }
+
+    /** Count the cards the storage lists, from the folder listings in the cache. */
+    async #countListed(): Promise<void> {
+        if (this.#counting) return;
+        this.#counting = true;
+        try {
+            const groups = await this.#rs.flashcards.listGroups(false);
+            const listings = await Promise.all(groups.map((g) => this.#cardFolders.getListing(`${g}/`, false)));
+            this.listed = listings.reduce<number>(
+                (n, listing) =>
+                    n +
+                    (listing && typeof listing === "object"
+                        ? Object.keys(listing).filter((k) => !k.endsWith("/")).length
+                        : 0),
+                0,
+            );
+        } catch {
+            // Only a progress count: the next sync request tries again.
+        } finally {
+            this.#counting = false;
+            this.#countedAt = Date.now();
+        }
     }
 
     #onError(e: unknown): void {

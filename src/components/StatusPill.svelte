@@ -6,6 +6,7 @@
         if (library.status === "unauthorized") return "Sign in again";
         if (library.status === "local") return "Saved locally";
         if (library.offline) return "Offline";
+        if (library.toSync > 0) return `Syncing ${library.cards.length.toLocaleString()} of ${library.listed.toLocaleString()}`;
         if (library.syncing) return "Syncing…";
         return library.userAddress || "Connected";
     });
