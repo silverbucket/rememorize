@@ -266,6 +266,8 @@ describe("planImport", () => {
         expect(plan.repeated).toBe(1);
         expect(sameText("„Jak se máš?“")).toBe("jak se máš");
         expect(sameText("byt’")).not.toBe(sameText("byt"));
+        expect(sameText("こんにちは。")).toBe("こんにちは");
+        expect(sameText("¿Qué tal?")).toBe("qué tal");
     });
 
     it("doesn't count a restored card whose front and back match the one here", () => {

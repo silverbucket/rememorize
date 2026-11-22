@@ -255,7 +255,7 @@ export function sameText(text: string): string {
         .normalize("NFC")
         .toLocaleLowerCase()
         .replace(/\s+/g, " ")
-        .replace(/^[\s.,;:!?¡¿…"„“”«»-]+|[\s.,;:!?…"„“”«»-]+$/g, "");
+        .replace(/^(?:(?!['‘’])[\s\p{P}])+|(?:(?!['‘’])[\s\p{P}])+$/gu, "");
 }
 
 /**

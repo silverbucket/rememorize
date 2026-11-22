@@ -68,7 +68,8 @@ import {
      * card's id, or its two sides, so changing the group keeps them out.
      */
     const removed = new SvelteSet<string>();
-    const removalKey = (c: FlashcardInput) => c["@id"] ?? `${c.frontText}\u0000${c.backText}`;
+    // Compared as duplicates are, so removing a card removes every spelling of it.
+    const removalKey = (c: FlashcardInput) => c["@id"] ?? `${sameText(c.frontText)}\u0000${sameText(c.backText)}`;
     // Removed cards are left out before planning, so every count is of the cards that will be imported.
     const plan: ImportPlan | undefined = $derived(
         parsed.result
@@ -376,7 +377,7 @@ import {
                     {sameFront.length === 1 ? "has" : "have"} the same front as another card in the group, with a different
                     back
                     <button class="btn ghost small inline" type="button" onclick={() => (onlySameFront = !onlySameFront)}>
-                        {onlySameFront ? "Show all cards" : "Show them"}
+                        {onlySameFront ? "Back to the list" : "Show them"}
                     </button>
                 </li>
             {/if}

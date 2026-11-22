@@ -868,11 +868,18 @@ test("near-duplicates are added once, and cards sharing a front can be picked ou
     const rows = page.locator(".summary tbody tr");
     await expect(rows).toHaveCount(2);
     await expect(rows.first()).toContainText("much");
+    await page.getByRole("button", { name: "Back to the list" }).click();
+    await expect(rows).toHaveCount(4);
+    // Removing a card removes every spelling of it, not just the one shown.
+    await page.getByRole("button", { name: "Remove Není zač." }).click();
+    await expect(page.getByText("3 new cards in Phrases")).toBeVisible();
+    await expect(page.getByText(/repeated in the file/)).toHaveCount(0);
+    await page.getByRole("button", { name: "Show them" }).click();
     await page.getByRole("button", { name: "Remove moc" }).first().click();
     // Nothing left to compare: the whole list is back.
     await expect(page.getByText(/same front/)).toHaveCount(0);
-    await expect(rows).toHaveCount(3);
-    await expect(page.getByRole("button", { name: "Import 3 cards" })).toBeVisible();
+    await expect(rows).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "Import 2 cards" })).toBeVisible();
 });
 
 test("a JSON backup restores cards with their review progress", async ({ page, browser }) => {
