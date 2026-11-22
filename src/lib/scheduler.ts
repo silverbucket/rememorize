@@ -150,8 +150,8 @@ export function dueItems(
  * Extra study, beyond what is due: `count` cards picked at random, for when the
  * day's reviews are done and you want more. New cards come first, whatever the
  * daily limit says; once those run out, cards already learned are reviewed
- * early. Cards still being learned are left alone: they come back on their own
- * within minutes. A card studied both ways appears once, as with `dueItems`.
+ * early, except those already reviewed today. Cards still being learned are
+ * left alone: they come back on their own within minutes. A card studied both ways appears once, as with `dueItems`.
  */
 export function extraItems(cards: Flashcard[], count: number, now = new Date(), random = Math.random): ReviewItem[] {
     const shuffle = <T>(list: T[]) => {
@@ -163,7 +163,7 @@ export function extraItems(cards: Flashcard[], count: number, now = new Date(), 
     };
     const open = cards.flatMap(itemsOf).filter((i) => !isBuried(i, now));
     const fresh = shuffle(open.filter((i) => isNew(i.card, i.reverse)));
-    const learned = shuffle(open.filter((i) => stateOf(i.card, i.reverse)?.state === 2));
+    const learned = shuffle(open.filter((i) => isEarly(i, now)));
     const seen = new Set<Flashcard>();
     const once = (item: ReviewItem) => !seen.has(item.card) && !!seen.add(item.card);
     return [...fresh, ...learned].filter(once).slice(0, Math.max(0, count));
@@ -171,9 +171,12 @@ export function extraItems(cards: Flashcard[], count: number, now = new Date(), 
 
 /** Whether `extraItems` would find anything in these cards. */
 export function canStudyExtra(cards: Flashcard[], now = new Date()): boolean {
-    return cards
-        .flatMap(itemsOf)
-        .some((i) => !isBuried(i, now) && (isNew(i.card, i.reverse) || stateOf(i.card, i.reverse)?.state === 2));
+    return cards.flatMap(itemsOf).some((i) => !isBuried(i, now) && (isNew(i.card, i.reverse) || isEarly(i, now)));
+}
+
+/** A learned direction that extra study may review early: not one already reviewed today. */
+function isEarly(item: ReviewItem, now: Date): boolean {
+    return stateOf(item.card, item.reverse)?.state === 2 && lastReviewedOn(item, now) === undefined;
 }
 
 /** When each direction that isn't due yet comes due, between `from` and `to`. */

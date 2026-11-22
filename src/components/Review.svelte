@@ -43,11 +43,9 @@
 
     const within = $derived(group ? library.cardsIn(group) : library.cards);
     const scope = $derived(show ? within.filter((c) => inView(c, show, library.now)) : within);
-    /** Whether the cards now are extra study, not what is due. Starts as the link says; the wrap-up can switch it. */
-    let extraMode = $state(untrack(() => extra));
     /** What is being reviewed, for the heading: the group, the view, or both, and whether it is extra study. */
     const title = $derived(
-        [group, show && labelOf(show), extraMode && (group || show ? "Extra" : "Extra study")]
+        [group, show && labelOf(show), extra && (group || show ? "Extra" : "Extra study")]
             .filter(Boolean)
             .join(" · "),
     );
@@ -142,7 +140,7 @@
      * so the button that carries on to the next group doesn't contradict it.
      */
     const doneTitle = $derived(
-        extraMode
+        extra
             ? "Extra study done"
             : waiting > 0
             ? "Done for now"
@@ -206,7 +204,7 @@
         if (started || !library.loaded) return;
         const cards = scope;
         untrack(() => {
-            queue = extraMode ? extraItems(cards, extraSize, new Date()) : library.dueIn(cards, new Date(), share);
+            queue = extra ? extraItems(cards, extraSize, new Date()) : library.dueIn(cards, new Date(), share);
             // A card already back in the queue isn't also waiting to come back.
             later = later.filter((l) => !queue.some((q) => itemKey(q) === itemKey(l)));
             started = true;
@@ -255,9 +253,8 @@
     /** Cards an extra round could take once this review is over: none are held back by the daily limit. */
     const extraLeft = $derived(live.length === 0 ? extraItems(scope, extraSize, library.now).length : 0);
 
-    /** Start another review, as if the page had just opened: of what is still due, or `asExtra`, extra study. */
-    function nextBatch(asExtra = false) {
-        extraMode = asExtra;
+    /** Start another review, as if the page had just opened: of what is still due, or another round of extra study. */
+    function nextBatch() {
         startedWith = undefined;
         grown = [];
         reviewed = 0;
@@ -496,7 +493,7 @@
             {:else if within.length === 0}
                 <h2>No cards to review</h2>
                 <p>Add some cards first.</p>
-            {:else if extraMode}
+            {:else if extra}
                 <h2>Nothing more to study</h2>
                 <p class="muted">Every card here is either still being learned or was just studied.</p>
             {:else}
@@ -522,7 +519,7 @@
         <!-- Where to go next, apart from the summary and at the bottom of a phone's screen, like the answer buttons. -->
         <div class="done-actions">
             {#if waiting > 0}
-                <button class="btn primary" type="button" onclick={() => nextBatch()} disabled={busy}>
+                <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>
                     Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
                 </button>
             {:else if nextGroup}
@@ -554,13 +551,20 @@
                     <a href={href.account()}>Change the limit</a>
                 </p>
             {/if}
-            <!-- Today's are done, but more can be studied: new cards past the daily limit, or learned ones early. -->
+            <!--
+                Today's are done, but more can be studied: new cards past the daily limit, or learned ones early.
+                It is a choice, not the next thing to do, so leaving stays the main button.
+            -->
             {#if waiting === 0 && !nextGroup && extraLeft > 0}
-                <button class="btn primary" type="button" onclick={() => nextBatch(true)} disabled={busy}>
-                    Study {plural(extraLeft, extraMode ? "more card" : "extra card")}
-                </button>
+                {#if extra}
+                    <button class="btn tonal" type="button" onclick={nextBatch} disabled={busy}>
+                        Study {plural(extraLeft, "more card")}
+                    </button>
+                {:else}
+                    <a class="btn tonal" href={href.extra(group, show, from)}>Study {plural(extraLeft, "extra card")}</a>
+                {/if}
             {/if}
-            <a class="btn" class:primary={waiting === 0 && !nextGroup && extraLeft === 0} href={back}>Back to {backName}</a>
+            <a class="btn" class:primary={waiting === 0 && !nextGroup} href={back}>Back to {backName}</a>
         </div>
     {/if}
 </div>

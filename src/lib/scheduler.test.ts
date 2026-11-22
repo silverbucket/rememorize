@@ -270,6 +270,8 @@ describe("extraItems", () => {
         expect(picked.slice(2)).toEqual(["l"]);
         expect(canStudyExtra(cards, NOW)).toBe(true);
         expect(canStudyExtra([learning("x")], NOW)).toBe(false);
+        // One reviewed today isn't brought back again.
+        expect(canStudyExtra([rate(card({ "@id": "t" }), 4, NOW)], NOW)).toBe(false);
     });
 
     it("takes a random handful, each card once", () => {
@@ -277,9 +279,10 @@ describe("extraItems", () => {
         const picked = extraItems(cards, 20, NOW);
         expect(picked).toHaveLength(20);
         expect(new Set(picked.map((i) => i.card["@id"])).size).toBe(20);
-        // The order comes from the shuffle: one that never swaps keeps the cards as they were.
+        // The order comes from the shuffle: one that never swaps keeps the cards as they were, another doesn't.
+        const ids = (random: () => number) => extraItems(cards, 20, NOW, random).map((i) => i.card["@id"]);
         const first = cards.slice(0, 20).map((c) => c["@id"]);
-        expect(extraItems(cards, 20, NOW, () => 0.999).map((i) => i.card["@id"])).toEqual(first);
-        expect(picked.map((i) => i.card["@id"]).sort()).not.toEqual([...first].sort());
+        expect(ids(() => 0.999)).toEqual(first);
+        expect(ids(() => 0.5)).not.toEqual(first);
     });
 });

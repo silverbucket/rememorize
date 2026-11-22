@@ -1,7 +1,7 @@
 <script lang="ts">
     import { fromNow, plural } from "../lib/format";
     import { href } from "../lib/router.svelte";
-    import { canStudyExtra, isNew, nextDue } from "../lib/scheduler";
+    import { isNew, nextDue } from "../lib/scheduler";
     import { library } from "../lib/state";
     import { lastDays, streak } from "../lib/stats";
     import { viewCounts } from "../lib/views";
@@ -122,7 +122,7 @@
                             <!-- What waits can be only the other side of cards already started: none of those is "not started". -->
                             {@const unstarted = viewCounts(library.cards, library.now).new}
                             {#if unstarted > 0}{plural(unstarted, "card")} not started yet: more{:else}More new cards{/if}
-                            start tomorrow.
+                            start tomorrow, or study extra now.
                         {:else if next}
                             The next card is due {fromNow(next.toISOString(), library.now)}.
                         {:else}
@@ -218,10 +218,13 @@
                             </span>
                         {/if}
                     </a>
-                    <!-- Nothing due here, but more can be studied anyway: past the daily limit, or ahead of schedule. -->
-                    {#if canStudyExtra(library.cardsIn(group.name), library.now)}
+                    <!--
+                        Nothing to do here today, but new cards wait past the daily limit: they can be started anyway.
+                        A choice, not something due, so it stays quiet next to the reviews above.
+                    -->
+                    {#if group.due === 0 && group.fresh > 0}
                         <a
-                            class="btn tonal small review"
+                            class="btn ghost small review"
                             href={href.extra(group.name)}
                             aria-label="Study extra cards in {group.name}"
                         >

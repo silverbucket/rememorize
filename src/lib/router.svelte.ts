@@ -90,8 +90,8 @@ export const href = {
     review: (group?: string, show?: ViewId, from?: "home") =>
         `${group ? `#/review/${enc(group)}` : "#/review"}${query({ show, from })}`,
     /** Extra study of some cards, beyond what is due today. */
-    extra: (group?: string, show?: ViewId) =>
-        `${group ? `#/review/${enc(group)}` : "#/review"}${query({ show, extra: "1" })}`,
+    extra: (group?: string, show?: ViewId, from?: "home") =>
+        `${group ? `#/review/${enc(group)}` : "#/review"}${query({ show, from, extra: "1" })}`,
     account: () => "#/account",
     import: (from?: "settings") => (from ? `#/import?from=${from}` : "#/import"),
     stats: () => "#/stats",

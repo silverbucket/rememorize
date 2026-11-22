@@ -248,7 +248,8 @@
                 {group === undefined ? `Review ${due} together` : `Review ${plural(due, "card")}`}
             </a>
         {:else if extra}
-            <a class="btn primary" href={href.extra(group, show)}>Study extra</a>
+            <!-- A choice, not something due: quieter than a review. -->
+            <a class="btn tonal" href={href.extra(group, show)}>Study extra</a>
         {/if}
     </div>
 </div>
