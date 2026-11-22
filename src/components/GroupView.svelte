@@ -44,7 +44,7 @@
     /** Reviews that are due, and new cards that could be started: counted apart, as on the home page. */
     const reviews = $derived(library.reviewsIn(cards));
     const fresh = $derived(library.freshIn(cards));
-    /** Cards with a direction not started yet: the number the "Not started" view shows, so the two agree. */
+    /** Cards with nothing started yet: the number the "Not started" view shows, so the two agree. */
     const notStarted = $derived(viewCounts(cards, library.now).new);
     /** Everything due here today, however many reviews it takes. */
     const today = $derived(library.todayIn(cards));
@@ -62,14 +62,14 @@
     );
 
     /**
-     * When a card comes up next. One studied both ways is "new" or "due" if
+     * When a card comes up next. One studied both ways is "not started" or "due" if
      * either direction is, unless that direction waits for tomorrow because
      * the other one was studied today.
      */
     function when(card: Flashcard): { text: string; due: boolean } {
         const due = itemsOf(card).filter((i) => isDue(card, library.now, i.reverse));
         const open = due.filter((i) => !isBuried(i, library.now));
-        if (open.some((i) => !stateOf(card, i.reverse))) return { text: "new", due: true };
+        if (open.some((i) => !stateOf(card, i.reverse))) return { text: "not started", due: true };
         if (open.length > 0) return { text: "due", due: true };
         if (due.length > 0) return { text: "tomorrow", due: false };
         return { text: fromNow(nextDue([card], library.now)?.toISOString(), library.now), due: false };
@@ -227,15 +227,11 @@
         {/if}
     </div>
     <div class="actions">
-        <!-- First and smallest: what belongs to the group as a whole is rarely needed. The review ends the row. -->
+        <!-- First and quietest: what belongs to the group as a whole is rarely needed. The review ends the row. -->
         {#if group !== undefined && all.length > 0}
-            <button
-                class="btn icon-only"
-                type="button"
-                aria-label="Group settings"
-                title="Group settings"
-                onclick={() => (settings = true)}><Icon name="more" /></button
-            >
+            <button class="btn settings" type="button" aria-label="Group settings" onclick={() => (settings = true)}>
+                <Icon name="settings" /><span class="label">Group settings</span>
+            </button>
         {/if}
         <a class="btn" href={href.newCard(group)}><Icon name="plus" />Add card</a>
         {#if due > 0}
@@ -329,7 +325,7 @@
                                 <span class="direction" title="Studied back → front"><Icon name="reverse" size={15} /></span>
                             {/if}
                         </span>
-                        <span class="when" class:due={next.due} class:fresh={next.text === "new"}>{next.text}</span>
+                        <span class="when" class:due={next.due} class:fresh={next.text === "not started"}>{next.text}</span>
                         <!-- Under the front on a wide screen; after the back on a phone, so the two sides stay together. -->
                         {#if group === undefined}<small class="in">{card.group}</small>{/if}
                     {/snippet}
@@ -429,7 +425,7 @@
 <style>
     /* Takes the width the buttons leave, so a long name wraps instead of pushing them down. */
     .about {
-        flex: 1 1 16rem;
+        flex: 1 1 12rem;
         min-width: 0;
     }
 
@@ -688,6 +684,11 @@
         white-space: nowrap;
     }
 
+    /* On a picked row the tint is the row's own: the mark takes the surface to stay a mark. */
+    .on .when.due:not(.fresh) {
+        background: var(--surface);
+    }
+
     .when.due {
         padding: 0.1rem 0.55rem;
         border-radius: 999px;
@@ -696,10 +697,12 @@
         font-weight: 650;
     }
 
-    /* Green is for what is due; a card not started yet is marked more quietly, as on the home page. */
+    /* The mark is for what is due. A card not started yet is said plainly, like one that is scheduled. */
     .when.fresh {
-        background: var(--surface-2);
+        padding: 0;
+        background: none;
         color: var(--text-muted);
+        font-weight: 400;
     }
 
     @media (max-width: 560px) {
@@ -778,8 +781,15 @@
             flex: 1 1 0;
         }
 
-        .page-head .actions .icon-only {
+        /* On a phone, just its icon. */
+        .page-head .actions .settings {
             flex: none;
+            width: 2.75rem;
+            padding: 0;
+        }
+
+        .settings .label {
+            display: none;
         }
     }
 </style>

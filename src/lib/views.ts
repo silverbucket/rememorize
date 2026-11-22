@@ -3,8 +3,11 @@
  * (its schedule and when it was written). Nothing is filed into a view, and
  * a card can be in several at once.
  *
- * A card studied both ways is in a view if either direction is, except
- * "known", which takes both.
+ * Not started, learning and well known are the stages a card goes through, and
+ * every card is at exactly one of them, so the three add up to all the cards.
+ * A card studied both ways is not started until one direction is, and well
+ * known once both are; in between it is learning. It is struggling if either
+ * direction is.
  */
 import type { Flashcard } from "remotestorage-module-flashcards";
 import { isNew, itemsOf, type ReviewItem, stateOf } from "./scheduler";
@@ -54,9 +57,9 @@ export function inView(card: Flashcard, view: ViewId, now = new Date()): boolean
         case "struggling":
             return items.some(isStruggling);
         case "learning":
-            return items.some((i) => !isNew(card, i.reverse) && !isKnown(i));
+            return !items.every((i) => isNew(card, i.reverse)) && !items.every(isKnown);
         case "new":
-            return items.some((i) => isNew(card, i.reverse));
+            return items.every((i) => isNew(card, i.reverse));
         case "recent":
             return now.getTime() - new Date(card.createdAt).getTime() < RECENT_DAYS * DAY_MS;
         case "known":

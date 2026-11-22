@@ -68,9 +68,10 @@ describe("inView", () => {
     });
 
     it("a card studied both ways is well known only when both directions are", () => {
+        expect(viewsOf(card({ direction: "both" }))).toEqual(["new"]);
         const { card: forward } = study(card({ direction: "both" }), [4, 3, 3, 3, 3]);
-        // Back → front hasn't been started.
-        expect(viewsOf(forward)).toEqual(["new"]);
+        // Back → front hasn't been started: one direction in, the card is learning.
+        expect(viewsOf(forward)).toEqual(["learning"]);
 
         const { card: both } = study(forward, [4, 3, 3, 3, 3], true);
         expect(viewsOf(both)).toEqual(["known"]);
@@ -85,6 +86,23 @@ describe("inView", () => {
         // A leftover schedule for a direction that was switched off doesn't count.
         const { card: stale } = study({ ...known, direction: "both" }, [4, 1], true);
         expect(viewsOf({ ...stale, direction: "forward" })).toEqual(["known"]);
+    });
+});
+
+describe("the stages", () => {
+    it("put every card at exactly one of not started, learning and well known", () => {
+        const half = study(card({ "@id": "half", direction: "both" }), [3]).card;
+        const cards = [
+            card({ "@id": "a" }),
+            card({ "@id": "b", direction: "both" }),
+            half,
+            study(card({ "@id": "c" }), [4, 1]).card,
+            study(card({ "@id": "d" }), [4, 3, 3, 3, 3]).card,
+            study(half, [4, 3, 3, 3, 3], true).card,
+        ];
+        const counts = viewCounts(cards, NOW);
+        expect(counts.new + counts.learning + counts.known).toBe(cards.length);
+        expect(counts).toMatchObject({ new: 2, learning: 3, known: 1 });
     });
 });
 

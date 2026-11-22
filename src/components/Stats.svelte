@@ -104,7 +104,7 @@
     const groupProgress = $derived(progress(library.cards, now));
     const allProgress = $derived(groupProgress[0]);
     const STAGES: { stage: Stage; label: string }[] = [
-        { stage: "new", label: "New" },
+        { stage: "new", label: "Not started" },
         { stage: "learning", label: "Learning" },
         { stage: "short", label: "Short-term" },
         { stage: "long", label: "Long-term" },
@@ -500,7 +500,10 @@
 
     <section class="panel">
         <h2>Cards learned</h2>
-        <p class="muted sub">Running total of cards you've started, by the day you first reviewed them.</p>
+        <p class="muted sub">
+            Running total of cards you've started, by the day you first reviewed them. A card studied both ways counts
+            twice.
+        </p>
         {#if learnedPoints.length === 0}
             <p class="muted">Nothing to show yet.</p>
         {:else}
@@ -875,8 +878,9 @@
     }
 
     /* Card stages: one hue for how well a card is known, amber while it is still being learned. */
+    /* A step darker than the empty track behind it, so cards not started show as a share of the bar. */
     .stage-new {
-        background: var(--surface-3);
+        background: color-mix(in oklab, var(--text-faint) 30%, var(--surface-3));
     }
 
     .stage-learning {
@@ -955,10 +959,10 @@
 
     .badges .figure {
         display: flex;
-        flex-wrap: wrap;
         align-items: baseline;
         justify-content: space-between;
         gap: 0 0.4rem;
+        white-space: nowrap;
     }
 
     .badges li.new {
@@ -1146,6 +1150,15 @@
 
         .tiles {
             grid-template-columns: repeat(2, 1fr);
+        }
+
+        /* Room for a best set today to say so beside its figure. */
+        .badges li {
+            padding: 0.75rem;
+        }
+
+        .badges strong {
+            font-size: 1.35rem;
         }
 
         /* Two by two, rather than three and a straggler. */

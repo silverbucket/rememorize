@@ -28,7 +28,7 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
 
     // B reviews; A sees the new schedule without reloading.
     await a.goto("/#/group/Verbs");
-    await expect(a.locator(".when")).toHaveText("new");
+    await expect(a.locator(".when")).toHaveText("not started");
     await b.goto("/#/review/Verbs");
     await b.getByRole("button", { name: /Show answer/ }).click();
     await b.getByRole("button", { name: /Easy/ }).click();

@@ -164,8 +164,8 @@
                             <span class="go" aria-hidden="true"><Icon name="chevron" size={16} /></span>
                         </span>
                         <span class="meta">
-                            {plural(group.total, "card")}{#if waiting > 0}, {waiting} not started{/if}{#if due}, next
-                                review {fromNow(due.toISOString(), library.now)}{/if}
+                            {plural(group.total, "card")}{#if waiting === group.total}, none started yet{:else if waiting > 0},
+                                {waiting} not started{/if}{#if due}, next review {fromNow(due.toISOString(), library.now)}{/if}
                         </span>
                     </a>
                 </li>
@@ -176,9 +176,9 @@
     <!-- Today's new cards are shared by every group. Says so where some are left out of the counts above. -->
     {#if first && library.newWaiting > 0}
         <p class="muted waiting">
-            Across your groups, {plural(library.newWaiting, "card")} not started
-            {library.newWaiting === 1 ? "waits" : "wait"} for another day:
-            <a href={href.account()}>the daily limit</a> is {plural(library.newPerDay, "new card")}.
+            The rest of your cards that aren't started wait for another day:
+            <a href={href.account()}>the daily limit</a> is {plural(library.newPerDay, "new card")}. Open a group to
+            start its new cards today instead.
         </p>
     {/if}
 

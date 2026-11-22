@@ -91,6 +91,7 @@
         font-weight: 650;
     }
 
+
     @media (max-width: 560px) {
         /* One row that scrolls sideways, out to the edges of the screen: a chip cut off there shows there are more. */
         .views {

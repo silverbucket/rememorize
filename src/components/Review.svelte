@@ -402,17 +402,8 @@
     {:else}
         <div class="panel done">
             {#if reviewed > 0}
-                <!-- The numbers below are this review's; the link leads to all of them. -->
-                <div class="done-head">
-                    <span class="seal"><Icon name="check" size={26} /></span>
-                    <a class="btn ghost small progress" href={href.stats()}><Icon name="chart" size={18} />See your progress</a>
-                </div>
+                <span class="seal"><Icon name="check" size={26} /></span>
                 <h2>{doneTitle}</h2>
-                {#if nextGroup && waiting === 0}
-                    <p class="muted left-today">
-                        {plural(cardsLeft, "card")} in {plural(groupsLeft, "group")} left today
-                    </p>
-                {/if}
                 <dl class="summary">
                     <div><dt>Reviewed</dt><dd>{reviewed}</dd></div>
                     <div><dt>Remembered</dt><dd>{Math.round(((reviewed - tally[1]) / reviewed) * 100)}%</dd></div>
@@ -435,6 +426,8 @@
                         {/each}
                     </ul>
                 {/if}
+                <!-- These numbers are this review's; the link leads to all of them. -->
+                <a class="progress" href={href.stats()}><Icon name="chart" size={16} />See your progress</a>
             {:else if within.length === 0}
                 <h2>No cards to review</h2>
                 <p>Add some cards first.</p>
@@ -473,6 +466,10 @@
                     Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
                 </button>
             {:else if nextGroup}
+                <!-- How much of the day is left, where the next step is taken. -->
+                <p class="muted left-today">
+                    <strong>{plural(cardsLeft, "card")}</strong> in {plural(groupsLeft, "group")} left today
+                </p>
                 <!-- The label sits on the one button it is about. -->
                 <div class="next">
                     <p class="next-up">Next up</p>
@@ -836,16 +833,12 @@
         letter-spacing: -0.01em;
     }
 
-    .done-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        width: 100%;
-        margin-bottom: 0.25rem;
-    }
-
     .progress {
-        margin-right: -0.4rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        min-height: 2rem;
+        font-size: 0.925rem;
         font-weight: 550;
     }
 
@@ -854,6 +847,7 @@
         place-items: center;
         width: 3rem;
         height: 3rem;
+        margin-bottom: 0.25rem;
         border-radius: 50%;
         background: var(--accent-subtle);
         color: var(--accent-text);
@@ -980,7 +974,13 @@
     }
 
     .left-today {
-        margin-top: -0.4rem;
+        flex-basis: 100%;
+        margin-bottom: 0.35rem;
+    }
+
+    .left-today strong {
+        color: var(--text);
+        font-weight: 600;
     }
 
     /* The count rides on the button, as on the home page's. */
