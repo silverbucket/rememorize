@@ -76,6 +76,7 @@ import {
             ? planImport(
                   parsed.result.rows.filter((r) => !removed.has(removalKey(r.card))),
                   library.cards,
+                  { shared: parsed.result.shared },
               )
             : undefined,
     );
@@ -250,7 +251,7 @@ import {
             {/if}
         </span>
     </label>
-    <p class="muted accepts">CSV, tab-separated text, an Anki deck (.apkg), or a Rememorize backup (JSON).</p>
+    <p class="muted accepts">CSV, tab-separated text, an Anki deck (.apkg), or a Rememorize backup or shared group (JSON).</p>
 
     {#if readError}<p class="error" role="alert">{readError}</p>{/if}
     {#if parsed.error}<p class="error" role="alert">{parsed.error}</p>{/if}
@@ -387,7 +388,8 @@ import {
                 <dt>JSON</dt>
                 <dd>
                     A Rememorize backup. Cards keep their review progress; ones that already exist are only replaced
-                    if the backup's copy is newer.
+                    if the backup's copy is newer. Or a group someone shared: its cards start as new, and ones you
+                    already have from an earlier copy get the new text and keep your progress.
                 </dd>
             </div>
         </dl>
@@ -429,7 +431,7 @@ import {
                 </li>
             {/if}
             {#if anki?.reviewed}<li>Anki's review progress isn't imported: every card starts as new</li>{/if}
-            {#if plan.update.length}<li>{plural(plan.update.length, "card")} updated from the backup</li>{/if}
+            {#if plan.update.length}<li>{plural(plan.update.length, "card")} updated from the {parsed.result.shared ? "shared group" : "backup"}</li>{/if}
             {#if plan.unchanged}<li>{plural(plan.unchanged, "card")} already here (skipped)</li>{/if}
             {#if plan.repeated}<li>{plural(plan.repeated, "card")} repeated in the file (added once)</li>{/if}
             {#if parsed.result.skipped.length}

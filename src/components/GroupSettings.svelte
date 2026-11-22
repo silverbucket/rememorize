@@ -1,10 +1,12 @@
 <script lang="ts">
     import type { Flashcard } from "remotestorage-module-flashcards";
     import { onMount } from "svelte";
+    import { download } from "../lib/download";
     import { plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { DIRECTION_LABELS, isDirection } from "../lib/settings";
     import { library } from "../lib/state";
+    import { exportCsv, exportFileName, exportGroup } from "../lib/transfer";
     import type { Redirected } from "./DirectionDialog.svelte";
     import Icon from "./Icon.svelte";
 
@@ -196,6 +198,30 @@
             {/if}
         </div>
 
+        <div class="setting">
+            <span class="label" id="group-share">Share</span>
+            <div class="buttons" role="group" aria-labelledby="group-share">
+                <button
+                    class="btn"
+                    type="button"
+                    disabled={cards.length === 0}
+                    onclick={() => download(exportGroup(group, cards), "application/json", exportFileName(group, "json"))}
+                    ><Icon name="export" size={18} />Export group</button
+                >
+                <button
+                    class="btn"
+                    type="button"
+                    disabled={cards.length === 0}
+                    onclick={() => download(exportCsv(cards), "text/csv", exportFileName(group, "csv"))}
+                    ><Icon name="export" size={18} />CSV</button
+                >
+            </div>
+            <small class="muted">
+                A file of the {plural(cards.length, "card")} here, without your progress, for someone else to import. Importing
+                a newer export updates the cards they already have. The CSV is for spreadsheets.
+            </small>
+        </div>
+
         <div class="setting danger-zone">
             <button class="btn danger" type="button" onclick={remove} disabled={busy}>
                 <Icon name="trash" size={18} />{deleting ? "Deleting…" : "Delete group"}
@@ -217,13 +243,20 @@
         padding: 0 0.25rem;
     }
 
-    .setting label {
+    .setting label,
+    .setting .label {
         font-size: 0.925rem;
         font-weight: 600;
     }
 
     .setting small {
         font-size: 0.875rem;
+    }
+
+    .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
 
     .line {

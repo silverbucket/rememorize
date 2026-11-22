@@ -2,6 +2,9 @@
  * Import and export.
  *
  * - JSON export is a full backup (ids, review state, timestamps).
+ * - A shared group is the same JSON for one group, without review progress,
+ *   so its cards start as new for whoever imports it. It names the group,
+ *   which tells an import to update cards it has by id rather than skip them.
  * - CSV/TSV is for moving cards between apps: front, back, hint, group,
  *   study direction and extra. A row without a direction gets one from `directionFor`.
  *   Anki's "Notes in Plain Text" export (tab-separated, `#` header lines)
@@ -24,6 +27,8 @@ export interface ImportRow {
 
 export interface ParsedImport {
     format: "json" | "csv" | "tsv" | "apkg";
+    /** A shared group (`exportGroup`) rather than a backup. */
+    shared?: boolean;
     rows: ImportRow[];
     /** Rows that couldn't be used, with why. */
     skipped: { source: number; reason: string }[];
@@ -60,6 +65,37 @@ export function exportCsv(cards: Flashcard[]): string {
         ...cards.map((c) => [c.frontText, c.backText, c.hint ?? "", c.group, c.direction ?? "forward", c.extra ?? ""]),
     ];
     return `${rows.map((r) => r.map(csvField).join(",")).join("\r\n")}\r\n`;
+}
+
+/** What a shared card keeps: everything but the sharer's review progress. */
+const SHARED_FIELDS = [
+    "@id",
+    "@type",
+    "frontText",
+    "backText",
+    "hint",
+    "extra",
+    "group",
+    "direction",
+    "createdAt",
+    "updatedAt",
+] as const satisfies readonly (keyof Flashcard)[];
+
+/**
+ * One group, to share: the backup format without review progress. Cards keep
+ * their ids, so importing an updated share updates them instead of adding copies.
+ */
+export function exportGroup(group: string, cards: Flashcard[], now = new Date()): string {
+    const shared = cards
+        .filter((c) => c.group === group)
+        .map((c) => Object.fromEntries(SHARED_FIELDS.filter((k) => c[k] !== undefined).map((k) => [k, c[k]])));
+    return `${JSON.stringify({ format: EXPORT_FORMAT, version: 1, exportedAt: now.toISOString(), group, cards: shared }, null, 2)}\n`;
+}
+
+/** A file name for a group's export: the group's name, without characters file systems refuse. */
+export function exportFileName(group: string, extension: string): string {
+    const base = group.replace(/[\\/:*?"<>|\p{Cc}]/gu, "-").trim() || "group";
+    return `${base}.${extension}`;
 }
 
 function csvField(value: string): string {
@@ -102,6 +138,7 @@ function parseJsonImport(text: string): ParsedImport {
     if (!Array.isArray(list)) throw new Error("No cards found. Expected a Rememorize export or a list of cards.");
 
     const result: ParsedImport = { format: "json", rows: [], skipped: [] };
+    if (!Array.isArray(data) && typeof (data as { group?: unknown }).group === "string") result.shared = true;
     list.forEach((item, i) => {
         const card = normalizeFlashcard(item);
         if (!card) {
@@ -289,8 +326,11 @@ function trimmable(char: string): boolean {
  *   theirs is newer, so restoring an old backup can't undo recent reviews.
  * - Cards without an id are skipped if the same front/back is already in
  *   that group (importing the same file twice doesn't duplicate).
+ * - From a shared group (`shared`), a card without review progress that is
+ *   already here updates the text of the copy here, which keeps its own
+ *   progress, group and direction.
  */
-export function planImport(rows: ImportRow[], existing: Flashcard[]): ImportPlan {
+export function planImport(rows: ImportRow[], existing: Flashcard[], { shared = false } = {}): ImportPlan {
     const byId = new Map(existing.map((c) => [c["@id"], c]));
     const frontKey = (c: { frontText: string; group?: string }) => `${c.group ?? ""}\u0000${sameText(c.frontText)}`;
     const contentKey = (c: { frontText: string; backText: string; group?: string }) =>
@@ -302,6 +342,16 @@ export function planImport(rows: ImportRow[], existing: Flashcard[]): ImportPlan
     for (const { card } of rows) {
         const id = card["@id"];
         const current = id ? byId.get(id) : undefined;
+        if (current && shared && !hasProgress(card)) {
+            const updated: Flashcard = { ...current, frontText: card.frontText, backText: card.backText };
+            for (const key of ["hint", "extra"] as const) {
+                if (card[key]) updated[key] = card[key];
+                else delete updated[key];
+            }
+            if (TEXT_FIELDS.every((k) => (updated[k] ?? "") === (current[k] ?? ""))) plan.unchanged += 1;
+            else plan.update.push({ card: updated, previousGroup: current.group });
+            continue;
+        }
         if (current) {
             if (card.updatedAt && card.updatedAt > current.updatedAt) {
                 plan.update.push({ card, previousGroup: current.group });
@@ -319,11 +369,25 @@ export function planImport(rows: ImportRow[], existing: Flashcard[]): ImportPlan
         plan.add.push(card);
     }
 
-    // The backs each front has in its group, counting the new cards.
+    // The backs each front has in its group once the import is done: updated and new cards included.
+    const updated = new Map(plan.update.map((u) => [u.card["@id"], u.card]));
     const backs = new Map<string, Set<string>>();
-    for (const c of [...existing, ...plan.add]) {
+    for (const c of [...existing.map((c) => updated.get(c["@id"]) ?? c), ...plan.add]) {
         backs.set(frontKey(c), (backs.get(frontKey(c)) ?? new Set()).add(sameText(c.backText)));
     }
     plan.sameFront = plan.add.filter((c) => (backs.get(frontKey(c))?.size ?? 0) > 1);
     return plan;
+}
+
+const TEXT_FIELDS = ["frontText", "backText", "hint", "extra"] as const;
+
+/** The card carries review progress, current or from v1 of the format. */
+function hasProgress(card: FlashcardInput): boolean {
+    return (
+        card.review !== undefined ||
+        card.reverseReview !== undefined ||
+        card.familiarity !== undefined ||
+        card.reviewedCount !== undefined ||
+        card.reviewedAt !== undefined
+    );
 }

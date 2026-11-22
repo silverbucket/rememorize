@@ -1,5 +1,6 @@
 <script lang="ts">
     import { untrack } from "svelte";
+    import { download } from "../lib/download";
     import { reminders } from "../lib/notifications.svelte";
     import { href } from "../lib/router.svelte";
     import {
@@ -125,13 +126,8 @@
         if (!reminders.error) input.value = library.reminderServer;
     }
 
-    function download(contents: string, type: string, extension: string) {
-        const url = URL.createObjectURL(new Blob([contents], { type }));
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `rememorize-${new Date().toISOString().slice(0, 10)}.${extension}`;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    function exportAll(contents: string, type: string, extension: string) {
+        download(contents, type, `rememorize-${new Date().toISOString().slice(0, 10)}.${extension}`);
     }
 
     let theme: Theme = $state(untrack(loadTheme));
@@ -418,21 +414,21 @@
     <h2>Import and export</h2>
     <p class="muted">
         Export a full backup (JSON, including review progress), or a spreadsheet of fronts, backs, hints, extras and groups (CSV).
-        Import accepts either, and Anki decks (.apkg).
+        To share one group, export it from the group's settings. Import accepts any of these, and Anki decks (.apkg).
     </p>
     <div class="buttons even">
         <button
             class="btn"
             type="button"
             disabled={library.cards.length === 0}
-            onclick={() => download(exportJson(library.cards), "application/json", "json")}
+            onclick={() => exportAll(exportJson(library.cards), "application/json", "json")}
             ><Icon name="export" size={18} />Export backup (JSON)</button
         >
         <button
             class="btn"
             type="button"
             disabled={library.cards.length === 0}
-            onclick={() => download(exportCsv(library.cards), "text/csv", "csv")}
+            onclick={() => exportAll(exportCsv(library.cards), "text/csv", "csv")}
             ><Icon name="export" size={18} />Export CSV</button
         >
         <a class="btn" href={href.import("settings")}><Icon name="import" size={18} />Import…</a>

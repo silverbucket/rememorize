@@ -923,6 +923,58 @@ test("a JSON backup restores cards with their review progress", async ({ page, b
     await expect(fresh.getByText("1 card already here (skipped)")).toBeVisible();
 });
 
+test("a group can be shared without progress, and a newer copy updates the cards", async ({ page, browser }) => {
+    await addCard(page, { front: "pivo", back: "beer", group: "Drinks" });
+    await addCard(page, { front: "voda", back: "water", group: "Drinks" });
+    await addCard(page, { front: "chléb", back: "bread", group: "Bakery" });
+    await page.goto("/#/review/Drinks");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+
+    async function share() {
+        await page.goto("/#/group/Drinks");
+        await page.getByRole("button", { name: "Group settings" }).click();
+        const download = page.waitForEvent("download");
+        await page.getByRole("button", { name: "Export group" }).click();
+        const file = await download;
+        expect(file.suggestedFilename()).toBe("Drinks.json");
+        await page.keyboard.press("Escape");
+        return file.path();
+    }
+
+    // Someone else imports the group: only its cards, all new.
+    const fresh = await (await browser.newContext()).newPage();
+    await fresh.goto("/#/import");
+    await fresh.getByLabel("File").setInputFiles(await share());
+    await expect(fresh.getByText("2 new cards in Drinks")).toBeVisible();
+    await fresh.getByRole("button", { name: "Import 2 cards" }).click();
+    await expect(fresh.getByRole("heading", { name: "Drinks" })).toBeVisible();
+    await fresh.goto("/");
+    await expect(fresh.locator(".groups li")).toHaveCount(1);
+    await fresh.goto("/#/review/Drinks");
+    await fresh.getByRole("button", { name: /Show answer/ }).click();
+    await fresh.getByRole("button", { name: /Easy/ }).click();
+
+    // The sharer fixes a card and shares again.
+    await page.goto("/#/group/Drinks");
+    await page.getByText("pivo").click();
+    await page.getByLabel("Back").fill("a beer");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("a beer")).toBeVisible();
+
+    await fresh.goto("/#/import");
+    await fresh.getByLabel("File").setInputFiles(await share());
+    await expect(fresh.getByText("1 card updated from the shared group")).toBeVisible();
+    await expect(fresh.getByText("1 card already here (skipped)")).toBeVisible();
+    await fresh.getByRole("button", { name: "Import 1 card" }).click();
+    await expect(fresh.getByRole("heading", { name: "Your cards" })).toBeVisible();
+    await fresh.goto("/#/group/Drinks");
+    await expect(fresh.locator(".cards li")).toHaveCount(2);
+    await expect(fresh.getByText("a beer")).toBeVisible();
+    // Progress made here is kept.
+    await expect(fresh.locator(".cards li .when").filter({ hasText: /^in / })).toHaveCount(1);
+});
+
 test("invalid import files show an error", async ({ page }) => {
     await page.goto("/#/import");
     await page
