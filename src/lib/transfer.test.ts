@@ -1,6 +1,15 @@
 import type { Flashcard } from "remotestorage-module-flashcards";
 import { describe, expect, it } from "vitest";
-import { exportCsv, exportJson, parseDelimited, parseImport, planImport, sameText } from "./transfer";
+import {
+    exportCsv,
+    exportFileName,
+    exportGroup,
+    exportJson,
+    parseDelimited,
+    parseImport,
+    planImport,
+    sameText,
+} from "./transfer";
 
 function card(overrides: Partial<Flashcard> = {}): Flashcard {
     return {
@@ -232,7 +241,8 @@ describe("planImport", () => {
             update: [{ card: newer, previousGroup: "moved" }],
             unchanged: 0,
             repeated: 0,
-            sameFront: [],
+            // Back in "food", the restored card has a different back for the same front.
+            sameFront: [missing],
         });
     });
 
@@ -303,5 +313,112 @@ describe("planImport", () => {
         expect(plan.add).toHaveLength(1);
         expect(plan.unchanged).toBe(1);
         expect(plan.repeated).toBe(1);
+    });
+});
+
+describe("exportGroup", () => {
+    const review = {
+        due: "2026-02-01T00:00:00.000Z",
+        stability: 3,
+        difficulty: 5,
+        reps: 2,
+        lapses: 0,
+        state: 2 as const,
+    };
+    const cards = [
+        card({
+            hint: "a drink",
+            extra: "Pivo je dobré.",
+            direction: "both",
+            review,
+            reverseReview: review,
+            familiarity: 2,
+            reviewedCount: 2,
+            reviewedAt: "2026-01-15T00:00:00.000Z",
+        }),
+        card({ "@id": "c2", frontText: "chleba", backText: "bread", group: "bakery" }),
+    ];
+
+    it("exports one group without review progress, and imports as a share", () => {
+        const text = exportGroup("food", cards, new Date("2026-05-01T00:00:00.000Z"));
+        const data = JSON.parse(text);
+        expect(data).toMatchObject({ format: "rememorize-export", version: 1, group: "food" });
+        expect(data.cards).toEqual([
+            {
+                "@id": "c1",
+                "@type": "flashcard",
+                frontText: "pivo",
+                backText: "beer",
+                hint: "a drink",
+                extra: "Pivo je dobré.",
+                group: "food",
+                direction: "both",
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+        ]);
+        const parsed = parseImport(text, "food.json", "Imported");
+        expect(parsed.shared).toBe(true);
+        expect(parsed.rows.map((r) => r.card["@id"])).toEqual(["c1"]);
+        expect(parseImport(exportJson(cards), "backup.json", "Imported").shared).toBeUndefined();
+    });
+
+    it("names the file after the group", () => {
+        expect(exportFileName("Czech verbs", "json")).toBe("Czech verbs.json");
+        expect(exportFileName('a:b*c?"d', "csv")).toBe("a-b-c--d.csv");
+        expect(exportFileName("  ", "json")).toBe("group.json");
+    });
+});
+
+describe("planImport from a shared group", () => {
+    const review = {
+        due: "2026-02-01T00:00:00.000Z",
+        stability: 3,
+        difficulty: 5,
+        reps: 2,
+        lapses: 0,
+        state: 2 as const,
+    };
+    const here = card({
+        group: "renamed",
+        direction: "reverse",
+        hint: "old hint",
+        review,
+        updatedAt: "2026-06-01T00:00:00.000Z",
+    });
+
+    it("updates the text of cards here, keeping their progress, group and direction", () => {
+        const shared = card({ backText: "a beer", extra: "Na zdraví!", updatedAt: "2026-02-01T00:00:00.000Z" });
+        const plan = planImport([{ source: 1, card: shared }], [here], { shared: true });
+        expect(plan.update).toEqual([
+            {
+                card: { ...here, backText: "a beer", extra: "Na zdraví!", hint: undefined },
+                previousGroup: "renamed",
+            },
+        ]);
+        expect(plan.update[0].card).not.toHaveProperty("hint");
+        expect(plan.unchanged).toBe(0);
+    });
+
+    it("warns about a shared front by the text cards will have after the update", () => {
+        const plan = planImport(
+            [
+                { source: 1, card: card({ frontText: "ležák", backText: "lager" }) },
+                { source: 2, card: card({ "@id": "c2", backText: "ale" }) },
+            ],
+            [card({ group: "food" })],
+            { shared: true },
+        );
+        expect(plan.update).toHaveLength(1);
+        expect(plan.sameFront).toEqual([]);
+    });
+
+    it("leaves cards with the same text alone", () => {
+        const shared = card({ hint: "old hint" });
+        expect(planImport([{ source: 1, card: shared }], [here], { shared: true })).toMatchObject({
+            add: [],
+            update: [],
+            unchanged: 1,
+        });
     });
 });
