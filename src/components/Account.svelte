@@ -581,8 +581,9 @@
         margin-top: 0.25rem;
     }
 
+    /* Wide enough for "No limit". */
     .number {
-        width: 5.5rem;
+        width: 6.75rem;
         font-variant-numeric: tabular-nums;
     }
 
