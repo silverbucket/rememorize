@@ -391,6 +391,7 @@
                         <div class="told">
                             {#if revealed}
                                 <div class="side back content {sizeOf(answer)}">{answer}</div>
+                                {#if current.extra}<p class="extra content muted">{current.extra}</p>{/if}
                             {:else if current.hint && !reverse}
                                 {#if showHint}
                                     <p class="hint content muted">{current.hint}</p>
@@ -782,6 +783,15 @@
     .hint {
         font-size: 1.125rem;
         font-style: italic;
+    }
+
+    /* What goes with the answer, under it and quieter. */
+    .extra {
+        margin: 1rem 0 0;
+        font-size: 1.0625rem;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
     }
 
     .hint-btn {

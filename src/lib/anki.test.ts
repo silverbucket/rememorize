@@ -8,6 +8,7 @@ import {
     clozeCards,
     clozeText,
     deckGroups,
+    extraText,
     guessMapping,
     htmlToText,
     mainDeck,
@@ -99,9 +100,9 @@ describe("readApkg", () => {
         ]);
         const vocabulary = collection.noteTypes[0];
         expect(vocabulary.front).toEqual(["Word", "Gender", "Audio"]);
-        expect(vocabulary.back).toEqual(["English", "Image"]);
+        expect(vocabulary.back).toEqual(["English", "Image", "Example"]);
         expect(vocabulary.notes[0]).toEqual({
-            fields: ["CZ-1", "káva", "f.", "coffee", "[sound:kava.mp3]", '<img src="kava.jpg">'],
+            fields: ["CZ-1", "káva", "f.", "coffee", "[sound:kava.mp3]", '<img src="kava.jpg">', "Jednu kávu, prosím."],
             deck: "Czech::Unit 01: Greetings",
             order: 1,
         });
@@ -125,14 +126,15 @@ describe("readApkg", () => {
 describe("guessMapping", () => {
     it("picks front, back and hint from the template, skipping media-only fields", async () => {
         const [vocabulary, cloze, announcement] = (await czech()).noteTypes;
-        expect(guessMapping(vocabulary)).toEqual({ include: true, front: 1, back: 3, hint: 2 });
+        expect(guessMapping(vocabulary)).toEqual({ include: true, front: 1, back: 3, hint: 2, extra: [6] });
         // A cloze with a translation: the whole sentence on one side, the translation on the other.
-        expect(guessMapping(cloze)).toEqual({ include: true, front: 0, back: 1, hint: -1, gaps: false });
+        expect(guessMapping(cloze)).toEqual({ include: true, front: 0, back: 1, hint: -1, gaps: false, extra: [] });
         expect(guessMapping(announcement)).toEqual({
             include: false,
             front: 0,
             back: 1,
             hint: -1,
+            extra: [],
             skipReason: "its backs are long text, like notes to read",
         });
     });
@@ -154,7 +156,13 @@ describe("guessMapping on quiz-like notes", () => {
     });
 
     it("takes the field that varies as the front, not a shared title", () => {
-        expect(guessMapping(quiz(["a", "b", "c", "d"]))).toEqual({ include: true, front: 1, back: 2, hint: 0 });
+        expect(guessMapping(quiz(["a", "b", "c", "d"]))).toEqual({
+            include: true,
+            front: 1,
+            back: 2,
+            hint: 0,
+            extra: [],
+        });
     });
 
     it("leaves a note type out when most notes have no back", () => {
@@ -192,7 +200,7 @@ describe("apkgImport", () => {
     it("makes one card per gap when asked, with the hint chosen", async () => {
         const collection = await czech();
         const mappings = guessed(collection);
-        mappings[2] = { include: true, front: 0, back: -1, hint: 1, gaps: true };
+        mappings[2] = { include: true, front: 0, back: -1, hint: 1, gaps: true, extra: [] };
         const result = apkgImport(collection, { mappings, groupFor: () => "g", directionFor: () => "both" });
         const cloze = result.rows.filter((r) => r.card.frontText.includes("["));
         expect(cloze.map((r) => [r.card.frontText, r.card.backText, r.card.hint, r.card.direction])).toEqual([
@@ -204,7 +212,7 @@ describe("apkgImport", () => {
     it("fills in the gaps on whichever side has them", async () => {
         const collection = await czech();
         const mappings = guessed(collection);
-        mappings[2] = { include: true, front: 1, back: 0, hint: -1, gaps: false };
+        mappings[2] = { include: true, front: 1, back: 0, hint: -1, gaps: false, extra: [] };
         const result = apkgImport(collection, { mappings, groupFor: () => "g", directionFor: () => "both" });
         expect(result.rows.find((r) => r.card.frontText.startsWith("Hello"))?.card.backText).toBe(
             "Dobrý den. Co si dáte?",
@@ -221,7 +229,7 @@ describe("apkgImport", () => {
             back: ["Audio"],
             notes: [{ fields: ["{{c1::word}}", "[sound:a.mp3]"], deck: "Default", order: 0 }],
         };
-        expect(guessMapping(type)).toEqual({ include: true, front: 0, back: -1, hint: -1, gaps: true });
+        expect(guessMapping(type)).toEqual({ include: true, front: 0, back: -1, hint: -1, gaps: true, extra: [] });
     });
 
     it("keeps a note's other gaps when one holds only media", () => {
@@ -255,7 +263,7 @@ describe("apkgImport", () => {
         const collection = await czech();
         const mappings = guessed(collection);
         mappings[2].include = false;
-        mappings[1] = { include: true, front: 3, back: 1, hint: -1 };
+        mappings[1] = { include: true, front: 3, back: 1, hint: -1, extra: [] };
         const result = apkgImport(collection, {
             mappings,
             groupFor: (deck) => deckGroups([deck]).get(deck) ?? "",
@@ -266,6 +274,50 @@ describe("apkgImport", () => {
             ["water\n(also: lake)", "voda", "Unit 01: Greetings", undefined],
             ["tea", "čaj", "Unit 02: Food-Drink", undefined],
         ]);
+    });
+});
+
+describe("extraText", () => {
+    const type: AnkiNoteType = {
+        id: "v",
+        name: "Vocabulary",
+        fields: ["Word", "Plural", "já", "ty", "Comments", "Empty"],
+        cloze: false,
+        front: [],
+        back: [],
+        notes: [],
+    };
+    const note = {
+        fields: ["mít", "", "mám", "máš", `A very common verb. ${"It is used everywhere. ".repeat(3)}`, ""],
+        deck: "Default",
+        order: 0,
+    };
+
+    it("labels short fields one per line and gives long ones a paragraph, in field order", () => {
+        expect(extraText(type, note, [4, 3, 2, 1, 5])).toBe(
+            `já: mám\nty: máš\n\nA very common verb. ${"It is used everywhere. ".repeat(3).trim()}`,
+        );
+        expect(extraText(type, note, [])).toBe("");
+    });
+
+    it("goes on each card the note gives", async () => {
+        const collection = await czech();
+        const result = apkgImport(collection, {
+            mappings: guessed(collection),
+            groupFor: () => "g",
+            directionFor: () => "forward",
+        });
+        expect(result.rows[0].card.extra).toBe("Example: Jednu kávu, prosím.");
+        expect(result.rows[1].card).not.toHaveProperty("extra");
+    });
+
+    it("leaves out a field that is already on the card", async () => {
+        const collection = await czech();
+        const mappings = guessed(collection);
+        mappings[1] = { ...mappings[1], back: 6, extra: [3, 6] };
+        const result = apkgImport(collection, { mappings, groupFor: () => "g", directionFor: () => "forward" });
+        expect(result.rows[0].card.backText).toBe("Jednu kávu, prosím.");
+        expect(result.rows[0].card.extra).toBe("English: coffee");
     });
 });
 

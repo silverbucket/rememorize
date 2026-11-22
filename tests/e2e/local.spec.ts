@@ -290,7 +290,7 @@ test("views narrow the cards, in a group and across all of them, and can be revi
 });
 
 test("review session schedules cards", async ({ page }) => {
-    await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks" });
+    await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks", extra: "Pes štěká." });
     await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
     await page.goto("/");
     await page.locator(".today").getByRole("link", { name: "Review Animals, 2 cards" }).click();
@@ -300,8 +300,11 @@ test("review session schedules cards", async ({ page }) => {
     await expect(page.locator(".side.front")).toHaveText("pes");
     await page.getByRole("button", { name: "Show hint" }).click();
     await expect(page.getByText("barks")).toBeVisible();
+    await expect(page.getByText("Pes štěká.")).toHaveCount(0);
     await page.getByRole("button", { name: /Show answer/ }).click();
     await expect(page.locator(".side.back")).toHaveText("dog");
+    // The extra comes with the answer.
+    await expect(page.locator(".extra")).toHaveText("Pes štěká.");
     // Each grade shows the interval it would give.
     for (const grade of ["Again", "Hard", "Good", "Easy"]) {
         await expect(page.getByRole("button", { name: new RegExp(grade) })).toContainText(/\d|<1m/);
@@ -736,8 +739,8 @@ test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
     const exported = await (await download).path();
     const { readFileSync } = await import("node:fs");
     const text = readFileSync(exported, "utf8");
-    expect(text).toContain("pes,dog,barks,Czech animals,both");
-    expect(text).toContain('"voda, studená",cold water,,Czech animals,both');
+    expect(text).toContain("pes,dog,barks,Czech animals,both,");
+    expect(text).toContain('"voda, studená",cold water,,Czech animals,both,');
 });
 
 test("import an Anki deck, choosing what goes on each side", async ({ page }) => {
@@ -756,7 +759,10 @@ test("import an Anki deck, choosing what goes on each side", async ({ page }) =>
     const vocabulary = page.locator(".type").filter({ hasText: "Vocabulary" });
     await expect(vocabulary.getByRole("checkbox")).toBeChecked();
     await expect(vocabulary.getByLabel("Front")).toHaveValue("1");
-    await expect(vocabulary.locator(".example")).toHaveText("káva → coffee · Hint: f.");
+    await expect(vocabulary.locator(".example").first()).toHaveText("káva → coffee · Hint: f.");
+    // What else the card template shows goes with the answer.
+    await expect(vocabulary.locator(".extra-pick summary")).toContainText("Extra, shown with the answer: Example");
+    await expect(vocabulary.locator(".example.extra")).toHaveText("Example: Jednu kávu, prosím.");
     const announcement = page.locator(".type").filter({ hasText: "Announcement" });
     await expect(announcement.getByRole("checkbox")).not.toBeChecked();
     await expect(announcement).toContainText("Left out: its backs are long text, like notes to read.");
@@ -781,7 +787,7 @@ test("import an Anki deck, choosing what goes on each side", async ({ page }) =>
     // Swapping the sides changes the cards.
     await vocabulary.getByLabel("Front").selectOption({ label: "English" });
     await vocabulary.getByLabel("Back").selectOption({ label: "Word" });
-    await expect(vocabulary.locator(".example")).toHaveText("coffee → káva · Hint: f.");
+    await expect(vocabulary.locator(".example").first()).toHaveText("coffee → káva · Hint: f.");
     await vocabulary.getByLabel("Front").selectOption({ label: "Word" });
     await vocabulary.getByLabel("Back").selectOption({ label: "English" });
 
@@ -795,6 +801,9 @@ test("import an Anki deck, choosing what goes on each side", async ({ page }) =>
     await expect(page.locator(".side.front")).toHaveText("káva");
     await page.getByRole("button", { name: "Show hint" }).click();
     await expect(page.getByText("f.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Example: Jednu kávu, prosím.")).toHaveCount(0);
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await expect(page.locator(".extra")).toHaveText("Example: Jednu kávu, prosím.");
 
     // Importing it again adds nothing.
     await page.goto("/#/import");
@@ -1146,7 +1155,7 @@ test("on a small phone, a field that takes focus scrolls clear of the Save bar",
     await page.setViewportSize({ width: 320, height: 430 });
     await page.goto("/#/new");
     await page.getByLabel("Front").focus();
-    for (const label of ["Back", "Hint", "Group", "Study direction"]) {
+    for (const label of ["Back", "Hint", "Group", "Extra", "Study direction"]) {
         await page.keyboard.press("Tab");
         const field = page.getByLabel(label);
         await expect(field).toBeFocused();
@@ -1159,7 +1168,7 @@ test("on a small phone, a field that takes focus scrolls clear of the Save bar",
 
     // And back up the form: clear of the header at the top.
     const header = await page.locator("header").boundingBox();
-    for (const label of ["Group", "Hint", "Back", "Front"]) {
+    for (const label of ["Extra", "Group", "Hint", "Back", "Front"]) {
         await page.keyboard.press("Shift+Tab");
         const field = page.getByLabel(label);
         await expect(field).toBeFocused();

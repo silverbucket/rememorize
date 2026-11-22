@@ -2,8 +2,8 @@
  * Import and export.
  *
  * - JSON export is a full backup (ids, review state, timestamps).
- * - CSV/TSV is for moving cards between apps: front, back, hint, group and
- *   study direction. A row without a direction gets one from `directionFor`.
+ * - CSV/TSV is for moving cards between apps: front, back, hint, group,
+ *   study direction and extra. A row without a direction gets one from `directionFor`.
  *   Anki's "Notes in Plain Text" export (tab-separated, `#` header lines)
  *   imports as-is.
  */
@@ -56,8 +56,8 @@ export function exportJson(cards: Flashcard[], now = new Date()): string {
 export function exportCsv(cards: Flashcard[]): string {
     // Always written: a row without one imports as studied both ways.
     const rows = [
-        ["front", "back", "hint", "group", "direction"],
-        ...cards.map((c) => [c.frontText, c.backText, c.hint ?? "", c.group, c.direction ?? "forward"]),
+        ["front", "back", "hint", "group", "direction", "extra"],
+        ...cards.map((c) => [c.frontText, c.backText, c.hint ?? "", c.group, c.direction ?? "forward", c.extra ?? ""]),
     ];
     return `${rows.map((r) => r.map(csvField).join(",")).join("\r\n")}\r\n`;
 }
@@ -126,6 +126,8 @@ const COLUMN_NAMES: Record<string, keyof Columns> = {
     group: "group",
     deck: "group",
     direction: "direction",
+    extra: "extra",
+    notes: "extra",
 };
 
 interface Columns {
@@ -135,6 +137,8 @@ interface Columns {
     group?: number;
     /** Only read when a header row names it. */
     direction?: number;
+    /** Only read when a header row names it. */
+    extra?: number;
 }
 
 /** Header lines Anki writes at the top of a plain-text export. */
@@ -172,6 +176,7 @@ function parseDelimitedImport(
         if (header.includes("hint")) columns.hint = header.indexOf("hint");
         if (header.includes("group")) columns.group = header.indexOf("group");
         if (header.includes("direction")) columns.direction = header.indexOf("direction");
+        if (header.includes("extra")) columns.extra = header.indexOf("extra");
         firstData = 1;
     }
 
@@ -194,6 +199,8 @@ function parseDelimitedImport(
         const card: FlashcardInput = { frontText: front, backText: back, group };
         const hint = columns.hint !== undefined ? record[columns.hint]?.trim() : "";
         if (hint) card.hint = hint;
+        const extra = columns.extra !== undefined ? record[columns.extra]?.trim() : "";
+        if (extra) card.extra = extra;
         const direction = columns.direction !== undefined ? record[columns.direction]?.trim().toLowerCase() : "";
         card.direction =
             direction === "forward" || direction === "reverse" || direction === "both"

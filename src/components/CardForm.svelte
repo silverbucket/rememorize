@@ -16,6 +16,7 @@
     let frontText = $state(initial?.frontText ?? "");
     let backText = $state(initial?.backText ?? "");
     let hint = $state(initial?.hint ?? "");
+    let extra = $state(initial?.extra ?? "");
     let group = $state(initial?.group ?? untrack(() => initialGroup) ?? "");
     /** A direction picked here; until one is, a new card is studied the way its group's new cards are. */
     let chosen: CardDirection | undefined = $state(initial ? (initial.direction ?? "forward") : undefined);
@@ -38,6 +39,7 @@
                 frontText: frontText.trim(),
                 backText: backText.trim(),
                 hint: hint.trim() || undefined,
+                extra: extra.trim() || undefined,
                 group: group.trim(),
                 direction,
             };
@@ -47,6 +49,7 @@
                 frontText = "";
                 backText = "";
                 hint = "";
+                extra = "";
                 saving = false;
                 document.getElementById("front")?.focus();
             } else {
@@ -98,6 +101,11 @@
             {#if groupError}<small class="error">{groupError}</small>{/if}
         </label>
     </div>
+
+    <label>
+        <span>Extra <span class="optional">(optional, shown with the answer: an example, notes)</span></span>
+        <textarea class="field content" bind:value={extra} rows="2"></textarea>
+    </label>
 
     <!-- Not wrapped in the label: the options would become part of its name. -->
     <div class="labelled">

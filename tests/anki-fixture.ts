@@ -79,11 +79,11 @@ export const CZECH: Fixture = {
         {
             id: 1,
             name: "Vocabulary",
-            fields: ["ID", "Word", "Gender", "English", "Audio", "Image"],
+            fields: ["ID", "Word", "Gender", "English", "Audio", "Image", "Example"],
             templates: [
                 {
                     qfmt: '<h3>{{Word}} {{#Gender}}({{Gender}}){{/Gender}}</h3>{{Audio}}<script>var x = "{{Deck}}";</script>',
-                    afmt: "{{FrontSide}}<hr id=answer>{{English}}{{Image}}",
+                    afmt: "{{FrontSide}}<hr id=answer>{{English}}{{Image}}{{#Example}}<i>{{Example}}</i>{{/Example}}",
                 },
             ],
         },
@@ -108,14 +108,18 @@ export const CZECH: Fixture = {
             deck: 11,
             fields: ["Unit 1", `Welcome! ${"In this unit you will learn to greet people. ".repeat(6)}`],
         },
-        { type: 1, deck: 11, fields: ["CZ-1", "káva", "f.", "coffee", "[sound:kava.mp3]", '<img src="kava.jpg">'] },
-        { type: 1, deck: 11, fields: ["CZ-2", "voda", "f.", "water<br>(also: <b>lake</b>)", "", ""] },
+        {
+            type: 1,
+            deck: 11,
+            fields: ["CZ-1", "káva", "f.", "coffee", "[sound:kava.mp3]", '<img src="kava.jpg">', "Jednu kávu, prosím."],
+        },
+        { type: 1, deck: 11, fields: ["CZ-2", "voda", "f.", "water<br>(also: <b>lake</b>)", "", "", ""] },
         {
             type: 2,
             deck: 12,
             fields: ["{{c1::Dobrý den}}. Co si {{c2::dáte::verb}}?", "Hello. What will you have?", ""],
         },
-        { type: 1, deck: 12, fields: ["CZ-3", "čaj", "m.", "tea", "", ""], reviewed: true },
-        { type: 1, deck: 12, fields: ["CZ-4", "", "", "missing word", "", ""] },
+        { type: 1, deck: 12, fields: ["CZ-3", "čaj", "m.", "tea", "", "", ""], reviewed: true },
+        { type: 1, deck: 12, fields: ["CZ-4", "", "", "missing word", "", "", ""] },
     ],
 };

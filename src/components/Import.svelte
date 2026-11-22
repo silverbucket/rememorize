@@ -120,6 +120,18 @@ import {
         return apkgImport(sample, { mappings, groupFor, directionFor }).rows[0]?.card;
     }
 
+    /** A note type's extra fields, named: a few, then how many more. */
+    function fieldList(type: AnkiNoteType, fields: number[]): string {
+        if (!fields.length) return "none";
+        const names = [...fields].sort((a, b) => a - b).map((i) => type.fields[i]);
+        return names.length > 4 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ");
+    }
+
+    function toggleExtra(typeId: string, field: number, on: boolean) {
+        const mapping = mappings[typeId];
+        mapping.extra = on ? [...mapping.extra, field] : mapping.extra.filter((i) => i !== field);
+    }
+
     async function readAnki(file: File) {
         reading = true;
         try {
@@ -299,6 +311,26 @@ import {
                                 </select>
                             </label>
                         </div>
+                        <details class="extra-pick">
+                            <summary>
+                                <Icon name="chevron" size={16} />
+                                <span>Extra, shown with the answer: <span class="muted">{fieldList(type, mapping.extra)}</span></span>
+                            </summary>
+                            <div class="extra-fields">
+                                {#each type.fields as field, i (i)}
+                                    {#if i !== mapping.front && (gaps || i !== mapping.back) && i !== mapping.hint}
+                                        <label class="check">
+                                            <input
+                                                type="checkbox"
+                                                checked={mapping.extra.includes(i)}
+                                                onchange={(e) => toggleExtra(type.id, i, e.currentTarget.checked)}
+                                            />
+                                            <span>{field}</span>
+                                        </label>
+                                    {/if}
+                                {/each}
+                            </div>
+                        </details>
                         {#if card}
                             <p class="example">
                                 <span class="content">{card.frontText}</span>
@@ -306,6 +338,7 @@ import {
                                 <span class="content">{card.backText}</span>
                                 {#if card.hint}<span class="muted"> · Hint: {card.hint}</span>{/if}
                             </p>
+                            {#if card.extra}<p class="example extra content muted">{card.extra}</p>{/if}
                         {:else}
                             <p class="error">{gaps ? "That field has no gaps in it." : "These fields are empty."}</p>
                         {/if}
@@ -324,7 +357,7 @@ import {
                 <dt>CSV or tab-separated</dt>
                 <dd>
                     One card per line: front, back, then optionally hint and group. A header row (front, back, hint,
-                    group, direction) lets the columns come in any order. Cards without a direction (forward, reverse
+                    group, direction, extra) lets the columns come in any order. Cards without a direction (forward, reverse
                     or both) are studied both ways, or the way their group's new cards are. Anki's “Notes in Plain
                     Text” export works as-is.
                 </dd>
@@ -333,7 +366,8 @@ import {
                 <dt>Anki deck</dt>
                 <dd>
                     A .apkg file, from AnkiWeb or Anki's “Export” with “Support older Anki versions” ticked. You choose
-                    which fields make the front, back and hint; new cards come up in the deck's order.
+                    which fields make the front, back and hint, and what goes in the extra, shown with the answer.
+                    New cards come up in the deck's order.
                 </dd>
             </div>
             <div>
@@ -674,6 +708,35 @@ import {
 
     .arrow {
         margin: 0 0.35rem;
+    }
+
+    /* The example's extra: a few lines of it are enough to show the mapping at work. */
+    .example.extra {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+        overflow: hidden;
+        margin-top: -0.4rem;
+    }
+
+    .extra-pick summary {
+        font-weight: 400;
+    }
+
+    .extra-pick summary .muted {
+        overflow-wrap: anywhere;
+    }
+
+    .extra-fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+        gap: 0.35rem 0.75rem;
+        margin-top: 0.6rem;
+    }
+
+    .extra-fields .check {
+        font-size: 0.9rem;
     }
 
     .summary {

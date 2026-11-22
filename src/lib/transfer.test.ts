@@ -35,7 +35,14 @@ describe("CSV round trip", () => {
     it("exports and re-imports cards", () => {
         const cards = [
             card(),
-            card({ "@id": "c2", frontText: 'a "quoted", text', backText: "line\nbreak", hint: " spaced ", group: "x" }),
+            card({
+                "@id": "c2",
+                frontText: 'a "quoted", text',
+                backText: "line\nbreak",
+                hint: " spaced ",
+                extra: "Jedno pivo, prosím.\nOne beer, please.",
+                group: "x",
+            }),
         ];
         const parsed = parseImport(exportCsv(cards), "cards.csv", "Imported");
         expect(parsed.format).toBe("csv");
@@ -46,6 +53,7 @@ describe("CSV round trip", () => {
                 frontText: 'a "quoted", text',
                 backText: "line\nbreak",
                 hint: "spaced",
+                extra: "Jedno pivo, prosím.\nOne beer, please.",
                 group: "x",
                 direction: "forward",
             },
@@ -157,14 +165,14 @@ describe("study direction in CSV", () => {
 
     it("round-trips through export and import", () => {
         const csv = exportCsv([card("a"), card("b", "reverse"), card("c", "both")]);
-        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction");
+        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction,extra");
         const parsed = parseImport(csv, "cards.csv", "Imported");
         expect(parsed.rows.map((r) => r.card.direction)).toEqual(["forward", "reverse", "both"]);
     });
 
     it("writes the column even when every card is front → back, so they stay that way", () => {
         const csv = exportCsv([card("a")]);
-        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction");
+        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction,extra");
         expect(parseImport(csv, "cards.csv", "Imported").rows[0].card.direction).toBe("forward");
     });
 

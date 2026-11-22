@@ -8,7 +8,7 @@
         "@fontsource-variable/newsreader": "^5.3.0",
         "@fontsource-variable/schibsted-grotesk": "^5.3.0",
         "fflate": "0.8.3",
-        "remotestorage-module-flashcards": "^2.2.0",
+        "remotestorage-module-flashcards": "^2.3.0",
         "remotestoragejs": "2.0.0-beta.10",
         "sql.js": "1.15.2",
         "svelte": "^5.58",
@@ -782,7 +782,7 @@
 
     "regjsparser": ["regjsparser@0.14.1", "", { "dependencies": { "jsesc": "~3.1.0" }, "bin": { "regjsparser": "bin/parser" } }, "sha512-IeYboCLG1KBNRksrZQIZ1SV5KVWZiR0ikFokOcA0n63vLvlaFvCsfxN+fd4aXwL0KW3YD+ByRzIgo9ZAHdbldw=="],
 
-    "remotestorage-module-flashcards": ["remotestorage-module-flashcards@2.2.0", "", { "peerDependencies": { "remotestoragejs": "^2.0.0-beta.10" } }, "sha512-g40z0FFltuzOtXq0dax0LPwaBUPoDXUbDyFA4u/Yi7p0h76qK5nr8dwCx1kfM/cWaouK/9RuTvtFRn8bJOESzA=="],
+    "remotestorage-module-flashcards": ["remotestorage-module-flashcards@2.3.0", "", { "peerDependencies": { "remotestoragejs": "^2.0.0-beta.10" } }, "sha512-jlwNHAkXpEj41DiBg1MlzCttVi8acQlt9XvPaALxxQk7o+IKnz3FThFdRsS9zoXSvdQtQXuJ/iTPNbdnk3oqvA=="],
 
     "remotestoragejs": ["remotestoragejs@2.0.0-beta.10", "", { "dependencies": { "esm": "^3.2.25", "tv4": "^1.3.0", "webfinger.js": "^3.0.6", "xhr2": "^0.2.1" }, "optionalDependencies": { "fsevents": "^2.3.2" } }, "sha512-YNPt2o1sGWBFJ950pN4J6D5d2lMSg2WoV3ewmLECjyrBAbpeujdQOreQMaejLJL0DhvDijp0RsxIeYnIhsE7kA=="],
 

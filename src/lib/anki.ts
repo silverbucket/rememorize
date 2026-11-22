@@ -51,6 +51,8 @@ export interface NoteTypeMapping {
     back: number;
     /** -1 for none. */
     hint: number;
+    /** Fields shown with the answer, as the card's extra. */
+    extra: number[];
     /**
      * Cloze only: one card per gap, the text with that gap hidden. Otherwise
      * one card per note: the whole text, gaps filled in, and `back` (often a
@@ -232,8 +234,23 @@ export function clozeCards(html: string): { front: string; back: string }[] {
 /** Longer than this on average, a field reads like notes rather than an answer. */
 const LONG = 150;
 
-/** A starting mapping for a note type, from what its first card template shows. */
+/**
+ * A starting mapping for a note type, from what its first card template
+ * shows. What else the template shows goes in the extra.
+ */
 export function guessMapping(type: AnkiNoteType): NoteTypeMapping {
+    const sides = guessSides(type);
+    const sample = type.notes.slice(0, 200);
+    const shown = new Set([...type.front, ...type.back]);
+    const used = [sides.front, sides.back, sides.hint];
+    const extra = type.fields
+        .map((_, i) => i)
+        .filter((i) => shown.has(type.fields[i]) && !used.includes(i))
+        .filter((i) => sample.some((n) => htmlToText(n.fields[i] ?? "")));
+    return { ...sides, extra };
+}
+
+function guessSides(type: AnkiNoteType): Omit<NoteTypeMapping, "extra"> {
     const sample = type.notes.slice(0, 200);
     const length = (i: number) =>
         sample.reduce((sum, note) => sum + htmlToText(note.fields[i] ?? "").length, 0) / Math.max(1, sample.length);
@@ -271,6 +288,32 @@ export function guessMapping(type: AnkiNoteType): NoteTypeMapping {
     return { include: true, front: f, back: b, hint };
 }
 
+/** Longer than this, or on more than one line, a field in the extra is a paragraph of its own rather than a labelled line. */
+const SHORT = 60;
+
+/**
+ * The extra for a note: short fields as "Name: value" lines (a conjugation
+ * reads "já: mám", "ty: máš"…), longer ones as paragraphs of their own.
+ */
+export function extraText(type: AnkiNoteType, note: AnkiNote, fields: number[]): string {
+    const blocks: string[] = [];
+    let lines: string[] = [];
+    for (const i of [...fields].sort((a, b) => a - b)) {
+        const html = note.fields[i] ?? "";
+        const value = type.cloze ? clozeText(html) : htmlToText(html);
+        if (!value) continue;
+        if (value.length <= SHORT && !value.includes("\n")) {
+            lines.push(`${type.fields[i]}: ${value}`);
+            continue;
+        }
+        if (lines.length) blocks.push(lines.join("\n"));
+        lines = [];
+        blocks.push(value);
+    }
+    if (lines.length) blocks.push(lines.join("\n"));
+    return blocks.join("\n\n");
+}
+
 export interface ApkgOptions {
     mappings: Record<string, NoteTypeMapping>;
     /** The group a note's cards go in, given its deck. */
@@ -294,6 +337,13 @@ export function apkgImport(collection: AnkiCollection, options: ApkgOptions): Pa
         const group = options.groupFor(note.deck);
         const hint = mapping.hint >= 0 ? htmlToText(note.fields[mapping.hint] ?? "") : "";
         const gaps = type.cloze && mapping.gaps;
+        // Not a field that's already on the card.
+        const onCard = [mapping.front, mapping.hint, ...(gaps ? [] : [mapping.back])];
+        const extra = extraText(
+            type,
+            note,
+            mapping.extra.filter((i) => !onCard.includes(i)),
+        );
         const text = note.fields[mapping.front] ?? "";
         const sides = gaps
             ? clozeCards(text)
@@ -315,6 +365,7 @@ export function apkgImport(collection: AnkiCollection, options: ApkgOptions): Pa
         for (const side of usable) {
             const card: FlashcardInput = { frontText: side.front, backText: side.back, group, direction };
             if (hint && hint !== side.front && hint !== side.back) card.hint = hint;
+            if (extra) card.extra = extra;
             result.rows.push({ source, card });
         }
     }
