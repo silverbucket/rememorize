@@ -68,7 +68,7 @@ const SPANISH =
     "la leche=milk|el pescado=fish|el pollo=chicken|la cocina=kitchen|el dormitorio=bedroom|la escalera=stairs|" +
     "el edificio=building|la calle=street|el puente=bridge|el mercado=market|la estación=station|" +
     "el billete=ticket|la maleta=suitcase|madrugar=to get up early|aprovechar=to make the most of|" +
-    "echar de menos=to miss someone|tener ganas de=to feel like doing|darse cuenta=to realise|" +
+    "echar de menos=to miss someone|tener ganas de=to feel like doing|darse cuenta=to realize|" +
     "quedarse=to stay|llevarse bien=to get along|estrenar=to use for the first time|" +
     "la sobremesa=lingering at the table after a meal|el atardecer=sunset";
 
@@ -260,7 +260,7 @@ async function seed(page, today) {
         if (day >= DAYS - 3) limit = 8;
         await openAt(page, time, "/review");
         if (isToday) {
-            const left = await page.getByText(/\d+ cards? left/).textContent();
+            const left = await page.getByText(/\d+\scards? left/).textContent();
             limit = Math.ceil(Number.parseInt(left, 10) * 0.45);
         }
         const rolls = Array.from({ length: 97 }, () => [random(), random(), random()]);
@@ -472,7 +472,7 @@ async function capture(page) {
         // Further down the same page: the forecast.
         forecast: async () => {
             await pages.stats();
-            await page.getByRole("heading", { name: "New cards started" }).evaluate((heading) => {
+            await page.getByRole("heading", { name: "Cards started per day" }).evaluate((heading) => {
                 // Just under the phone's header, with the panel above tucked out of sight behind it.
                 window.scrollTo(0, heading.closest("section").getBoundingClientRect().top + window.scrollY - 66);
             });
@@ -518,7 +518,7 @@ async function capture(page) {
         "group-settings": async () => {
             await pages.group();
             await page.getByRole("button", { name: "Group settings" }).click();
-            await page.getByLabel("Cards you add here").waitFor();
+            await page.getByLabel("Default study direction").waitFor();
             return () => page.keyboard.press("Escape");
         },
         select: async () => {

@@ -8,7 +8,7 @@ import { acceptDialogs, addCard } from "./helpers";
 test("empty state", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByText("No cards yet")).toBeVisible();
-    await expect(page.getByRole("link", { name: /Not synced/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Saved locally/ })).toBeVisible();
 });
 
 test("add cards, edit, move between groups, delete", async ({ page }) => {
@@ -111,7 +111,7 @@ test("cards can be picked and moved to another group, a new one, and back", asyn
     await page.goto("/#/group/Czech");
     await page.getByRole("button", { name: "Select", exact: true }).click();
     const bar = page.getByRole("toolbar", { name: "Selected cards" });
-    await expect(bar).toContainText("Pick cards to move");
+    await expect(bar).toContainText("Select cards");
     await expect(bar.getByRole("button", { name: "Move to…" })).toBeDisabled();
     // A tap on a row picks it instead of opening it.
     await page.locator(".cards li").filter({ hasText: "pivo" }).click();
@@ -137,7 +137,7 @@ test("cards can be picked and moved to another group, a new one, and back", asyn
     await bar.getByRole("button", { name: "Select all" }).click();
     await expect(bar).toContainText("3 selected");
     await bar.getByRole("button", { name: "Select none" }).click();
-    await expect(bar).toContainText("Pick cards to move");
+    await expect(bar).toContainText("Select cards");
     await page.locator(".cards li").filter({ hasText: "chléb" }).click();
     await page
         .locator(".cards li")
@@ -496,9 +496,9 @@ test("reviews of a few cards at a time, and the home page counts new cards apart
     await expect(page.getByText("3 new cards in Numbers")).toBeVisible();
 
     await page.goto("/#/account");
-    await expect(page.getByLabel("Most cards per review")).toHaveValue("");
-    await page.getByLabel("Most cards per review").fill("2");
-    await page.getByLabel("Most cards per review").blur();
+    await expect(page.getByLabel("Cards per review")).toHaveValue("");
+    await page.getByLabel("Cards per review").fill("2");
+    await page.getByLabel("Cards per review").blur();
 
     await page.goto("/#/group/Numbers");
     await expect(page.getByText("3 ready to review, 2 at a time: the review size is 2.")).toBeVisible();
@@ -522,10 +522,10 @@ test("reviews of a few cards at a time, and the home page counts new cards apart
     // Clearing the field turns the limit off again.
     await page.reload();
     await page.goto("/#/account");
-    await expect(page.getByLabel("Most cards per review")).toHaveValue("2");
-    await page.getByLabel("Most cards per review").fill("");
-    await page.getByLabel("Most cards per review").blur();
-    await expect(page.getByLabel("Most cards per review")).toHaveValue("");
+    await expect(page.getByLabel("Cards per review")).toHaveValue("2");
+    await page.getByLabel("Cards per review").fill("");
+    await page.getByLabel("Cards per review").blur();
+    await expect(page.getByLabel("Cards per review")).toHaveValue("");
 });
 
 test("cards can be studied back → front, or both ways", async ({ page }) => {
@@ -595,7 +595,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
 test("new cards take a direction from the settings or their group, and many cards change at once", async ({ page }) => {
     // The settings' direction is what a new card starts with.
     await page.goto("/#/account");
-    await page.getByLabel("Cards you add", { exact: true }).selectOption("Both ways");
+    await page.getByLabel("Default study direction", { exact: true }).selectOption("Both ways");
     await page.goto("/#/new?group=Czech");
     await expect(page.getByLabel("Study direction")).toHaveValue("both");
     await page.getByLabel("Front").fill("pivo");
@@ -612,7 +612,7 @@ test("new cards take a direction from the settings or their group, and many card
 
     // A group's own direction, offered to the cards already in it.
     await page.getByRole("button", { name: "Group settings" }).click();
-    const own = page.getByLabel("Cards you add here");
+    const own = page.getByLabel("Default study direction");
     await expect(own).toHaveValue("");
     await own.selectOption("Back → front");
     const offer = page.getByRole("status").filter({ hasText: "Study the 2 cards already here back → front too?" });

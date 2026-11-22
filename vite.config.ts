@@ -44,7 +44,8 @@ export default defineConfig({
             manifest: {
                 name: "Rememorize",
                 short_name: "Rememorize",
-                description: "Flashcards with spaced repetition, stored in your own remoteStorage.",
+                description:
+                    "Flashcards that come back just before you forget them: offline, private, and yours to keep.",
                 start_url: "./",
                 scope: "./",
                 display: "standalone",

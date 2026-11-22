@@ -4,7 +4,7 @@
     const label = $derived.by(() => {
         if (library.status === "connecting") return "Connecting…";
         if (library.status === "unauthorized") return "Sign in again";
-        if (library.status === "local") return "Not synced";
+        if (library.status === "local") return "Saved locally";
         if (library.offline) return "Offline";
         if (library.syncing) return "Syncing…";
         return library.userAddress || "Connected";

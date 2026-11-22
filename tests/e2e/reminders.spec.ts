@@ -327,8 +327,8 @@ test("a reminder counts everything due, not one review's worth", async ({ page }
     const hub = await standIn(page, device);
     for (const front of ["pes", "kočka", "kůň"]) await addCard(page, { front, back: "animal", group: "Animals" });
     await page.goto("/#/account");
-    await page.getByLabel("Most cards per review").fill("2");
-    await page.getByLabel("Most cards per review").blur();
+    await page.getByLabel("Cards per review").fill("2");
+    await page.getByLabel("Cards per review").blur();
     await turnOn(page);
     expect(nextTitle(hub, device, address(1))).toBe("3 cards due");
 });

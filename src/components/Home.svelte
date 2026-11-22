@@ -88,9 +88,9 @@
             before you're likely to forget it.
         </p>
         <p class="muted">
-            Your cards are saved in this browser and work offline.
+            Your cards stay in this browser and work offline, with no account needed.
             {#if library.status !== "connected"}
-                <a href={href.account()}>Connect a remoteStorage account</a> to sync them across devices.
+                To sync across devices, <a href={href.account()}>connect your own storage</a>.
             {/if}
         </p>
         <div class="empty-actions">
@@ -243,7 +243,8 @@
 
     {#if library.status === "local"}
         <p class="muted hint">
-            Saved in this browser only. <a href={href.account()}>Connect storage</a> to sync across devices.
+            Saved in this browser only. <a href={href.account()}>Connect your own storage</a> to back up and sync across
+            devices.
         </p>
     {/if}
 {/if}
