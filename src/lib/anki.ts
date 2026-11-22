@@ -202,7 +202,7 @@ export function htmlToText(html: string): string {
 const CLOZE = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g;
 const HAS_CLOZE = /\{\{c\d+::/;
 /** A gap with no other gap inside it, and its optional hint. */
-const INNERMOST_CLOZE = /\{\{c\d+::((?:(?!\{\{)[\s\S])*?)(?:::(?:(?!\{\{)[\s\S])*?)?\}\}/g;
+const INNERMOST_CLOZE = /\{\{c\d+::((?:(?!\{\{c\d+::)[\s\S])*?)(?:::(?:(?!\{\{c\d+::)[\s\S])*?)?\}\}/g;
 
 /** The text with every gap filled in. */
 export function clozeText(html: string): string {

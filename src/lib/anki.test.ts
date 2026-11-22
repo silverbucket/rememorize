@@ -76,6 +76,7 @@ describe("clozeText", () => {
     it("fills in every gap, dropping hints, including a gap inside a gap", () => {
         expect(clozeText("{{c1::Dobrý den}}. Co si {{c2::dáte::verb}}?")).toBe("Dobrý den. Co si dáte?");
         expect(clozeText("{{c1::I saw {{c2::her}} yesterday.}}")).toBe("I saw her yesterday.");
+        expect(clozeText("{{c1::Use {{ to open a template}}")).toBe("Use {{ to open a template");
     });
 });
 
