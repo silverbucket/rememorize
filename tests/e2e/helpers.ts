@@ -40,11 +40,15 @@ export async function connect(page: Page, user: TestUser): Promise<void> {
 }
 
 /** Add a card through the editor. Ends on the card's group page. */
-export async function addCard(page: Page, card: { front: string; back: string; group: string; hint?: string }) {
+export async function addCard(
+    page: Page,
+    card: { front: string; back: string; group: string; hint?: string; extra?: string },
+) {
     await page.goto(`/#/new?group=${encodeURIComponent(card.group)}`);
     await page.getByLabel("Front").fill(card.front);
     await page.getByLabel("Back").fill(card.back);
     if (card.hint) await page.getByLabel("Hint").fill(card.hint);
+    if (card.extra) await page.getByLabel("Extra").fill(card.extra);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: card.group })).toBeVisible();
 }

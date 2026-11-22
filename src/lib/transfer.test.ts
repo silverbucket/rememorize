@@ -1,6 +1,6 @@
 import type { Flashcard } from "remotestorage-module-flashcards";
 import { describe, expect, it } from "vitest";
-import { exportCsv, exportJson, parseDelimited, parseImport, planImport } from "./transfer";
+import { exportCsv, exportJson, parseDelimited, parseImport, planImport, sameText } from "./transfer";
 
 function card(overrides: Partial<Flashcard> = {}): Flashcard {
     return {
@@ -35,7 +35,14 @@ describe("CSV round trip", () => {
     it("exports and re-imports cards", () => {
         const cards = [
             card(),
-            card({ "@id": "c2", frontText: 'a "quoted", text', backText: "line\nbreak", hint: " spaced ", group: "x" }),
+            card({
+                "@id": "c2",
+                frontText: 'a "quoted", text',
+                backText: "line\nbreak",
+                hint: " spaced ",
+                extra: "Jedno pivo, prosím.\nOne beer, please.",
+                group: "x",
+            }),
         ];
         const parsed = parseImport(exportCsv(cards), "cards.csv", "Imported");
         expect(parsed.format).toBe("csv");
@@ -46,6 +53,7 @@ describe("CSV round trip", () => {
                 frontText: 'a "quoted", text',
                 backText: "line\nbreak",
                 hint: "spaced",
+                extra: "Jedno pivo, prosím.\nOne beer, please.",
                 group: "x",
                 direction: "forward",
             },
@@ -157,14 +165,14 @@ describe("study direction in CSV", () => {
 
     it("round-trips through export and import", () => {
         const csv = exportCsv([card("a"), card("b", "reverse"), card("c", "both")]);
-        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction");
+        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction,extra");
         const parsed = parseImport(csv, "cards.csv", "Imported");
         expect(parsed.rows.map((r) => r.card.direction)).toEqual(["forward", "reverse", "both"]);
     });
 
     it("writes the column even when every card is front → back, so they stay that way", () => {
         const csv = exportCsv([card("a")]);
-        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction");
+        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction,extra");
         expect(parseImport(csv, "cards.csv", "Imported").rows[0].card.direction).toBe("forward");
     });
 
@@ -195,7 +203,8 @@ describe("planImport", () => {
             existing,
         );
         expect(plan.add.map((c) => `${c.group}:${c.frontText}`)).toEqual(["drinks:pivo", "food:voda"]);
-        expect(plan.unchanged).toBe(2);
+        expect(plan.unchanged).toBe(1);
+        expect(plan.repeated).toBe(1);
     });
 
     it("restores backups without overwriting newer progress", () => {
@@ -203,7 +212,13 @@ describe("planImport", () => {
         const older = card({ updatedAt: "2026-02-01T00:00:00.000Z" });
         const newer = card({ updatedAt: "2026-04-01T00:00:00.000Z", backText: "a beer" });
         const missing = card({ "@id": "c9" });
-        expect(planImport([{ source: 1, card: older }], [here])).toEqual({ add: [], update: [], unchanged: 1 });
+        expect(planImport([{ source: 1, card: older }], [here])).toEqual({
+            add: [],
+            update: [],
+            unchanged: 1,
+            repeated: 0,
+            sameFront: [],
+        });
         expect(
             planImport(
                 [
@@ -216,6 +231,77 @@ describe("planImport", () => {
             add: [missing],
             update: [{ card: newer, previousGroup: "moved" }],
             unchanged: 0,
+            repeated: 0,
+            sameFront: [],
         });
+    });
+
+    it("counts new cards whose front is already in their group with another back", () => {
+        const existing = [card({ frontText: "moc", backText: "a lot", group: "czech" })];
+        const plan = planImport(
+            [
+                { source: 1, card: { frontText: "moc", backText: "power", group: "czech" } },
+                { source: 2, card: { frontText: "moc", backText: "power", group: "other" } },
+                { source: 3, card: { frontText: "moc", backText: "a lot", group: "czech" } },
+            ],
+            existing,
+        );
+        expect(plan.add).toHaveLength(2);
+        expect(plan.unchanged).toBe(1);
+        expect(plan.sameFront.map((c) => `${c.group}:${c.backText}`)).toEqual(["czech:power"]);
+    });
+
+    it("flags new cards that share a front with each other, but not with themselves", () => {
+        const row = (frontText: string, backText: string) => ({ source: 1, card: { frontText, backText, group: "g" } });
+        const plan = planImport([row("moc", "much"), row("moc", "power"), row("pes", "dog")], []);
+        expect(plan.sameFront.map((c) => c.backText)).toEqual(["much", "power"]);
+    });
+
+    it("treats cards that differ only in capitals, spacing and surrounding punctuation as the same", () => {
+        const existing = [card({ frontText: "Pes", backText: "Dog.", group: "g" })];
+        const row = (frontText: string, backText: string) => ({ source: 1, card: { frontText, backText, group: "g" } });
+        const plan = planImport(
+            [
+                row("pes", "dog"),
+                row("Není zač.", "You're welcome."),
+                row("není  zač", "you're welcome"),
+                row("Promiňte...", "Excuse me"),
+            ],
+            existing,
+        );
+        expect(plan.add.map((c) => c.frontText)).toEqual(["Není zač.", "Promiňte..."]);
+        expect(plan.unchanged).toBe(1);
+        expect(plan.repeated).toBe(1);
+        expect(sameText("„Jak se máš?“")).toBe("jak se máš");
+        expect(sameText("byt’")).not.toBe(sameText("byt"));
+        expect(sameText("こんにちは。")).toBe("こんにちは");
+        expect(sameText("¿Qué tal?")).toBe("qué tal");
+        // Punctuation outside the Basic Multilingual Plane (U+10100 AEGEAN WORD SEPARATOR LINE).
+        expect(sameText("\u{10100}hello\u{10100}")).toBe("hello");
+        expect(sameText("😀 hi 😀")).toBe("😀 hi 😀");
+        // A lone low surrogate isn't half of a pair with the apostrophe before it.
+        expect(sameText("byt’\udc00")).toBe("byt’\udc00");
+        // Long runs of punctuation inside the text don't slow it down.
+        const started = performance.now();
+        expect(sameText(`a${"_".repeat(40_000)}b`)).toHaveLength(40_002);
+        expect(performance.now() - started).toBeLessThan(200);
+    });
+
+    it("doesn't count a restored card whose front and back match the one here", () => {
+        const here = card({ "@id": "a", frontText: "moc", backText: "a lot", group: "czech" });
+        const restored = card({ "@id": "b", frontText: "moc", backText: "a lot", group: "czech" });
+        expect(planImport([{ source: 1, card: restored }], [here]).sameFront).toEqual([]);
+    });
+
+    it("tells cards repeated in the file from cards already here", () => {
+        const existing = [card({ frontText: "pes", backText: "dog", group: "czech" })];
+        const row = (frontText: string, backText: string) => ({
+            source: 1,
+            card: { frontText, backText, group: "czech" },
+        });
+        const plan = planImport([row("pes", "dog"), row("voda", "water"), row("voda", "water")], existing);
+        expect(plan.add).toHaveLength(1);
+        expect(plan.unchanged).toBe(1);
+        expect(plan.repeated).toBe(1);
     });
 });

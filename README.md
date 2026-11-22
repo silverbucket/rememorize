@@ -74,8 +74,9 @@ storage you control, never on our servers.
 - **Move and merge groups.** Select cards in a group or across all of them and
   move them to another group, or a new one, with their schedules intact.
   Rename a group, or merge it into another.
-- **Import and export.** Bring in cards from CSV or Anki's plain-text export.
-  Export a full JSON backup or a CSV spreadsheet whenever you like.
+- **Import and export.** Bring in cards from CSV, an Anki deck (.apkg) or
+  Anki's plain-text export. Export a full JSON backup or a CSV spreadsheet
+  whenever you like.
 - **Easy on the eyes.** Light is tinted like ledger paper, dark like a
   chalkboard. Follows your system theme, or you choose.
 - **Quick with a keyboard.** Space shows the answer, 1 to 4 rate it, and U

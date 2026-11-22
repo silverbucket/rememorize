@@ -3,6 +3,7 @@
  * browser and works offline.
  */
 import { expect, test } from "@playwright/test";
+import { buildApkg, CZECH } from "../anki-fixture";
 import { acceptDialogs, addCard } from "./helpers";
 
 test("empty state", async ({ page }) => {
@@ -289,7 +290,7 @@ test("views narrow the cards, in a group and across all of them, and can be revi
 });
 
 test("review session schedules cards", async ({ page }) => {
-    await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks" });
+    await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks", extra: "Pes štěká." });
     await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
     await page.goto("/");
     await page.locator(".today").getByRole("link", { name: "Review Animals, 2 cards" }).click();
@@ -299,8 +300,11 @@ test("review session schedules cards", async ({ page }) => {
     await expect(page.locator(".side.front")).toHaveText("pes");
     await page.getByRole("button", { name: "Show hint" }).click();
     await expect(page.getByText("barks")).toBeVisible();
+    await expect(page.getByText("Pes štěká.")).toHaveCount(0);
     await page.getByRole("button", { name: /Show answer/ }).click();
     await expect(page.locator(".side.back")).toHaveText("dog");
+    // The extra comes with the answer.
+    await expect(page.locator(".extra")).toHaveText("Pes štěká.");
     // Each grade shows the interval it would give.
     for (const grade of ["Again", "Hard", "Good", "Easy"]) {
         await expect(page.getByRole("button", { name: new RegExp(grade) })).toContainText(/\d|<1m/);
@@ -735,8 +739,156 @@ test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
     const exported = await (await download).path();
     const { readFileSync } = await import("node:fs");
     const text = readFileSync(exported, "utf8");
-    expect(text).toContain("pes,dog,barks,Czech animals,both");
-    expect(text).toContain('"voda, studená",cold water,,Czech animals,both');
+    expect(text).toContain("pes,dog,barks,Czech animals,both,");
+    expect(text).toContain('"voda, studená",cold water,,Czech animals,both,');
+});
+
+test("import an Anki deck, choosing what goes on each side", async ({ page }) => {
+    const file = {
+        name: "Czech.apkg",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(await buildApkg(CZECH)),
+    };
+
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles(file);
+    // The group is named after the deck.
+    await expect(page.getByLabel("Group", { exact: true })).toHaveValue("Czech");
+
+    // Each note type gets a guessed mapping and an example card; lesson notes are left out.
+    const vocabulary = page.locator(".type").filter({ hasText: "Vocabulary" });
+    await expect(vocabulary.getByRole("checkbox")).toBeChecked();
+    await expect(vocabulary.getByLabel("Front")).toHaveValue("1");
+    await expect(vocabulary.locator(".example").first()).toHaveText("káva → coffee · Hint: f.");
+    // What else the card template shows goes with the answer.
+    await expect(vocabulary.locator(".extra-pick summary")).toContainText("Extra, shown with the answer: Example");
+    await expect(vocabulary.locator(".example.extra")).toHaveText("Example: Jednu kávu, prosím.");
+    const announcement = page.locator(".type").filter({ hasText: "Announcement" });
+    await expect(announcement.getByRole("checkbox")).not.toBeChecked();
+    await expect(announcement).toContainText("Left out: its backs are long text, like notes to read.");
+    // A cloze becomes the whole sentence and its translation, or a card per gap.
+    const cloze = page.locator(".type").filter({ hasText: "Cloze" });
+    await expect(cloze.locator(".example")).toHaveText("Dobrý den. Co si dáte? → Hello. What will you have?");
+    await expect(page.getByText("4 new cards in Czech")).toBeVisible();
+    await cloze.getByLabel("Cards").selectOption({ label: "One per gap: the text with that gap hidden" });
+    await expect(cloze.locator(".example")).toHaveText("[…]. Co si dáte? → Dobrý den");
+    await expect(page.getByText("5 new cards in Czech")).toBeVisible();
+    await cloze.getByLabel("Cards").selectOption({ label: "One per note: the whole text, gaps filled in" });
+
+    await expect(page.getByText("4 new cards in Czech")).toBeVisible();
+    await expect(page.getByText("1 note couldn't be used: note 5 (front or back is empty)")).toBeVisible();
+    await expect(page.getByText("Anki's review progress isn't imported")).toBeVisible();
+
+    // A group per deck instead, then back to one.
+    await page.getByLabel("Put the cards in").selectOption({ label: "A group per deck (2 decks)" });
+    await expect(page.getByText("4 new cards in Unit 01: Greetings, Unit 02: Food-Drink")).toBeVisible();
+    await page.getByLabel("Put the cards in").selectOption({ label: "One group" });
+
+    // Swapping the sides changes the cards.
+    await vocabulary.getByLabel("Front").selectOption({ label: "English" });
+    await vocabulary.getByLabel("Back").selectOption({ label: "Word" });
+    await expect(vocabulary.locator(".example").first()).toHaveText("coffee → káva · Hint: f.");
+    await vocabulary.getByLabel("Front").selectOption({ label: "Word" });
+    await vocabulary.getByLabel("Back").selectOption({ label: "English" });
+
+    await page.getByRole("button", { name: "Import 4 cards" }).click();
+    await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
+    // Studied the way new cards are by default: front to back (only other directions are marked).
+    await expect(page.locator(".direction")).toHaveCount(0);
+
+    // New cards come up in the deck's order, with the hint the mapping chose.
+    await page.goto("/#/review/Czech");
+    await expect(page.locator(".side.front")).toHaveText("káva");
+    await page.getByRole("button", { name: "Show hint" }).click();
+    await expect(page.getByText("f.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Example: Jednu kávu, prosím.")).toHaveCount(0);
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await expect(page.locator(".extra")).toHaveText("Example: Jednu kávu, prosím.");
+
+    // Importing it again adds nothing.
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles(file);
+    await expect(page.getByText("4 cards already here (skipped)")).toBeVisible();
+});
+
+test("an Anki deck in the newer format explains how to export it", async ({ page }) => {
+    const buffer = Buffer.from(await buildApkg({ ...CZECH, newerFormat: true }));
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles({ name: "new.apkg", mimeType: "application/octet-stream", buffer });
+    await expect(page.getByRole("alert")).toContainText("Support older Anki versions");
+});
+
+test("cards can be taken out of an import in the preview", async ({ page }) => {
+    const words = ["jedna", "dvě", "tři", "čtyři", "pět", "šest", "sedm"];
+    const csv = words.map((w, i) => `${w},${i + 1}`).join("\n");
+    await addCard(page, { front: "jedna", back: "one", group: "Numbers" });
+    await page.goto("/#/import");
+    await page
+        .getByLabel("File")
+        .setInputFiles({ name: "Numbers.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+    await expect(page.getByText("7 new cards in Numbers")).toBeVisible();
+    await expect(page.getByText("1 new card has the same front as another card in the group")).toBeVisible();
+
+    // The first five are listed; the rest are a tap away.
+    const rows = page.locator(".summary tbody tr");
+    await expect(rows).toHaveCount(5);
+    await page.getByRole("button", { name: "Show all 7" }).click();
+    await expect(rows).toHaveCount(7);
+
+    await page.getByRole("button", { name: "Remove dvě" }).click();
+    await page.getByRole("button", { name: "Remove sedm" }).click();
+    await expect(rows).toHaveCount(5);
+    await expect(page.getByText("5 new cards in Numbers")).toBeVisible();
+    await expect(page.getByText("2 cards removed")).toBeVisible();
+
+    // Removing can be taken back.
+    await page.getByRole("button", { name: "Put back" }).click();
+    await expect(page.getByText("7 new cards in Numbers")).toBeVisible();
+    await page.getByRole("button", { name: "Remove dvě" }).click();
+    // The warning is about the cards being imported: it goes with the card it was about.
+    await page.getByRole("button", { name: "Remove jedna" }).click();
+    await expect(page.getByText(/same front/)).toHaveCount(0);
+
+    // Removed cards stay out when the group changes.
+    await page.getByLabel("Group for cards without one").fill("Čísla");
+    await expect(page.getByText("5 new cards in Čísla")).toBeVisible();
+    await expect(page.getByText("2 cards removed")).toBeVisible();
+
+    await page.getByRole("button", { name: "Import 5 cards" }).click();
+    await expect(page.getByRole("heading", { name: "Čísla" })).toBeVisible();
+    await expect(page.getByText("tři")).toBeVisible();
+    await expect(page.getByText("dvě")).toHaveCount(0);
+    await expect(page.getByText("jedna")).toHaveCount(0);
+});
+
+test("near-duplicates are added once, and cards sharing a front can be picked out", async ({ page }) => {
+    const csv = "Není zač.,You're welcome.\nnení zač,you're welcome\nmoc,much\nmoc,power\npes,dog\n";
+    await page.goto("/#/import");
+    await page
+        .getByLabel("File")
+        .setInputFiles({ name: "Phrases.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+    // Capitals and punctuation don't make a different card.
+    await expect(page.getByText("4 new cards in Phrases")).toBeVisible();
+    await expect(page.getByText("1 card repeated in the file (added once)")).toBeVisible();
+
+    // Two meanings of "moc", or a duplicate: shown together so one can be removed.
+    await expect(page.getByText("2 new cards have the same front as another card in the group")).toBeVisible();
+    await page.getByRole("button", { name: "Show them" }).click();
+    const rows = page.locator(".summary tbody tr");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toContainText("much");
+    await page.getByRole("button", { name: "Back to the list" }).click();
+    await expect(rows).toHaveCount(4);
+    // Removing a card removes every spelling of it, not just the one shown.
+    await page.getByRole("button", { name: "Remove Není zač." }).click();
+    await expect(page.getByText("3 new cards in Phrases")).toBeVisible();
+    await expect(page.getByText(/repeated in the file/)).toHaveCount(0);
+    await page.getByRole("button", { name: "Show them" }).click();
+    await page.getByRole("button", { name: "Remove moc" }).first().click();
+    // Nothing left to compare: the whole list is back.
+    await expect(page.getByText(/same front/)).toHaveCount(0);
+    await expect(rows).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "Import 2 cards" })).toBeVisible();
 });
 
 test("a JSON backup restores cards with their review progress", async ({ page, browser }) => {
@@ -1003,7 +1155,7 @@ test("on a small phone, a field that takes focus scrolls clear of the Save bar",
     await page.setViewportSize({ width: 320, height: 430 });
     await page.goto("/#/new");
     await page.getByLabel("Front").focus();
-    for (const label of ["Back", "Hint", "Group", "Study direction"]) {
+    for (const label of ["Back", "Hint", "Group", "Extra", "Study direction"]) {
         await page.keyboard.press("Tab");
         const field = page.getByLabel(label);
         await expect(field).toBeFocused();
@@ -1016,7 +1168,7 @@ test("on a small phone, a field that takes focus scrolls clear of the Save bar",
 
     // And back up the form: clear of the header at the top.
     const header = await page.locator("header").boundingBox();
-    for (const label of ["Group", "Hint", "Back", "Front"]) {
+    for (const label of ["Extra", "Group", "Hint", "Back", "Front"]) {
         await page.keyboard.press("Shift+Tab");
         const field = page.getByLabel(label);
         await expect(field).toBeFocused();

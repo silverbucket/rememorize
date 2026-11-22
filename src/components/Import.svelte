@@ -1,8 +1,21 @@
 <script lang="ts">
+    
+    import type { FlashcardInput } from "remotestorage-module-flashcards";
+    import { SvelteSet } from "svelte/reactivity";
+import {
+        type AnkiCollection,
+        type AnkiNoteType,
+        apkgImport,
+        deckGroups,
+        guessMapping,
+        mainDeck,
+        type NoteTypeMapping,
+        readApkg,
+    } from "../lib/anki";
     import { plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { library } from "../lib/state";
-    import { type ImportPlan, type ParsedImport, parseImport, planImport } from "../lib/transfer";
+    import { type ImportPlan, type ParsedImport, parseImport, planImport, sameText } from "../lib/transfer";
     import Icon from "./Icon.svelte";
 
     /** Importing is offered on the home page and in Settings: go back to whichever led here. */
@@ -14,6 +27,14 @@
 
     let fileName = $state("");
     let text = $state("");
+    /** An Anki package, once read. Not deeply reactive: it can hold thousands of notes. */
+    let anki: AnkiCollection | undefined = $state.raw();
+    /** Per note type (by id): which fields make the front, back and hint. */
+    let mappings: Record<string, NoteTypeMapping> = $state({});
+    /** Anki cards go in a group per deck rather than all in one. */
+    let perDeck = $state(false);
+    let reading = $state(false);
+    const chosen = $derived(!!text || !!anki);
     let defaultGroup = $state("Imported");
     let readError = $state("");
     let importing = $state(false);
@@ -22,7 +43,16 @@
     /** Fixed when the import starts: saving changes library.cards, which would change the plan. */
     let running: { plan: ImportPlan; total: number; groups: string[] } | undefined = $state();
 
+    /** New cards from a deck are studied the way new cards in their group are. */
+    const directionFor = (group: string) => library.directionFor(group);
+    const groupName = $derived(defaultGroup.trim() || "Imported");
+    /** A group name for each deck that holds notes. */
+    const deckNames = $derived(deckGroups(anki ? anki.noteTypes.flatMap((t) => t.notes.map((n) => n.deck)) : []));
+    const decks = $derived(deckNames.size);
+    const groupFor = $derived(perDeck ? (deck: string) => deckNames.get(deck) || groupName : () => groupName);
+
     const parsed: { result?: ParsedImport; error?: string } = $derived.by(() => {
+        if (anki) return { result: apkgImport(anki, { mappings, groupFor, directionFor }) };
         if (!text) return {};
         try {
             // Rows without a direction are studied both ways, unless their group has a direction of its own.
@@ -33,12 +63,43 @@
             return { error: e instanceof Error ? e.message : String(e) };
         }
     });
+    /**
+     * New cards taken out of the import in the preview, by `removalKey`: a
+     * card's id, or its two sides, so changing the group keeps them out.
+     */
+    const removed = new SvelteSet<string>();
+    // Compared as duplicates are, so removing a card removes every spelling of it.
+    const removalKey = (c: FlashcardInput) => c["@id"] ?? `${sameText(c.frontText)}\u0000${sameText(c.backText)}`;
+    // Removed cards are left out before planning, so every count is of the cards that will be imported.
     const plan: ImportPlan | undefined = $derived(
-        parsed.result ? planImport(parsed.result.rows, library.cards) : undefined,
+        parsed.result
+            ? planImport(
+                  parsed.result.rows.filter((r) => !removed.has(removalKey(r.card))),
+                  library.cards,
+              )
+            : undefined,
     );
-    const total = $derived(plan ? plan.add.length + plan.update.length : 0);
-    const groups = $derived(plan ? [...new Set(plan.add.map((c) => c.group ?? "default"))] : []);
-    const defaultGroupError = $derived(defaultGroup.includes("/") ? 'Group names can\'t contain "/".' : "");
+    const removedCount = $derived(
+        new Set((parsed.result?.rows ?? []).map((r) => removalKey(r.card)).filter((k) => removed.has(k))).size,
+    );
+    /** The whole list of new cards is shown, rather than the first few. */
+    let showAll = $state(false);
+    /** Only the new cards that share a front with another card are shown. */
+    let onlySameFront = $state(false);
+    const adding = $derived(plan?.add ?? []);
+    /** Sorted by front, so cards that share one are listed together. */
+    const sameFront = $derived(
+        [...(plan?.sameFront ?? [])].sort((a, b) => sameText(a.frontText).localeCompare(sameText(b.frontText))),
+    );
+    const listed = $derived(
+        onlySameFront && sameFront.length ? sameFront : showAll ? adding : adding.slice(0, 5),
+    );
+    const total = $derived(plan ? adding.length + plan.update.length : 0);
+    const groups = $derived([...new Set(adding.map((c) => c.group ?? "default"))]);
+    // Per deck, the groups are named after the decks and this name isn't used.
+    const defaultGroupError = $derived(
+        !(anki && perDeck) && defaultGroup.includes("/") ? 'Group names can\'t contain "/".' : "",
+    );
 
     /** A file is being dragged over the box that takes one. */
     let over = $state(false);
@@ -50,15 +111,66 @@
     function drop(event: DragEvent) {
         event.preventDefault();
         over = false;
-        if (!importing) void read(event.dataTransfer?.files[0]);
+        if (!importing && !reading) void read(event.dataTransfer?.files[0]);
+    }
+
+    /** The card a note type's first usable note makes with its mapping, to show the mapping at work. */
+    function example(type: AnkiNoteType) {
+        const sample = { noteTypes: [{ ...type, notes: type.notes.slice(0, 20) }], reviewed: 0 };
+        return apkgImport(sample, { mappings, groupFor, directionFor }).rows[0]?.card;
+    }
+
+    /** A note type's extra fields, named: a few, then how many more. */
+    function fieldList(type: AnkiNoteType, fields: number[]): string {
+        if (!fields.length) return "none";
+        const names = [...fields].sort((a, b) => a - b).map((i) => type.fields[i]);
+        return names.length > 4 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ");
+    }
+
+    /** A field can be in the extra unless it's already on the card. */
+    function canBeExtra(type: AnkiNoteType, mapping: NoteTypeMapping, field: number): boolean {
+        const gaps = type.cloze && mapping.gaps;
+        return field !== mapping.front && field !== mapping.hint && (gaps || field !== mapping.back);
+    }
+
+    /** The extra fields that will be imported. */
+    function extraFields(type: AnkiNoteType, mapping: NoteTypeMapping): number[] {
+        return mapping.extra.filter((i) => canBeExtra(type, mapping, i));
+    }
+
+    function toggleExtra(typeId: string, field: number, on: boolean) {
+        const mapping = mappings[typeId];
+        mapping.extra = on ? [...mapping.extra, field] : mapping.extra.filter((i) => i !== field);
+    }
+
+    async function readAnki(file: File) {
+        reading = true;
+        try {
+            const [{ loadSqlJs }, bytes] = await Promise.all([import("../lib/sqljs"), file.arrayBuffer()]);
+            const collection = await readApkg(new Uint8Array(bytes), loadSqlJs);
+            if (fileName !== file.name) return;
+            mappings = Object.fromEntries(collection.noteTypes.map((t) => [t.id, guessMapping(t)]));
+            perDeck = false;
+            defaultGroup = mainDeck(collection).replace(/\//g, "-").trim() || defaultGroup;
+            anki = collection;
+        } catch (e) {
+            readError = e instanceof Error ? e.message : String(e);
+        } finally {
+            reading = false;
+        }
     }
 
     async function read(file: File | undefined) {
         readError = "";
         importError = "";
         text = "";
+        anki = undefined;
+        removed.clear();
+        showAll = false;
+        onlySameFront = false;
         if (!file) return;
         fileName = file.name;
+        if (/\.(apkg|colpkg)$/i.test(file.name)) return readAnki(file);
         try {
             text = await file.text();
             if (!fileName.toLowerCase().endsWith(".json")) {
@@ -107,7 +219,7 @@
     <label
         class="drop"
         class:over
-        class:chosen={!!text}
+        class:chosen
         ondragover={(e) => {
             e.preventDefault();
             over = true;
@@ -119,13 +231,16 @@
         <input
             class="visually-hidden"
             type="file"
-            accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json"
-            disabled={importing}
+            accept=".csv,.tsv,.txt,.json,.apkg,.colpkg,text/csv,text/plain,application/json"
+            disabled={importing || reading}
             onchange={choose}
         />
-        <span class="drop-mark"><Icon name={text ? "check" : "import"} size={22} /></span>
+        <span class="drop-mark"><Icon name={chosen ? "check" : "import"} size={22} /></span>
         <span class="drop-text">
-            {#if text}
+            {#if reading}
+                <strong>{fileName}</strong>
+                <span class="muted" role="status">Reading the deck…</span>
+            {:else if chosen}
                 <strong>{fileName}</strong>
                 <span class="muted">Choose another file</span>
             {:else}
@@ -135,17 +250,117 @@
             {/if}
         </span>
     </label>
-    <p class="muted accepts">CSV, tab-separated text, Anki's plain-text export, or a Rememorize backup (JSON).</p>
+    <p class="muted accepts">CSV, tab-separated text, an Anki deck (.apkg), or a Rememorize backup (JSON).</p>
 
     {#if readError}<p class="error" role="alert">{readError}</p>{/if}
     {#if parsed.error}<p class="error" role="alert">{parsed.error}</p>{/if}
 
-    {#if parsed.result && parsed.result.format !== "json"}
+    {#if anki && decks > 1}
         <label>
-            <span>Group for cards without one</span>
+            <span>Put the cards in</span>
+            <select class="field" bind:value={perDeck}>
+                <option value={false}>One group</option>
+                <option value={true}>A group per deck ({decks} decks)</option>
+            </select>
+        </label>
+    {/if}
+
+    {#if parsed.result && parsed.result.format !== "json" && !(anki && perDeck)}
+        <label>
+            <span>{anki ? "Group" : "Group for cards without one"}</span>
             <input class="field" bind:value={defaultGroup} />
             {#if defaultGroupError}<small class="error">{defaultGroupError}</small>{/if}
         </label>
+    {/if}
+
+    {#if anki}
+        <fieldset class="types">
+            <legend>Note types</legend>
+            <p class="muted">
+                Choose what goes on each side of the cards. Cards are plain text, so pictures and sound stay behind.
+            </p>
+            {#each anki.noteTypes as type (type.id)}
+                {@const mapping = mappings[type.id]}
+                <div class="type" class:off={!mapping.include}>
+                    <label class="check">
+                        <input type="checkbox" bind:checked={mappings[type.id].include} />
+                        <span><strong>{type.name}</strong> <span class="muted">{plural(type.notes.length, "note")}</span></span>
+                    </label>
+                    {#if mapping.include}
+                        {@const card = example(type)}
+                        {@const gaps = type.cloze && mapping.gaps}
+                        {#if type.cloze}
+                            <label class="cards">
+                                <span>Cards</span>
+                                <select class="field" bind:value={mappings[type.id].gaps}>
+                                    <option value={false}>One per note: the whole text, gaps filled in</option>
+                                    <option value={true}>One per gap: the text with that gap hidden</option>
+                                </select>
+                            </label>
+                        {/if}
+                        <div class="sides">
+                            <label>
+                                <span>{gaps ? "Text with gaps" : "Front"}</span>
+                                <select class="field" bind:value={mappings[type.id].front}>
+                                    {#each type.fields as field, i (i)}<option value={i}>{field}</option>{/each}
+                                </select>
+                            </label>
+                            {#if !gaps}
+                                <label>
+                                    <span>Back</span>
+                                    <select class="field" bind:value={mappings[type.id].back}>
+                                        {#if mapping.back < 0}<option value={-1} disabled>Choose a field</option>{/if}
+                                        {#each type.fields as field, i (i)}<option value={i}>{field}</option>{/each}
+                                    </select>
+                                </label>
+                            {/if}
+                            <label>
+                                <span>Hint</span>
+                                <select class="field" bind:value={mappings[type.id].hint}>
+                                    <option value={-1}>None</option>
+                                    {#each type.fields as field, i (i)}<option value={i}>{field}</option>{/each}
+                                </select>
+                            </label>
+                        </div>
+                        <details class="extra-pick">
+                            <summary>
+                                <Icon name="chevron" size={16} />
+                                <span
+                                    >Extra, shown with the answer: <span class="muted">{fieldList(type, extraFields(type, mapping))}</span></span
+                                >
+                            </summary>
+                            <div class="extra-fields">
+                                {#each type.fields as field, i (i)}
+                                    {#if canBeExtra(type, mapping, i)}
+                                        <label class="check">
+                                            <input
+                                                type="checkbox"
+                                                checked={mapping.extra.includes(i)}
+                                                onchange={(e) => toggleExtra(type.id, i, e.currentTarget.checked)}
+                                            />
+                                            <span>{field}</span>
+                                        </label>
+                                    {/if}
+                                {/each}
+                            </div>
+                        </details>
+                        {#if card}
+                            <p class="example">
+                                <span class="content">{card.frontText}</span>
+                                <span class="arrow muted" aria-label="then">→</span>
+                                <span class="content">{card.backText}</span>
+                                {#if card.hint}<span class="muted"> · Hint: {card.hint}</span>{/if}
+                            </p>
+                            {#if card.extra}<p class="example extra content muted">{card.extra}</p>{/if}
+                        {:else}
+                            <p class="error">{gaps ? "That field has no gaps in it." : "These fields are empty."}</p>
+                        {/if}
+                    {:else if mapping.skipReason}
+                        <p class="muted why">Left out: {mapping.skipReason}.</p>
+                    {/if}
+                </div>
+            {/each}
+        </fieldset>
     {/if}
 
     <details>
@@ -155,9 +370,17 @@
                 <dt>CSV or tab-separated</dt>
                 <dd>
                     One card per line: front, back, then optionally hint and group. A header row (front, back, hint,
-                    group, direction) lets the columns come in any order. Cards without a direction (forward, reverse
+                    group, direction, extra) lets the columns come in any order. Cards without a direction (forward, reverse
                     or both) are studied both ways, or the way their group's new cards are. Anki's “Notes in Plain
                     Text” export works as-is.
+                </dd>
+            </div>
+            <div>
+                <dt>Anki deck</dt>
+                <dd>
+                    A .apkg file, from AnkiWeb or Anki's “Export” with “Support older Anki versions” ticked. You choose
+                    which fields make the front, back and hint, and what goes in the extra, shown with the answer.
+                    New cards come up in the deck's order.
                 </dd>
             </div>
             <div>
@@ -180,30 +403,79 @@
     <div class="panel summary" aria-live="polite">
         <h2>Preview</h2>
         <ul>
-            <li>{plural(plan.add.length, "new card")}{groups.length ? ` in ${groups.join(", ")}` : ""}</li>
+            <li>
+                {plural(adding.length, "new card")}{groups.length > 3
+                    ? ` in ${groups.length} groups`
+                    : groups.length
+                      ? ` in ${groups.join(", ")}`
+                      : ""}
+            </li>
+            {#if removedCount}
+                <li>
+                    {plural(removedCount, "card")} removed
+                    <button class="btn ghost small restore" type="button" onclick={() => removed.clear()}>
+                        <Icon name="undo" size={16} />Put back
+                    </button>
+                </li>
+            {/if}
+            {#if sameFront.length}
+                <li>
+                    {plural(sameFront.length, "new card")}
+                    {sameFront.length === 1 ? "has" : "have"} the same front as another card in the group, with a different
+                    back
+                    <button class="btn ghost small inline" type="button" onclick={() => (onlySameFront = !onlySameFront)}>
+                        {onlySameFront ? "Back to the list" : "Show them"}
+                    </button>
+                </li>
+            {/if}
+            {#if anki?.reviewed}<li>Anki's review progress isn't imported: every card starts as new</li>{/if}
             {#if plan.update.length}<li>{plural(plan.update.length, "card")} updated from the backup</li>{/if}
             {#if plan.unchanged}<li>{plural(plan.unchanged, "card")} already here (skipped)</li>{/if}
+            {#if plan.repeated}<li>{plural(plan.repeated, "card")} repeated in the file (added once)</li>{/if}
             {#if parsed.result.skipped.length}
+                {@const unit = parsed.result.format === "apkg" ? "note" : "line"}
                 <li class="error">
-                    {plural(parsed.result.skipped.length, "line")} couldn't be used:
+                    {plural(parsed.result.skipped.length, unit)} couldn't be used:
                     {parsed.result.skipped
                         .slice(0, 5)
-                        .map((s) => `line ${s.source} (${s.reason})`)
+                        .map((s) => `${unit} ${s.source} (${s.reason})`)
                         .join(", ")}{parsed.result.skipped.length > 5 ? ", …" : ""}
                 </li>
             {/if}
         </ul>
 
-        {#if plan.add.length}
+        {#if adding.length}
             <table>
-                <thead><tr><th>Front</th><th>Back</th><th class="where">Group</th></tr></thead>
+                <!-- With one group, the line above names it: no need to repeat it on every row. -->
+                <thead>
+                    <tr>
+                        <th>Front</th><th>Back</th>{#if groups.length > 1}<th class="where">Group</th>{/if}
+                        <th class="remove"><span class="visually-hidden">Remove</span></th>
+                    </tr>
+                </thead>
                 <tbody>
-                    {#each plan.add.slice(0, 5) as card, i (i)}
-                        <tr><td class="content">{card.frontText}</td><td class="content">{card.backText}</td><td>{card.group}</td></tr>
+                    {#each listed as card, i (i)}
+                        <tr>
+                            <td class="content">{card.frontText}</td><td class="content">{card.backText}</td>
+                            {#if groups.length > 1}<td>{card.group}</td>{/if}
+                            <td class="remove">
+                                <button
+                                    class="btn ghost icon-only"
+                                    type="button"
+                                    aria-label="Remove {card.frontText}"
+                                    title="Don't import this card"
+                                    onclick={() => removed.add(removalKey(card))}><Icon name="close" size={16} /></button
+                                >
+                            </td>
+                        </tr>
                     {/each}
                 </tbody>
             </table>
-            {#if plan.add.length > 5}<p class="muted more">…and {plan.add.length - 5} more</p>{/if}
+            {#if adding.length > 5 && !(onlySameFront && sameFront.length)}
+                <button class="btn ghost small more" type="button" onclick={() => (showAll = !showAll)}>
+                    {showAll ? "Show the first 5" : `Show all ${adding.length}`}
+                </button>
+            {/if}
         {/if}
 
         {#if importError}<p class="error" role="alert">{importError}</p>{/if}
@@ -373,6 +645,113 @@
         margin: 0;
     }
 
+    .types {
+        display: grid;
+        gap: 0.75rem;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        min-width: 0;
+    }
+
+    legend {
+        padding: 0;
+        margin-bottom: 0.4rem;
+        font-weight: 600;
+        font-size: 0.925rem;
+    }
+
+    .types > p {
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .type {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.9rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--bg);
+    }
+
+    .check {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-weight: 400;
+        cursor: pointer;
+    }
+
+    .check input {
+        flex: none;
+        width: 1.15rem;
+        height: 1.15rem;
+        accent-color: var(--accent);
+    }
+
+    .check strong {
+        font-weight: 620;
+        overflow-wrap: anywhere;
+    }
+
+    .off .check strong {
+        color: var(--text-muted);
+    }
+
+    .sides {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+        gap: 0.6rem;
+    }
+
+    .cards,
+    .sides label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .example,
+    .why {
+        margin: 0;
+        font-size: 0.925rem;
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+    }
+
+    .arrow {
+        margin: 0 0.35rem;
+    }
+
+    /* The example's extra: a few lines of it are enough to show the mapping at work. */
+    .example.extra {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+        overflow: hidden;
+        margin-top: -0.4rem;
+    }
+
+    .extra-pick summary {
+        font-weight: 400;
+    }
+
+    .extra-pick summary .muted {
+        overflow-wrap: anywhere;
+    }
+
+    .extra-fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+        gap: 0.35rem 0.75rem;
+        margin-top: 0.6rem;
+    }
+
+    .extra-fields .check {
+        font-size: 0.9rem;
+    }
+
     .summary {
         margin-top: 1rem;
         display: grid;
@@ -431,7 +810,24 @@
     }
 
     .more {
-        font-size: 0.9rem;
+        justify-self: start;
+    }
+
+    th.remove,
+    td.remove {
+        width: 2.75rem;
+        padding-right: 0;
+        text-align: right;
+    }
+
+    td.remove .btn {
+        color: var(--text-muted);
+    }
+
+    .restore,
+    .inline {
+        margin-left: 0.4rem;
+        vertical-align: middle;
     }
 
     .buttons {

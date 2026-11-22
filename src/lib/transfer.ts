@@ -2,8 +2,8 @@
  * Import and export.
  *
  * - JSON export is a full backup (ids, review state, timestamps).
- * - CSV/TSV is for moving cards between apps: front, back, hint, group and
- *   study direction. A row without a direction gets one from `directionFor`.
+ * - CSV/TSV is for moving cards between apps: front, back, hint, group,
+ *   study direction and extra. A row without a direction gets one from `directionFor`.
  *   Anki's "Notes in Plain Text" export (tab-separated, `#` header lines)
  *   imports as-is.
  */
@@ -17,13 +17,13 @@ import {
 export const EXPORT_FORMAT = "rememorize-export";
 
 export interface ImportRow {
-    /** 1-based line (CSV) or index (JSON) the card came from. */
+    /** 1-based line (CSV), index (JSON) or note (Anki) the card came from. */
     source: number;
     card: FlashcardInput;
 }
 
 export interface ParsedImport {
-    format: "json" | "csv" | "tsv";
+    format: "json" | "csv" | "tsv" | "apkg";
     rows: ImportRow[];
     /** Rows that couldn't be used, with why. */
     skipped: { source: number; reason: string }[];
@@ -36,6 +36,14 @@ export interface ImportPlan {
     update: { card: FlashcardInput; previousGroup: string }[];
     /** Already here (same id and not newer, or same front/back in the same group). */
     unchanged: number;
+    /** Cards that appear more than once in the file, so are only added once. */
+    repeated: number;
+    /**
+     * New cards whose front another card in their group has too (already
+     * here, or another new one), with a different back: maybe a duplicate,
+     * maybe a word with two meanings.
+     */
+    sameFront: FlashcardInput[];
 }
 
 // ---------------------------------------------------------------------------
@@ -48,8 +56,8 @@ export function exportJson(cards: Flashcard[], now = new Date()): string {
 export function exportCsv(cards: Flashcard[]): string {
     // Always written: a row without one imports as studied both ways.
     const rows = [
-        ["front", "back", "hint", "group", "direction"],
-        ...cards.map((c) => [c.frontText, c.backText, c.hint ?? "", c.group, c.direction ?? "forward"]),
+        ["front", "back", "hint", "group", "direction", "extra"],
+        ...cards.map((c) => [c.frontText, c.backText, c.hint ?? "", c.group, c.direction ?? "forward", c.extra ?? ""]),
     ];
     return `${rows.map((r) => r.map(csvField).join(",")).join("\r\n")}\r\n`;
 }
@@ -118,6 +126,8 @@ const COLUMN_NAMES: Record<string, keyof Columns> = {
     group: "group",
     deck: "group",
     direction: "direction",
+    extra: "extra",
+    notes: "extra",
 };
 
 interface Columns {
@@ -127,6 +137,8 @@ interface Columns {
     group?: number;
     /** Only read when a header row names it. */
     direction?: number;
+    /** Only read when a header row names it. */
+    extra?: number;
 }
 
 /** Header lines Anki writes at the top of a plain-text export. */
@@ -164,6 +176,7 @@ function parseDelimitedImport(
         if (header.includes("hint")) columns.hint = header.indexOf("hint");
         if (header.includes("group")) columns.group = header.indexOf("group");
         if (header.includes("direction")) columns.direction = header.indexOf("direction");
+        if (header.includes("extra")) columns.extra = header.indexOf("extra");
         firstData = 1;
     }
 
@@ -186,6 +199,8 @@ function parseDelimitedImport(
         const card: FlashcardInput = { frontText: front, backText: back, group };
         const hint = columns.hint !== undefined ? record[columns.hint]?.trim() : "";
         if (hint) card.hint = hint;
+        const extra = columns.extra !== undefined ? record[columns.extra]?.trim() : "";
+        if (extra) card.extra = extra;
         const direction = columns.direction !== undefined ? record[columns.direction]?.trim().toLowerCase() : "";
         card.direction =
             direction === "forward" || direction === "reverse" || direction === "both"
@@ -239,6 +254,36 @@ export function parseDelimited(text: string, delimiter: string): string[][] {
 }
 
 /**
+ * Text as compared for duplicates: capitals, spacing and the punctuation
+ * around it don't count. Apostrophes do: "byt’" is byť (though), not byt (flat).
+ */
+export function sameText(text: string): string {
+    const normalized = text.normalize("NFC").toLocaleLowerCase().replace(/\s+/g, " ");
+    // A loop rather than a regex anchored at the end, which slows to a crawl on long runs of punctuation.
+    let start = 0;
+    let end = normalized.length;
+    // By code point, so punctuation outside the Basic Multilingual Plane counts too.
+    while (start < end) {
+        const char = String.fromCodePoint(normalized.codePointAt(start) ?? 0);
+        if (!trimmable(char)) break;
+        start += char.length;
+    }
+    while (end > start) {
+        const low = normalized.charCodeAt(end - 1);
+        const high = normalized.charCodeAt(end - 2);
+        const pair = low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff && end - 2 >= start;
+        const size = pair ? 2 : 1;
+        if (!trimmable(normalized.slice(end - size, end))) break;
+        end -= size;
+    }
+    return normalized.slice(start, end);
+}
+
+function trimmable(char: string): boolean {
+    return !"'‘’".includes(char) && /[\s\p{P}]/u.test(char);
+}
+
+/**
  * Decide what an import will do, given the cards already here.
  * - Cards with an id (from a backup) update the existing card only if
  *   theirs is newer, so restoring an old backup can't undo recent reviews.
@@ -247,10 +292,12 @@ export function parseDelimited(text: string, delimiter: string): string[][] {
  */
 export function planImport(rows: ImportRow[], existing: Flashcard[]): ImportPlan {
     const byId = new Map(existing.map((c) => [c["@id"], c]));
+    const frontKey = (c: { frontText: string; group?: string }) => `${c.group ?? ""}\u0000${sameText(c.frontText)}`;
     const contentKey = (c: { frontText: string; backText: string; group?: string }) =>
-        `${c.group ?? ""}\u0000${c.frontText.trim()}\u0000${c.backText.trim()}`;
+        `${frontKey(c)}\u0000${sameText(c.backText)}`;
     const seen = new Set(existing.map(contentKey));
-    const plan: ImportPlan = { add: [], update: [], unchanged: 0 };
+    const here = new Set(seen);
+    const plan: ImportPlan = { add: [], update: [], unchanged: 0, repeated: 0, sameFront: [] };
 
     for (const { card } of rows) {
         const id = card["@id"];
@@ -264,11 +311,19 @@ export function planImport(rows: ImportRow[], existing: Flashcard[]): ImportPlan
             continue;
         }
         if (!id && seen.has(contentKey(card))) {
-            plan.unchanged += 1;
+            if (here.has(contentKey(card))) plan.unchanged += 1;
+            else plan.repeated += 1;
             continue;
         }
         seen.add(contentKey(card));
         plan.add.push(card);
     }
+
+    // The backs each front has in its group, counting the new cards.
+    const backs = new Map<string, Set<string>>();
+    for (const c of [...existing, ...plan.add]) {
+        backs.set(frontKey(c), (backs.get(frontKey(c)) ?? new Set()).add(sameText(c.backText)));
+    }
+    plan.sameFront = plan.add.filter((c) => (backs.get(frontKey(c))?.size ?? 0) > 1);
     return plan;
 }
