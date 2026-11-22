@@ -40,9 +40,8 @@
     /** Fixed when the import starts: saving changes library.cards, which would change the plan. */
     let running: { plan: ImportPlan; total: number; groups: string[] } | undefined = $state();
 
-    /** A group's own direction for new cards, if it has one. */
-    const groupDirection = (group: string) =>
-        Object.hasOwn(library.groupDirections, group) ? library.groupDirections[group] : undefined;
+    /** New cards from a deck are studied the way new cards in their group are. */
+    const directionFor = (group: string) => library.directionFor(group);
     const groupName = $derived(defaultGroup.trim() || "Imported");
     /** A group name for each deck that holds notes. */
     const deckNames = $derived(deckGroups(anki ? anki.noteTypes.flatMap((t) => t.notes.map((n) => n.deck)) : []));
@@ -50,7 +49,7 @@
     const groupFor = $derived(perDeck ? (deck: string) => deckNames.get(deck) || groupName : () => groupName);
 
     const parsed: { result?: ParsedImport; error?: string } = $derived.by(() => {
-        if (anki) return { result: apkgImport(anki, { mappings, groupFor, groupDirection }) };
+        if (anki) return { result: apkgImport(anki, { mappings, groupFor, directionFor }) };
         if (!text) return {};
         try {
             // Rows without a direction are studied both ways, unless their group has a direction of its own.
@@ -87,7 +86,7 @@
     /** The card a note type's first usable note makes with its mapping, to show the mapping at work. */
     function example(type: AnkiNoteType) {
         const sample = { noteTypes: [{ ...type, notes: type.notes.slice(0, 20) }], reviewed: 0 };
-        return apkgImport(sample, { mappings, groupFor, groupDirection }).rows[0]?.card;
+        return apkgImport(sample, { mappings, groupFor, directionFor }).rows[0]?.card;
     }
 
     async function readAnki(file: File) {
@@ -232,17 +231,28 @@
                     </label>
                     {#if mapping.include}
                         {@const card = example(type)}
+                        {@const gaps = type.cloze && mapping.gaps}
+                        {#if type.cloze}
+                            <label class="cards">
+                                <span>Cards</span>
+                                <select class="field" bind:value={mappings[type.id].gaps}>
+                                    <option value={false}>One per note: the whole text, gaps filled in</option>
+                                    <option value={true}>One per gap: the text with that gap hidden</option>
+                                </select>
+                            </label>
+                        {/if}
                         <div class="sides">
                             <label>
-                                <span>{type.cloze ? "Text with gaps" : "Front"}</span>
+                                <span>{gaps ? "Text with gaps" : "Front"}</span>
                                 <select class="field" bind:value={mappings[type.id].front}>
                                     {#each type.fields as field, i (i)}<option value={i}>{field}</option>{/each}
                                 </select>
                             </label>
-                            {#if !type.cloze}
+                            {#if !gaps}
                                 <label>
                                     <span>Back</span>
                                     <select class="field" bind:value={mappings[type.id].back}>
+                                        {#if mapping.back < 0}<option value={-1} disabled>Choose a field</option>{/if}
                                         {#each type.fields as field, i (i)}<option value={i}>{field}</option>{/each}
                                     </select>
                                 </label>
@@ -262,7 +272,7 @@
                                 <span class="content">{card.backText}</span>
                             </p>
                         {:else}
-                            <p class="error">{type.cloze ? "That field has no gaps in it." : "These fields are empty."}</p>
+                            <p class="error">{gaps ? "That field has no gaps in it." : "These fields are empty."}</p>
                         {/if}
                     {:else if mapping.skipReason}
                         <p class="muted why">Left out: {mapping.skipReason}.</p>
@@ -580,6 +590,7 @@
         gap: 0.6rem;
     }
 
+    .cards,
     .sides label {
         font-size: 0.85rem;
         color: var(--text-muted);

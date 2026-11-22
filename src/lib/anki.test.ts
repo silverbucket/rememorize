@@ -117,7 +117,8 @@ describe("guessMapping", () => {
     it("picks front, back and hint from the template, skipping media-only fields", async () => {
         const [vocabulary, cloze, announcement] = (await czech()).noteTypes;
         expect(guessMapping(vocabulary)).toEqual({ include: true, front: 1, back: 3, hint: 2 });
-        expect(guessMapping(cloze)).toEqual({ include: true, front: 0, back: -1, hint: 1 });
+        // A cloze with a translation: the whole sentence on one side, the translation on the other.
+        expect(guessMapping(cloze)).toEqual({ include: true, front: 0, back: 1, hint: -1, gaps: false });
         expect(guessMapping(announcement)).toEqual({
             include: false,
             front: 0,
@@ -162,15 +163,14 @@ describe("apkgImport", () => {
         const result = apkgImport(collection, {
             mappings: guessed(collection),
             groupFor: () => "Czech",
-            groupDirection: () => undefined,
+            directionFor: () => "forward",
             now,
         });
         expect(result.format).toBe("apkg");
         expect(result.rows.map((r) => [r.card.frontText, r.card.backText, r.card.hint, r.card.direction])).toEqual([
             ["káva", "coffee", "f.", "forward"],
             ["voda", "water\n(also: lake)", "f.", "forward"],
-            ["[…]. Co si dáte?", "Dobrý den", "Hello. What will you have?", "forward"],
-            ["Dobrý den. Co si [verb]?", "dáte", "Hello. What will you have?", "forward"],
+            ["Dobrý den. Co si dáte?", "Hello. What will you have?", undefined, "forward"],
             ["čaj", "tea", "m.", "forward"],
         ]);
         const created = result.rows.map((r) => r.card.createdAt ?? "");
@@ -178,6 +178,31 @@ describe("apkgImport", () => {
         expect(new Set(created).size).toBe(created.length);
         expect((created.at(-1) ?? "") < now.toISOString()).toBe(true);
         expect(result.skipped).toEqual([{ source: 5, reason: "front or back is empty" }]);
+    });
+
+    it("makes one card per gap when asked, with the hint chosen", async () => {
+        const collection = await czech();
+        const mappings = guessed(collection);
+        mappings[2] = { include: true, front: 0, back: -1, hint: 1, gaps: true };
+        const result = apkgImport(collection, { mappings, groupFor: () => "g", directionFor: () => "both" });
+        const cloze = result.rows.filter((r) => r.card.frontText.includes("["));
+        expect(cloze.map((r) => [r.card.frontText, r.card.backText, r.card.hint, r.card.direction])).toEqual([
+            ["[…]. Co si dáte?", "Dobrý den", "Hello. What will you have?", "forward"],
+            ["Dobrý den. Co si [verb]?", "dáte", "Hello. What will you have?", "forward"],
+        ]);
+    });
+
+    it("guesses one card per gap for a cloze with nothing else to show", () => {
+        const type: AnkiNoteType = {
+            id: "c",
+            name: "Cloze",
+            fields: ["Text", "Audio"],
+            cloze: true,
+            front: ["Text"],
+            back: ["Audio"],
+            notes: [{ fields: ["{{c1::word}}", "[sound:a.mp3]"], deck: "Default", order: 0 }],
+        };
+        expect(guessMapping(type)).toEqual({ include: true, front: 0, back: -1, hint: -1, gaps: true });
     });
 
     it("keeps a note's other gaps when one holds only media", () => {
@@ -192,22 +217,19 @@ describe("apkgImport", () => {
         };
         const result = apkgImport(
             { noteTypes: [type], reviewed: 0 },
-            { mappings: { c: guessMapping(type) }, groupFor: () => "g", groupDirection: () => undefined },
+            { mappings: { c: guessMapping(type) }, groupFor: () => "g", directionFor: () => "both" },
         );
         expect(result.rows.map((r) => [r.card.frontText, r.card.backText])).toEqual([["[…]", "word"]]);
     });
 
-    it("follows the group's direction, except for cloze cards", async () => {
+    it("studies cards the way new cards in their group are", async () => {
         const collection = await czech();
-        const mappings = guessed(collection);
-        const reverse = apkgImport(collection, { mappings, groupFor: () => "g", groupDirection: () => "reverse" });
-        expect(reverse.rows.map((r) => r.card.direction)).toEqual([
-            "reverse",
-            "reverse",
-            "forward",
-            "forward",
-            "reverse",
-        ]);
+        const result = apkgImport(collection, {
+            mappings: guessed(collection),
+            groupFor: () => "g",
+            directionFor: () => "both",
+        });
+        expect(result.rows.map((r) => r.card.direction)).toEqual(["both", "both", "both", "both"]);
     });
 
     it("leaves out note types that aren't included, and uses the chosen fields", async () => {
@@ -218,7 +240,7 @@ describe("apkgImport", () => {
         const result = apkgImport(collection, {
             mappings,
             groupFor: (deck) => deckGroups([deck]).get(deck) ?? "",
-            groupDirection: () => undefined,
+            directionFor: () => "forward",
         });
         expect(result.rows.map((r) => [r.card.frontText, r.card.backText, r.card.group, r.card.hint])).toEqual([
             ["coffee", "káva", "Unit 01: Greetings", undefined],

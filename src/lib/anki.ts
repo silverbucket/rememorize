@@ -45,11 +45,18 @@ export interface AnkiCollection {
 
 export interface NoteTypeMapping {
     include: boolean;
-    /** Field indexes. For a cloze note type, `front` is the field with the deletions and `back` is unused. */
+    /** Field indexes. For a cloze note type, `front` is the field with the deletions. */
     front: number;
+    /** Unused when `gaps` is on. */
     back: number;
     /** -1 for none. */
     hint: number;
+    /**
+     * Cloze only: one card per gap, the text with that gap hidden. Otherwise
+     * one card per note: the whole text, gaps filled in, and `back` (often a
+     * translation) on the other side.
+     */
+    gaps?: boolean;
     /** Why `include` was guessed off, when it was. */
     skipReason?: string;
 }
@@ -195,6 +202,11 @@ export function htmlToText(html: string): string {
 const CLOZE = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g;
 const HAS_CLOZE = /\{\{c\d+::/;
 
+/** The text with every gap filled in. */
+export function clozeText(html: string): string {
+    return htmlToText(html.replace(CLOZE, (_, _number: string, answer: string) => answer));
+}
+
 /** One card per cloze number: the text with that deletion hidden, and what it hides. */
 export function clozeCards(html: string): { front: string; back: string }[] {
     const numbers = [...new Set([...html.matchAll(CLOZE)].map((m) => m[1]))];
@@ -225,9 +237,11 @@ export function guessMapping(type: AnkiNoteType): NoteTypeMapping {
 
     if (type.cloze) {
         const clozeField = type.fields.findIndex((_, i) => sample.some((n) => HAS_CLOZE.test(n.fields[i] ?? "")));
-        const hint = [...front, ...back].find((i) => i !== clozeField) ?? -1;
         if (clozeField < 0) return { include: false, front: 0, back: -1, hint: -1, skipReason: "no cloze deletions" };
-        return { include: true, front: clozeField, back: -1, hint };
+        // Another field the cards show, like a translation, makes a better other side than a gap.
+        const other = [...front, ...back].find((i) => i !== clozeField);
+        if (other === undefined) return { include: true, front: clozeField, back: -1, hint: -1, gaps: true };
+        return { include: true, front: clozeField, back: other, hint: -1, gaps: false };
     }
 
     const values = (i: number) => sample.map((n) => htmlToText(n.fields[i] ?? "")).filter(Boolean);
@@ -253,8 +267,8 @@ export interface ApkgOptions {
     mappings: Record<string, NoteTypeMapping>;
     /** The group a note's cards go in, given its deck. */
     groupFor: (deck: string) => string;
-    /** The direction for a group's cards, when it has one of its own. */
-    groupDirection: (group: string) => CardDirection | undefined;
+    /** The direction new cards in a group are studied in. */
+    directionFor: (group: string) => CardDirection;
     now?: Date;
 }
 
@@ -271,23 +285,24 @@ export function apkgImport(collection: AnkiCollection, options: ApkgOptions): Pa
         if (!mapping?.include) continue;
         const group = options.groupFor(note.deck);
         const hint = mapping.hint >= 0 ? htmlToText(note.fields[mapping.hint] ?? "") : "";
-        const sides = type.cloze
-            ? clozeCards(note.fields[mapping.front] ?? "")
+        const gaps = type.cloze && mapping.gaps;
+        const text = note.fields[mapping.front] ?? "";
+        const sides = gaps
+            ? clozeCards(text)
             : [
                   {
-                      front: htmlToText(note.fields[mapping.front] ?? ""),
+                      front: type.cloze ? clozeText(text) : htmlToText(text),
                       back: htmlToText(note.fields[mapping.back] ?? ""),
                   },
               ];
         // A gap holding only a sound or a picture leaves that card with nothing to answer; the note's other gaps still count.
         const usable = sides.filter((s) => s.front && s.back);
         if (!usable.length) {
-            result.skipped.push({ source, reason: type.cloze ? "no cloze deletions" : "front or back is empty" });
+            result.skipped.push({ source, reason: gaps ? "no cloze deletions" : "front or back is empty" });
             continue;
         }
-        // Front to back, as the note type's first template shows it, unless the group says otherwise.
-        // A cloze only makes sense one way.
-        const direction: CardDirection = type.cloze ? "forward" : (options.groupDirection(group) ?? "forward");
+        // A card with a gap only makes sense one way.
+        const direction: CardDirection = gaps ? "forward" : options.directionFor(group);
         for (const side of usable) {
             const card: FlashcardInput = { frontText: side.front, backText: side.back, group, direction };
             if (hint && hint !== side.front && hint !== side.back) card.hint = hint;
