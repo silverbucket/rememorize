@@ -518,7 +518,7 @@ async function capture(page) {
         "group-settings": async () => {
             await pages.group();
             await page.getByRole("button", { name: "Group settings" }).click();
-            await page.getByLabel("New cards here").waitFor();
+            await page.getByLabel("Cards you add here").waitFor();
             return () => page.keyboard.press("Escape");
         },
         select: async () => {

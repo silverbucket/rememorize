@@ -39,6 +39,12 @@
         return `${kinds} ${where}${size !== null && today.length > size ? `, ${size} at a time` : ""}`;
     });
 
+    /** The groups today's new cards go to as things stand, to say what opening another would change. */
+    const takers = $derived.by(() => {
+        const names = ready.filter((g) => g.starting).map((g) => g.name);
+        return names.length === 0 ? "" : names.length === 1 ? names[0] : "other groups";
+    });
+
     /** When a group with nothing due comes up next. */
     const nextIn = (group: string) => nextDue(library.cardsIn(group), library.now);
     /** Its cards that are not started yet, counted as the group's own page counts them. */
@@ -84,7 +90,7 @@
 {:else}
     <!-- Today's cards as a deck: the top card says what is due, with the rest of the pile showing under it. -->
     <div class="stage" class:deck-under={ready.length > 0}>
-        <section class="panel today" aria-label="Today">
+        <section class="panel today" class:caught={!first} aria-label="Today">
             <div class="today-text">
                 {#if first}
                     <p class="headline">{plural(today.length, "card")} to study today</p>
@@ -92,7 +98,10 @@
                 {:else}
                     <p class="headline">You're all caught up</p>
                     <p class="muted">
-                        {#if library.newWaiting > 0}
+                        <!-- What comes back later today is said first: caught up is then only for now. -->
+                        {#if next && next.toDateString() === library.now.toDateString()}
+                            The next card is due {fromNow(next.toISOString(), library.now)}.
+                        {:else if library.newWaiting > 0}
                             {plural(viewCounts(library.cards, library.now).new, "card")} not started yet: more start
                             tomorrow.
                         {:else if next}
@@ -103,6 +112,10 @@
                     </p>
                 {/if}
             </div>
+            {#if !first}
+                <!-- Where the button was: the same mark a finished review gets. -->
+                <span class="seal" aria-hidden="true"><Icon name="check" size={24} /></span>
+            {/if}
             {#if first}
                 <a
                     class="btn primary large start"
@@ -170,7 +183,9 @@
                         </span>
                         <!-- Today's new cards can go to this group instead: said on the row that does it. -->
                         {#if waiting > 0 && library.newRemaining > 0}
-                            <span class="meta instead">Open to start its new cards today instead</span>
+                            <span class="meta instead">
+                                Open to start today's {plural(Math.min(waiting, library.newRemaining), "new card")} here{takers ? ` instead of in ${takers}` : ""}
+                            </span>
                         {/if}
                     </a>
                 </li>
@@ -181,8 +196,7 @@
     <!-- Today's new cards are shared by every group. Says so where some are left out of the counts above. -->
     {#if first && library.newWaiting > 0}
         <p class="muted waiting">
-            The rest wait for another day: <a href={href.account()}>the daily limit</a> is
-            {plural(library.newPerDay, "new card")}.
+            <a href={href.account()}>The daily limit</a> is {plural(library.newPerDay, "new card")} across all groups.
         </p>
     {/if}
 
@@ -303,6 +317,16 @@
         padding: 1.6rem 1.6rem 1.1rem;
         border-radius: var(--radius-xl);
         box-shadow: var(--shadow);
+    }
+
+    .seal {
+        display: grid;
+        place-items: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 50%;
+        background: var(--accent-subtle);
+        color: var(--accent-text);
     }
 
     .headline {
@@ -450,8 +474,9 @@
         font-weight: 650;
     }
 
+    /* Said in the text's own ink: green in these rows is for what is due. */
     .instead {
-        color: var(--accent-text);
+        color: var(--text);
     }
 
     .due {
@@ -553,6 +578,11 @@
         .today {
             grid-template-columns: minmax(0, 1fr);
             padding: 1.35rem 1.25rem 1rem;
+        }
+
+        /* The mark keeps its place beside the text. */
+        .today.caught {
+            grid-template-columns: minmax(0, 1fr) auto;
         }
 
         .start {

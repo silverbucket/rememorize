@@ -40,7 +40,9 @@
     const dayName = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" });
     const shortDay = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
     const monthName = new Intl.DateTimeFormat(undefined, { month: "short" });
+    const monthYear = new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" });
     const longDay = new Intl.DateTimeFormat(undefined, { dateStyle: "long" });
+    const count = new Intl.NumberFormat();
 
     const log = $derived(library.log);
     const now = $derived(library.now);
@@ -61,11 +63,14 @@
     const dayText = (day: DayStats) =>
         `${dayName.format(day.date)}: ${plural(day.reviews, "review")}${day.started ? `, ${plural(day.started, "new card")} started` : ""}`;
 
+    const yearTotal = $derived(weeks.flat().reduce((sum, d) => sum + d.reviews, 0));
+    const reviewsInYear = $derived(`${count.format(yearTotal)} ${yearTotal === 1 ? "review" : "reviews"}`);
+
     // Kept as a key, so the reading follows the day's numbers when sync changes them.
     let pickedKey: string | undefined = $state();
     const picked = $derived(weeks.flat().find((d) => d.key === pickedKey));
     const reading = $derived(
-        picked ? dayText(picked) : `${plural(weeks.flat().reduce((sum, d) => sum + d.reviews, 0), "review")} in the last year`,
+        picked ? dayText(picked) : `${reviewsInYear} in the last year`,
     );
 
     /** Label today and every 7th day before it, so the axis stays readable. */
@@ -94,7 +99,6 @@
     const upcomingWeek = $derived(upcoming.slice(0, 7).reduce((sum, d) => sum + d.due, 0));
 
     const percent = (r: Retention) => (r.rate === undefined ? "—" : `${Math.round(r.rate * 100)}%`);
-    const count = new Intl.NumberFormat();
     const fromKey = (key: string) => {
         const [y, m, d] = key.split("-").map(Number);
         return new Date(y, m - 1, d);
@@ -178,7 +182,8 @@
             return {
                 key,
                 value: total,
-                tick: i === 0 ? shortDay.format(date) : i === length - 1 ? "Today" : undefined,
+                // Over months, the first label gives its year: "Nov 15" beside "Today" would pass for last week.
+                tick: i === 0 ? (length > 180 ? monthYear.format(date) : shortDay.format(date)) : i === length - 1 ? "Today" : undefined,
                 text: `${dayName.format(date)}: ${total} started`,
             };
         });
@@ -378,7 +383,8 @@
         <p class="muted sub">The last 7 days, compared with the 7 before.</p>
         <dl class="compare">
             {#each [
-                { label: "Reviews", now: weeks2.current.reviews, before: weeks2.previous.reviews, show: (v: number) => count.format(v), unit: "" },
+                // Only retention is better or worse. How many reviews came due, and how many cards started, is the schedule's doing.
+                { label: "Reviews", now: weeks2.current.reviews, before: weeks2.previous.reviews, show: (v: number) => count.format(v), unit: "", plain: true },
                 {
                     label: "Retention",
                     now: retentionPoints(weeks2.current.retention),
@@ -386,7 +392,6 @@
                     show: (v: number) => `${v}%`,
                     unit: " pts",
                 },
-                // Neither better nor worse: the daily limit decides how many start.
                 { label: "New cards", now: weeks2.current.started, before: weeks2.previous.started, show: (v: number) => count.format(v), unit: "", plain: true },
             ] as row (row.label)}
                 <div>
@@ -497,7 +502,7 @@
                                 <div class="meter"><div style:width={percent(row.retention)}></div></div>
                             </td>
                             <td class="num">{percent(row.retention)}</td>
-                            <td class="num muted">{row.retention.reviews}</td>
+                            <td class="num muted">{count.format(row.retention.reviews)}</td>
                         </tr>
                     {/each}
                 </tbody>
@@ -922,13 +927,14 @@
         display: flex;
         gap: 2px;
         height: 10px;
-        border-radius: 5px;
+        border-radius: 3px;
         overflow: hidden;
     }
 
+    /* Wide enough that a sliver at the end isn't shaved to a crescent by the bar's corner. */
     .stack i {
         flex-basis: 0;
-        min-width: 3px;
+        min-width: 5px;
     }
 
     .badges {
@@ -1104,6 +1110,11 @@
         background: var(--surface-3);
         color: var(--text);
         font-variant-numeric: tabular-nums;
+    }
+
+    .cell.l0 {
+        background: none;
+        border: 1px solid var(--border);
     }
 
     .cell.l1 {

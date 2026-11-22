@@ -94,6 +94,21 @@
     const nextGroup = $derived(
         group !== undefined && !show && live.length === 0 ? library.ready.find((g) => g.name !== group) : undefined,
     );
+    /** The group whose cards come due next, and when: the soonest of every group's. */
+    const soonest = $derived.by(() => {
+        let best: { group: string; at: Date } | undefined;
+        for (const g of library.groups) {
+            const at = nextDue(library.cardsIn(g.name), library.now);
+            if (at && (!best || at < best.at)) best = { group: g.name, at };
+        }
+        return best;
+    });
+    /** More comes due before the day is out: caught up, but only for now. */
+    const moreToday = $derived(!!soonest && soonest.at.toDateString() === library.now.toDateString());
+    const caughtUp = $derived(moreToday ? "All caught up for now" : "All caught up for today");
+    /** Nothing is left to review anywhere: the day's reviews are done, or done until more come due. */
+    const dayDone = $derived(waiting === 0 && library.ready.length === 0);
+
     /**
      * What the wrap-up is called. One group done is not the day done: it says which,
      * so the button that carries on to the next group doesn't contradict it.
@@ -101,10 +116,10 @@
     const doneTitle = $derived(
         waiting > 0
             ? "Done for now"
-            : nextGroup
+            : group !== undefined && !show
               ? `${group} done`
               : library.ready.length === 0
-                ? "All caught up for today"
+                ? caughtUp
                 : "Done for now",
     );
     /** The groups still to review once this one is done, and what their reviews hold. */
@@ -405,6 +420,10 @@
             {#if reviewed > 0}
                 <span class="seal"><Icon name="check" size={26} /></span>
                 <h2>{doneTitle}</h2>
+                <!-- The heading is the group's, and so are the numbers under it. This line is the day's. -->
+                {#if dayDone && doneTitle !== caughtUp}
+                    <p class="day">{caughtUp}.</p>
+                {/if}
                 <dl class="summary">
                     <div><dt>Reviewed</dt><dd>{reviewed}</dd></div>
                     <div><dt>Remembered</dt><dd>{Math.round(((reviewed - tally[1]) / reviewed) * 100)}%</dd></div>
@@ -436,6 +455,13 @@
             {#if comesBack}
                 <p>{comingBack}</p>
             {/if}
+            <!-- When to come back. Later today always; a later day only when nothing new is waiting to start before it. -->
+            {#if dayDone && soonest && !comesBack && (moreToday || (library.newWaiting === 0 && held === 0))}
+                <p class="muted">
+                    Next review {fromNow(soonest.at.toISOString(), library.now)}{#if library.groups.length > 1}, in
+                        <span class="content">{soonest.group}</span>{/if}.
+                </p>
+            {/if}
             {#if waiting > 0}
                 <p>{plural(waiting, "more card")} {waiting === 1 ? "is" : "are"} due.</p>
                 <p class="muted">
@@ -452,9 +478,6 @@
                 <p class="muted">
                     {plural(held, "card")} held until tomorrow: the other direction of a card you studied today.
                 </p>
-            {/if}
-            {#if nextDue(scope, library.now) && library.newWaiting === 0 && waiting === 0 && held === 0 && !comesBack}
-                <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
             {/if}
             <!-- The numbers above are this review's; the link leads to all of them. -->
             {#if reviewed > 0}
@@ -835,11 +858,15 @@
         letter-spacing: -0.01em;
     }
 
+    /* The card's foot, ruled off from what the review has to say. */
     .progress {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         gap: 0.35rem;
-        min-height: 2rem;
+        width: 100%;
+        margin-top: 0.25rem;
+        padding-top: 0.9rem;
+        border-top: 1px solid var(--border);
         font-size: 0.925rem;
         font-weight: 550;
     }
@@ -973,6 +1000,11 @@
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    .done .day {
+        margin-top: -0.35rem;
+        color: var(--text-muted);
     }
 
     .left-today {

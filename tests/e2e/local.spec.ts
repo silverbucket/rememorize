@@ -339,10 +339,13 @@ test("a card answered Again comes back before the review ends, and one answered 
     await expect(page.getByRole("button", { name: /Show answer/ })).toBeVisible();
     await expect(page.locator(".side.front")).toHaveText("pes");
 
-    // Hard: remembered, so it keeps its schedule and the review is done.
+    // Hard: remembered, so it keeps its schedule and the review is done. Its next step is minutes away,
+    // so the day isn't over: caught up for now, and it says when to come back.
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Hard/ }).click();
-    await expect(page.getByText("All caught up for today")).toBeVisible();
+    await expect(page.getByText("All caught up for now")).toBeVisible();
+    await expect(page.getByText(/Next review in \d+ minutes?, in Animals\./)).toHaveCount(0);
+    await expect(page.getByText(/Next review in \d+ minutes?\./)).toBeVisible();
 });
 
 test("undo the last rating", async ({ page, isMobile }) => {
@@ -591,7 +594,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
 test("new cards take a direction from the settings or their group, and many cards change at once", async ({ page }) => {
     // The settings' direction is what a new card starts with.
     await page.goto("/#/account");
-    await page.getByLabel("Study new cards").selectOption("Both ways");
+    await page.getByLabel("Cards you add", { exact: true }).selectOption("Both ways");
     await page.goto("/#/new?group=Czech");
     await expect(page.getByLabel("Study direction")).toHaveValue("both");
     await page.getByLabel("Front").fill("pivo");
@@ -608,7 +611,7 @@ test("new cards take a direction from the settings or their group, and many card
 
     // A group's own direction, offered to the cards already in it.
     await page.getByRole("button", { name: "Group settings" }).click();
-    const own = page.getByLabel("New cards here");
+    const own = page.getByLabel("Cards you add here");
     await expect(own).toHaveValue("");
     await own.selectOption("Back → front");
     const offer = page.getByRole("status").filter({ hasText: "Study the 2 cards already here back → front too?" });
@@ -853,7 +856,9 @@ test("a review keeps to one group, and offers the next group when it ends", asyn
     await expect(page.locator(".side.front")).toHaveText("voda");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("All caught up for today")).toBeVisible();
+    // The heading is still the group's; a line under it says the day is done.
+    await expect(page.getByRole("heading", { name: "Drinks done" })).toBeVisible();
+    await expect(page.getByText("All caught up for today.")).toBeVisible();
     await expect(page.getByText(/Next up/)).toHaveCount(0);
 
     // It all started on the home page, so that is where it ends.

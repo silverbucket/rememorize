@@ -166,7 +166,7 @@
         </form>
 
         <div class="setting">
-            <label for="group-direction">New cards here</label>
+            <label for="group-direction">Cards you add here</label>
             <select id="group-direction" class="field" value={ownDirection ?? ""} onchange={setDirection} disabled={busy}>
                 <option value="">{DIRECTION_LABELS[library.direction]} (the default)</option>
                 {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
@@ -192,7 +192,7 @@
                     </div>
                 </div>
             {:else}
-                <small class="muted">The way cards added to this group are studied. Each card can still be changed by itself.</small>
+                <small class="muted">The way round they are studied. Each card can still be changed by itself.</small>
             {/if}
         </div>
 

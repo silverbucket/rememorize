@@ -264,15 +264,15 @@
         </div>
 
         <div class="setting">
-            <label for="direction">Study new cards</label>
+            <label for="direction">Cards you add</label>
             <select id="direction" class="field direction" value={library.direction} onchange={setDirection}>
                 {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
                     <option {value}>{label}</option>
                 {/each}
             </select>
             <p class="muted">
-                Which way round new cards are studied, unless their group says otherwise. A group's settings can give
-                it a direction of its own, and each card can still be changed by itself.
+                Which way round the cards you add are studied, unless their group says otherwise. A group's settings
+                can give it a direction of its own, and each card can still be changed by itself.
             </p>
         </div>
     </div>

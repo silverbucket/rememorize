@@ -659,6 +659,15 @@
             left: calc(50% + var(--sidebar) / 2);
             bottom: 1.5rem;
         }
+
+        /* As wide as the list it works on, so no row shows past either end of it. */
+        .bar:not(.note) {
+            width: min(46rem, calc(100vw - var(--sidebar) - 4rem));
+        }
+
+        .bar:not(.note) .picked {
+            flex: 1;
+        }
     }
 
     .front,
@@ -730,22 +739,6 @@
 
         .pick .in {
             grid-column: 2;
-        }
-
-        /* Just the box, so the search field keeps the row. */
-        .select:not(.on) {
-            width: 2.75rem;
-            padding: 0;
-        }
-
-        /* While picking it says Done: a lone tick would pass for one of the boxes below it. */
-        .select:not(.on) .label {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            overflow: hidden;
-            clip-path: inset(50%);
-            white-space: nowrap;
         }
 
         .pick {
