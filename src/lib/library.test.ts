@@ -8,7 +8,10 @@ let rs: RSWithModules;
 let library: Library;
 
 beforeEach(async () => {
-    rs = new RemoteStorage({ modules: [Flashcards], changeEvents: { local: false, window: false } }) as RSWithModules;
+    rs = new RemoteStorage({
+        modules: [Flashcards],
+        changeEvents: { local: false, window: false, remote: true, conflict: true },
+    }) as RSWithModules;
     rs.access.claim("flashcards", "rw");
     rs.access.claim("rememorize", "rw");
     rs.caching.enable("/flashcards/");
@@ -615,6 +618,33 @@ describe("Library", () => {
         });
         expect(lib.log).toEqual([entry]);
         expect(lib.cards).toEqual([]);
+    });
+
+    it("keeps a card that arrives by sync while the cache is being read", async () => {
+        await library.save({ frontText: "pivo", backText: "beer", group: "food" });
+        const loading = library.load();
+        // Sync stores it, and says so, before the load has finished reading.
+        (rs as unknown as { _dispatchEvent(n: string, e: unknown): void })._dispatchEvent("change", {
+            origin: "remote",
+            path: "/flashcards/food/r1",
+            newValue: { "@id": "r1", "@type": "flashcard", frontText: "voda", backText: "water", group: "food" },
+        });
+        await loading;
+        expect(library.find("food", "r1")?.frontText).toBe("voda");
+        expect(library.cards).toHaveLength(2);
+    });
+
+    it("counts the cards still to arrive while a sync runs", async () => {
+        await library.save({ frontText: "pivo", backText: "beer", group: "food" });
+        // In the cache, as a listing that has synced ahead of its cards; this library hasn't seen them.
+        await rs.flashcards.store({ frontText: "voda", backText: "water", group: "food" });
+        await rs.flashcards.store({ frontText: "pes", backText: "dog", group: "animals" });
+        const emit = (rs as unknown as { _emit(n: string): void })._emit.bind(rs);
+        emit("sync-started");
+        await expect.poll(() => library.toSync).toBe(2);
+        expect(library.listed).toBe(3);
+        emit("sync-done");
+        expect(library.toSync).toBe(0);
     });
 
     it("reports discovery errors and leaves connecting state", () => {
