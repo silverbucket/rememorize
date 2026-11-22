@@ -15,7 +15,7 @@ import {
     import { plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { library } from "../lib/state";
-    import { type ImportPlan, type ParsedImport, parseImport, planImport } from "../lib/transfer";
+    import { type ImportPlan, type ParsedImport, parseImport, planImport, sameText } from "../lib/transfer";
     import Icon from "./Icon.svelte";
 
     /** Importing is offered on the home page and in Settings: go back to whichever led here. */
@@ -83,7 +83,16 @@ import {
     );
     /** The whole list of new cards is shown, rather than the first few. */
     let showAll = $state(false);
+    /** Only the new cards that share a front with another card are shown. */
+    let onlySameFront = $state(false);
     const adding = $derived(plan?.add ?? []);
+    /** Sorted by front, so cards that share one are listed together. */
+    const sameFront = $derived(
+        [...(plan?.sameFront ?? [])].sort((a, b) => sameText(a.frontText).localeCompare(sameText(b.frontText))),
+    );
+    const listed = $derived(
+        onlySameFront && sameFront.length ? sameFront : showAll ? adding : adding.slice(0, 5),
+    );
     const total = $derived(plan ? adding.length + plan.update.length : 0);
     const groups = $derived([...new Set(adding.map((c) => c.group ?? "default"))]);
     // Per deck, the groups are named after the decks and this name isn't used.
@@ -134,6 +143,7 @@ import {
         anki = undefined;
         removed.clear();
         showAll = false;
+        onlySameFront = false;
         if (!file) return;
         fileName = file.name;
         if (/\.(apkg|colpkg)$/i.test(file.name)) return readAnki(file);
@@ -360,8 +370,15 @@ import {
                     </button>
                 </li>
             {/if}
-            {#if plan.sameFront}
-                <li>{plural(plan.sameFront, "new card")} {plan.sameFront === 1 ? "has" : "have"} the same front as a card already in the group, with a different back</li>
+            {#if sameFront.length}
+                <li>
+                    {plural(sameFront.length, "new card")}
+                    {sameFront.length === 1 ? "has" : "have"} the same front as another card in the group, with a different
+                    back
+                    <button class="btn ghost small inline" type="button" onclick={() => (onlySameFront = !onlySameFront)}>
+                        {onlySameFront ? "Show all cards" : "Show them"}
+                    </button>
+                </li>
             {/if}
             {#if anki?.reviewed}<li>Anki's review progress isn't imported: every card starts as new</li>{/if}
             {#if plan.update.length}<li>{plural(plan.update.length, "card")} updated from the backup</li>{/if}
@@ -389,7 +406,7 @@ import {
                     </tr>
                 </thead>
                 <tbody>
-                    {#each showAll ? adding : adding.slice(0, 5) as card, i (i)}
+                    {#each listed as card, i (i)}
                         <tr>
                             <td class="content">{card.frontText}</td><td class="content">{card.backText}</td>
                             {#if groups.length > 1}<td>{card.group}</td>{/if}
@@ -406,7 +423,7 @@ import {
                     {/each}
                 </tbody>
             </table>
-            {#if adding.length > 5}
+            {#if adding.length > 5 && !(onlySameFront && sameFront.length)}
                 <button class="btn ghost small more" type="button" onclick={() => (showAll = !showAll)}>
                     {showAll ? "Show the first 5" : `Show all ${adding.length}`}
                 </button>
@@ -730,7 +747,8 @@ import {
         color: var(--text-muted);
     }
 
-    .restore {
+    .restore,
+    .inline {
         margin-left: 0.4rem;
         vertical-align: middle;
     }

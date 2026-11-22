@@ -818,7 +818,7 @@ test("cards can be taken out of an import in the preview", async ({ page }) => {
         .getByLabel("File")
         .setInputFiles({ name: "Numbers.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
     await expect(page.getByText("7 new cards in Numbers")).toBeVisible();
-    await expect(page.getByText("1 new card has the same front as a card already in the group")).toBeVisible();
+    await expect(page.getByText("1 new card has the same front as another card in the group")).toBeVisible();
 
     // The first five are listed; the rest are a tap away.
     const rows = page.locator(".summary tbody tr");
@@ -850,6 +850,29 @@ test("cards can be taken out of an import in the preview", async ({ page }) => {
     await expect(page.getByText("tři")).toBeVisible();
     await expect(page.getByText("dvě")).toHaveCount(0);
     await expect(page.getByText("jedna")).toHaveCount(0);
+});
+
+test("near-duplicates are added once, and cards sharing a front can be picked out", async ({ page }) => {
+    const csv = "Není zač.,You're welcome.\nnení zač,you're welcome\nmoc,much\nmoc,power\npes,dog\n";
+    await page.goto("/#/import");
+    await page
+        .getByLabel("File")
+        .setInputFiles({ name: "Phrases.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+    // Capitals and punctuation don't make a different card.
+    await expect(page.getByText("4 new cards in Phrases")).toBeVisible();
+    await expect(page.getByText("1 card repeated in the file (added once)")).toBeVisible();
+
+    // Two meanings of "moc", or a duplicate: shown together so one can be removed.
+    await expect(page.getByText("2 new cards have the same front as another card in the group")).toBeVisible();
+    await page.getByRole("button", { name: "Show them" }).click();
+    const rows = page.locator(".summary tbody tr");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toContainText("much");
+    await page.getByRole("button", { name: "Remove moc" }).first().click();
+    // Nothing left to compare: the whole list is back.
+    await expect(page.getByText(/same front/)).toHaveCount(0);
+    await expect(rows).toHaveCount(3);
+    await expect(page.getByRole("button", { name: "Import 3 cards" })).toBeVisible();
 });
 
 test("a JSON backup restores cards with their review progress", async ({ page, browser }) => {

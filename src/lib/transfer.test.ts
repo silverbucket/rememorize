@@ -1,6 +1,6 @@
 import type { Flashcard } from "remotestorage-module-flashcards";
 import { describe, expect, it } from "vitest";
-import { exportCsv, exportJson, parseDelimited, parseImport, planImport } from "./transfer";
+import { exportCsv, exportJson, parseDelimited, parseImport, planImport, sameText } from "./transfer";
 
 function card(overrides: Partial<Flashcard> = {}): Flashcard {
     return {
@@ -209,7 +209,7 @@ describe("planImport", () => {
             update: [],
             unchanged: 1,
             repeated: 0,
-            sameFront: 0,
+            sameFront: [],
         });
         expect(
             planImport(
@@ -224,7 +224,7 @@ describe("planImport", () => {
             update: [{ card: newer, previousGroup: "moved" }],
             unchanged: 0,
             repeated: 0,
-            sameFront: 0,
+            sameFront: [],
         });
     });
 
@@ -240,13 +240,38 @@ describe("planImport", () => {
         );
         expect(plan.add).toHaveLength(2);
         expect(plan.unchanged).toBe(1);
-        expect(plan.sameFront).toBe(1);
+        expect(plan.sameFront.map((c) => `${c.group}:${c.backText}`)).toEqual(["czech:power"]);
+    });
+
+    it("flags new cards that share a front with each other, but not with themselves", () => {
+        const row = (frontText: string, backText: string) => ({ source: 1, card: { frontText, backText, group: "g" } });
+        const plan = planImport([row("moc", "much"), row("moc", "power"), row("pes", "dog")], []);
+        expect(plan.sameFront.map((c) => c.backText)).toEqual(["much", "power"]);
+    });
+
+    it("treats cards that differ only in capitals, spacing and surrounding punctuation as the same", () => {
+        const existing = [card({ frontText: "Pes", backText: "Dog.", group: "g" })];
+        const row = (frontText: string, backText: string) => ({ source: 1, card: { frontText, backText, group: "g" } });
+        const plan = planImport(
+            [
+                row("pes", "dog"),
+                row("Není zač.", "You're welcome."),
+                row("není  zač", "you're welcome"),
+                row("Promiňte...", "Excuse me"),
+            ],
+            existing,
+        );
+        expect(plan.add.map((c) => c.frontText)).toEqual(["Není zač.", "Promiňte..."]);
+        expect(plan.unchanged).toBe(1);
+        expect(plan.repeated).toBe(1);
+        expect(sameText("„Jak se máš?“")).toBe("jak se máš");
+        expect(sameText("byt’")).not.toBe(sameText("byt"));
     });
 
     it("doesn't count a restored card whose front and back match the one here", () => {
         const here = card({ "@id": "a", frontText: "moc", backText: "a lot", group: "czech" });
         const restored = card({ "@id": "b", frontText: "moc", backText: "a lot", group: "czech" });
-        expect(planImport([{ source: 1, card: restored }], [here]).sameFront).toBe(0);
+        expect(planImport([{ source: 1, card: restored }], [here]).sameFront).toEqual([]);
     });
 
     it("tells cards repeated in the file from cards already here", () => {
