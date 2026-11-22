@@ -282,7 +282,7 @@ test("views narrow the cards, in a group and across all of them, and can be revi
     await views.getByRole("link", { name: "All" }).click();
     await expect(page.locator(".cards li")).toHaveCount(4);
     // Reviewing them together is offered here, and each card then says which group it is from.
-    await page.getByRole("link", { name: "Review 4 cards" }).click();
+    await page.getByRole("link", { name: "Review 4 together" }).click();
     await expect(page.locator(".card .tag")).toHaveText("Animals");
     await page.getByRole("link", { name: "End review" }).click();
     await expect(page.getByRole("heading", { name: "All cards" })).toBeVisible();
@@ -444,8 +444,8 @@ test("daily limit on new cards", async ({ page }) => {
 
     // The group says why its review is shorter than its count of new cards.
     await page.goto("/#/group/Numbers");
-    await expect(page.getByText("3 cards, 3 new")).toBeVisible();
-    await expect(page.getByText("You can start 2 of the 3 new cards today: the daily limit is 2.")).toBeVisible();
+    await expect(page.getByText("3 cards, 3 not started")).toBeVisible();
+    await expect(page.getByText("2 new cards start today: the daily limit is 2.")).toBeVisible();
 
     await page.goto("/");
     const start = page.locator(".today").getByRole("link", { name: /^Review Numbers/ });
@@ -468,7 +468,7 @@ test("daily limit on new cards", async ({ page }) => {
     await page.reload();
     await page.goto("/#/account");
     await expect(page.getByLabel("New cards per day")).toHaveValue("2");
-    await expect(page.getByText("Started today: 2")).toBeVisible();
+    await expect(page.getByText("2 started today")).toBeVisible();
 
     // Raising the limit makes the waiting card available straight away.
     await page.getByLabel("New cards per day").fill("5");

@@ -4,6 +4,7 @@
     import { isNew, nextDue } from "../lib/scheduler";
     import { library } from "../lib/state";
     import { lastDays, streak } from "../lib/stats";
+    import { viewCounts } from "../lib/views";
     import Icon from "./Icon.svelte";
     import Logo from "./Logo.svelte";
 
@@ -40,6 +41,8 @@
 
     /** When a group with nothing due comes up next. */
     const nextIn = (group: string) => nextDue(library.cardsIn(group), library.now);
+    /** Its cards that are not started yet, counted as the group's own page counts them. */
+    const notStartedIn = (group: string) => viewCounts(library.cardsIn(group), library.now).new;
 </script>
 
 <div class="page-head">
@@ -122,7 +125,11 @@
             {#each ready as group (group.name)}
                 <li class="row">
                     <a class="group" href={href.group(group.name)}>
-                        <span class="name content">{group.name}</span>
+                        <!-- The arrow rides on the name: it is the name that opens the group. -->
+                        <span class="title">
+                            <span class="name content">{group.name}</span>
+                            <span class="go" aria-hidden="true"><Icon name="chevron" size={16} /></span>
+                        </span>
                         <!-- What its review holds: the two counts add up to the button's, a review size aside. -->
                         <span class="meta">
                             {#if group.reviews > 0}<span class="due">{group.reviews} due</span>{/if}{#if group.reviews > 0 && group.starting}{", "}{/if}{#if group.starting}<span
@@ -148,15 +155,19 @@
         <ul class="groups rows">
             {#each rest as group (group.name)}
                 {@const due = nextIn(group.name)}
+                {@const waiting = notStartedIn(group.name)}
                 <li class="row">
                     <a class="group" href={href.group(group.name)}>
-                        <span class="name content">{group.name}</span>
+                        <!-- The arrow rides on the name: it is the name that opens the group. -->
+                        <span class="title">
+                            <span class="name content">{group.name}</span>
+                            <span class="go" aria-hidden="true"><Icon name="chevron" size={16} /></span>
+                        </span>
                         <span class="meta">
-                            {plural(group.total, "card")}{#if group.fresh > 0}, {group.fresh} not started{/if}{#if due}, next
+                            {plural(group.total, "card")}{#if waiting > 0}, {waiting} not started{/if}{#if due}, next
                                 review {fromNow(due.toISOString(), library.now)}{/if}
                         </span>
                     </a>
-                    <span class="go" aria-hidden="true"><Icon name="chevron" size={18} /></span>
                 </li>
             {/each}
         </ul>
@@ -165,8 +176,9 @@
     <!-- Today's new cards are shared by every group. Says so where some are left out of the counts above. -->
     {#if first && library.newWaiting > 0}
         <p class="muted waiting">
-            {plural(library.newWaiting, "more new card")} will wait for another day:
-            <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
+            Across your groups, {plural(library.newWaiting, "card")} not started
+            {library.newWaiting === 1 ? "waits" : "wait"} for another day:
+            <a href={href.account()}>the daily limit</a> is {plural(library.newPerDay, "new card")}.
         </p>
     {/if}
 
@@ -175,7 +187,7 @@
         <span class="all-mark"><Icon name="cards" size={20} /></span>
         <span class="all-text">
             <span class="all-name">All cards</span>
-            <span class="meta">Search, filter and review across every group</span>
+            <span class="meta">Every group in one list, to search or review together</span>
         </span>
         <span class="count">{library.cards.length}</span>
         <span class="go" aria-hidden="true"><Icon name="chevron" size={18} /></span>
@@ -384,6 +396,12 @@
         gap: 0.1rem;
     }
 
+    .title {
+        display: flex;
+        align-items: center;
+        gap: 0.15rem;
+    }
+
     .group::after {
         content: "";
         position: absolute;
@@ -450,9 +468,18 @@
     }
 
     .go {
+        flex: none;
         display: grid;
         place-items: center;
         color: var(--text-faint);
+        transition: transform 120ms;
+    }
+
+    @media (hover: hover) {
+        .row:has(.group:hover) .go {
+            color: var(--text-muted);
+            transform: translateX(2px);
+        }
     }
 
     .all {

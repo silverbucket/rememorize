@@ -149,7 +149,7 @@
     {/if}
 
     <details>
-        <summary>How to lay out a file</summary>
+        <summary><Icon name="chevron" size={16} />How to lay out a file</summary>
         <dl class="formats muted">
             <div>
                 <dt>CSV or tab-separated</dt>
@@ -325,12 +325,30 @@
         }
     }
 
+    /* The app's own arrow in place of the browser's triangle. It turns down when the help is open. */
     summary {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
         width: fit-content;
+        margin-left: -0.2rem;
         color: var(--text-muted);
         font-size: 0.925rem;
         font-weight: 600;
+        list-style: none;
         cursor: pointer;
+    }
+
+    summary::-webkit-details-marker {
+        display: none;
+    }
+
+    summary :global(.icon) {
+        transition: transform 120ms;
+    }
+
+    details[open] summary :global(.icon) {
+        transform: rotate(90deg);
     }
 
     @media (hover: hover) {

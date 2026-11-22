@@ -43,6 +43,8 @@
     --shadow: 0 1px 2px oklch(0.3 0.03 150 / 0.05), 0 10px 28px -12px oklch(0.3 0.03 150 / 0.18);
     --shadow-lg: 0 2px 6px oklch(0.3 0.03 150 / 0.08), 0 28px 64px -20px oklch(0.3 0.03 150 / 0.34);
     --backdrop: oklch(0.25 0.03 160 / 0.38);
+    /* The same, already laid over the page. */
+    --backdrop-solid: color-mix(in oklab, oklch(0.25 0.03 160) 38%, var(--bg));
 
     --radius-sm: 8px;
     --radius: 10px;
@@ -98,6 +100,7 @@
         --shadow: 0 1px 2px oklch(0.1 0.02 165 / 0.3), 0 12px 32px -12px oklch(0.08 0.02 165 / 0.6);
         --shadow-lg: 0 2px 6px oklch(0.1 0.02 165 / 0.4), 0 28px 64px -20px oklch(0.05 0.02 165 / 0.8);
         --backdrop: oklch(0.12 0.02 165 / 0.6);
+        --backdrop-solid: color-mix(in oklab, oklch(0.12 0.02 165) 60%, var(--bg));
     }
 }
 
@@ -129,6 +132,7 @@
     --shadow: 0 1px 2px oklch(0.1 0.02 165 / 0.3), 0 12px 32px -12px oklch(0.08 0.02 165 / 0.6);
     --shadow-lg: 0 2px 6px oklch(0.1 0.02 165 / 0.4), 0 28px 64px -20px oklch(0.05 0.02 165 / 0.8);
     --backdrop: oklch(0.12 0.02 165 / 0.6);
+    --backdrop-solid: color-mix(in oklab, oklch(0.12 0.02 165) 60%, var(--bg));
 }
 
 *,
@@ -481,6 +485,14 @@ dialog.modal {
 
 dialog.modal::backdrop {
     background: var(--backdrop);
+}
+
+/*
+ * The strip kept for a scrollbar is outside what the backdrop covers, and takes the page's
+ * own background. While a dialog is open that is the backdrop's colour, so no bright edge is left.
+ */
+html:has(dialog.modal[open]) {
+    background: var(--backdrop-solid);
 }
 
 .modal-body {

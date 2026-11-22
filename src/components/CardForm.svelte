@@ -311,10 +311,18 @@
             padding-right: 0.5rem;
         }
 
-        /* Each direction on one line. */
-        tbody th,
-        tbody td {
+        /* Each direction on one line, and the headings over them, with the four columns evenly apart. */
+        th,
+        td {
             white-space: nowrap;
+        }
+
+        tbody th {
+            padding-right: 0.85rem;
+        }
+
+        .num {
+            padding-left: 0.6rem;
         }
 
         /* One date per line, name on the left and value on the right. */

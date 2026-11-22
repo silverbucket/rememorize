@@ -578,6 +578,8 @@ async function captureDone(options) {
         const rolls = Array.from({ length: 97 }, () => [random(), 0, random()]);
         await page.evaluate(reviewSession, { limit: 400, rolls, accuracy: ACCURACY });
         await page.locator(".panel.done").waitFor();
+        // Off the buttons: the pointer is still where the last rating was given.
+        await page.mouse.move(0, 0);
         await onEachDevice(page, (device) => shoot(page, `${device}-done`));
     } finally {
         await context.close();

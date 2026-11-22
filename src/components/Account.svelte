@@ -225,7 +225,7 @@
         <div class="setting">
             <div class="name">
                 <label for="new-per-day">New cards per day</label>
-                <span class="status">Started today: {library.startedToday}</span>
+                <span class="status">{library.startedToday} started today</span>
             </div>
             <input
                 id="new-per-day"
@@ -545,7 +545,6 @@
     .status {
         color: var(--text-muted);
         font-size: 0.875rem;
-        font-variant-numeric: tabular-nums;
     }
 
     /* The rule runs the width of the panel, like the ones between the settings above it. */

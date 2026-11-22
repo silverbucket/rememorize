@@ -107,6 +107,10 @@
                 ? "All caught up for today"
                 : "Done for now",
     );
+    /** The groups still to review once this one is done, and what their reviews hold. */
+    const left = $derived(library.ready.filter((g) => g.name !== group));
+    const groupsLeft = $derived(left.length);
+    const cardsLeft = $derived(left.reduce((sum, g) => sum + g.due, 0));
     /** How far through the session: ratings given, out of those plus what is left. */
     const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
     const dueAt = (i: ReviewItem) => new Date(stateOf(i.card, i.reverse)?.due ?? 0).getTime();
@@ -404,6 +408,11 @@
                     <a class="btn ghost small progress" href={href.stats()}><Icon name="chart" size={18} />See your progress</a>
                 </div>
                 <h2>{doneTitle}</h2>
+                {#if nextGroup && waiting === 0}
+                    <p class="muted left-today">
+                        {plural(cardsLeft, "card")} in {plural(groupsLeft, "group")} left today
+                    </p>
+                {/if}
                 <dl class="summary">
                     <div><dt>Reviewed</dt><dd>{reviewed}</dd></div>
                     <div><dt>Remembered</dt><dd>{Math.round(((reviewed - tally[1]) / reviewed) * 100)}%</dd></div>
@@ -456,16 +465,17 @@
             {#if nextDue(scope, library.now) && library.newWaiting === 0 && waiting === 0 && held === 0 && !comesBack}
                 <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
             {/if}
-            <div class="done-actions">
-                <!-- A label on the button it is about, so the two read together. -->
-                {#if nextGroup && waiting === 0}
+        </div>
+        <!-- Where to go next, apart from the summary and at the bottom of a phone's screen, like the answer buttons. -->
+        <div class="done-actions">
+            {#if waiting > 0}
+                <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>
+                    Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
+                </button>
+            {:else if nextGroup}
+                <!-- The label sits on the one button it is about. -->
+                <div class="next">
                     <p class="next-up">Next up</p>
-                {/if}
-                {#if waiting > 0}
-                    <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>
-                        Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
-                    </button>
-                {:else if nextGroup}
                     <a
                         class="btn primary"
                         href={href.review(nextGroup.name, undefined, from)}
@@ -474,9 +484,9 @@
                         <span class="what">Review {nextGroup.name}</span>
                         <span class="n">{plural(nextGroup.due, "card")}</span>
                     </a>
-                {/if}
-                <a class="btn" class:primary={waiting === 0 && !nextGroup} href={back}>Back to {backName}</a>
-            </div>
+                </div>
+            {/if}
+            <a class="btn" class:primary={waiting === 0 && !nextGroup} href={back}>Back to {backName}</a>
         </div>
     {/if}
 </div>
@@ -951,18 +961,26 @@
         color: var(--hard);
     }
 
+    .next {
+        display: grid;
+        gap: 0.4rem;
+        min-width: 0;
+    }
+
     .next-up {
-        flex-basis: 100%;
-        margin-bottom: -0.1rem;
         color: var(--text-muted);
         font-size: 0.875rem;
         font-weight: 600;
     }
 
-    .what {
+    .done-actions .what {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    .left-today {
+        margin-top: -0.4rem;
     }
 
     /* The count rides on the button, as on the home page's. */
@@ -978,8 +996,10 @@
     .done-actions {
         display: flex;
         flex-wrap: wrap;
+        align-items: flex-end;
         gap: 0.5rem;
         margin-top: 0.5rem;
+        padding-inline: 0.25rem;
     }
 
 
@@ -1013,23 +1033,19 @@
             padding: 1.5rem 1.25rem;
         }
 
-        /* Like the card, the summary takes the screen, with its buttons at the bottom. */
         .done {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
             padding: 1.5rem 1.25rem;
         }
 
+        /* Like the answer buttons, where to go next sits at the bottom of the screen. */
         .done-actions {
-            width: 100%;
             margin-top: auto;
-            padding-top: 1.5rem;
+            padding: 1.5rem 0 0;
         }
 
+        .done-actions > *,
         .done-actions .btn {
-            flex: 1 1 auto;
+            flex: 1 1 100%;
         }
     }
 </style>

@@ -327,14 +327,19 @@
         {:else}
             <ul class="badges">
                 <li class:new={longest.endedOn === today && longest.days > 1}>
-                    {#if longest.endedOn === today && longest.days > 1}<span class="pill">Today</span>{/if}
-                    <strong>{plural(longest.days, "day")}</strong>
+                    <!-- Side by side, so a long streak pushes the mark along instead of running under it. -->
+                    <span class="figure">
+                        <strong>{plural(longest.days, "day")}</strong>
+                        {#if longest.endedOn === today && longest.days > 1}<span class="pill">Today</span>{/if}
+                    </span>
                     <span>Longest streak</span>
                 </li>
                 {#if busiestDay}
                     <li class:new={busiestDay.key === today}>
-                        {#if busiestDay.key === today}<span class="pill">Today</span>{/if}
-                        <strong>{count.format(busiestDay.reviews)}</strong>
+                        <span class="figure">
+                            <strong>{count.format(busiestDay.reviews)}</strong>
+                            {#if busiestDay.key === today}<span class="pill">Today</span>{/if}
+                        </span>
                         <span>Most reviews in a day, on {shortDay.format(fromKey(busiestDay.key))}</span>
                     </li>
                 {/if}
@@ -948,15 +953,20 @@
         color: var(--text-muted);
     }
 
+    .badges .figure {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0 0.4rem;
+    }
+
     .badges li.new {
         border-color: var(--accent);
         background: var(--accent-subtle);
     }
 
     .badges .pill {
-        position: absolute;
-        top: 0.6rem;
-        right: 0.7rem;
         font-size: 0.75rem;
         font-weight: 650;
         color: var(--accent-text);
@@ -1118,10 +1128,14 @@
         font-size: 0.8rem;
     }
 
-    /* Where the year doesn't fit, say that it scrolls. */
+    /* Where the year doesn't fit, say that it scrolls, and let the earliest weeks showing fade out past the day names. */
     @media (max-width: 760px) {
         .swipe {
             display: block;
+        }
+
+        .scroller {
+            mask-image: linear-gradient(to right, #000 0 1.75rem, transparent 1.75rem, #000 4.25rem);
         }
     }
 
@@ -1132,6 +1146,13 @@
 
         .tiles {
             grid-template-columns: repeat(2, 1fr);
+        }
+
+        /* Two by two, rather than three and a straggler. */
+        .key {
+            display: grid;
+            grid-template-columns: repeat(2, max-content);
+            gap: 0.3rem 1.5rem;
         }
 
         .tile {

@@ -329,7 +329,7 @@
 
         /* One column, centred in the space beside the sidebar. */
         .page {
-            max-width: 44rem;
+            max-width: 46rem;
             margin-inline: auto;
         }
 

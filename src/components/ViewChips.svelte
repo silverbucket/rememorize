@@ -17,10 +17,26 @@
     const counts = $derived(viewCounts(cards, library.now));
     /** Views with nothing in them are left out. */
     const offered = $derived(VIEWS.filter((v) => v.id === active || counts[v.id] > 0));
+
+    /** On a phone the row scrolls sideways. `more` is true while chips are waiting off its far edge. */
+    let row: HTMLElement | undefined = $state();
+    let more = $state(false);
+    const measure = () => {
+        more = !!row && row.scrollLeft + row.clientWidth < row.scrollWidth - 1;
+    };
+    $effect(() => {
+        // Measured again when the chips change, and when the row is resized.
+        void [offered.length, cards.length, active];
+        if (!row) return;
+        measure();
+        const resized = new ResizeObserver(measure);
+        resized.observe(row);
+        return () => resized.disconnect();
+    });
 </script>
 
 {#if cards.length > 0}
-    <nav class="views" aria-label="Views">
+    <nav class="views" class:more aria-label="Views" bind:this={row} onscroll={measure}>
         <a href={link()} aria-current={active === "all" ? "page" : undefined}>
             All <span class="n">{cards.length}</span>
         </a>
@@ -36,7 +52,7 @@
     .views {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.4rem;
+        gap: 0.3rem;
         margin-bottom: 0.9rem;
     }
 
@@ -45,7 +61,7 @@
         align-items: center;
         gap: 0.4rem;
         min-height: 2.25rem;
-        padding: 0.25rem 0.8rem;
+        padding: 0.25rem 0.65rem;
         border: 1px solid var(--border);
         border-radius: 999px;
         background: var(--surface);
@@ -87,6 +103,11 @@
 
         .views::-webkit-scrollbar {
             display: none;
+        }
+
+        /* Fades out at the edge only while there is more to scroll to, so a chip is never cut off cold. */
+        .views.more {
+            mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
         }
     }
 </style>

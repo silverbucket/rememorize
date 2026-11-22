@@ -19,7 +19,7 @@
     import { isBuried, isDue, isNew, itemsOf, nextDue, stateOf } from "../lib/scheduler";
     import { DIRECTION_LABELS } from "../lib/settings";
     import { library } from "../lib/state";
-    import { inView, labelOf, type ViewId } from "../lib/views";
+    import { inView, labelOf, type ViewId, viewCounts } from "../lib/views";
     import DirectionDialog from "./DirectionDialog.svelte";
     import GroupSettings from "./GroupSettings.svelte";
     import Icon from "./Icon.svelte";
@@ -44,6 +44,8 @@
     /** Reviews that are due, and new cards that could be started: counted apart, as on the home page. */
     const reviews = $derived(library.reviewsIn(cards));
     const fresh = $derived(library.freshIn(cards));
+    /** Cards with a direction not started yet: the number the "Not started" view shows, so the two agree. */
+    const notStarted = $derived(viewCounts(cards, library.now).new);
     /** Everything due here today, however many reviews it takes. */
     const today = $derived(library.todayIn(cards));
     /** New cards that can be started today. Fewer than `fresh` only when the daily new-card limit is in the way. */
@@ -219,16 +221,13 @@
         {#if library.loaded && cards.length > 0}
             <p class="sub">
                 {#if show}{labelOf(show)}:{/if}
-                {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if fresh > 0}, {fresh} new{/if}
+                {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if notStarted > 0}, {notStarted} not
+                    started{/if}
             </p>
         {/if}
     </div>
     <div class="actions">
-        <a class="btn" href={href.newCard(group)}><Icon name="plus" />Add card</a>
-        {#if due > 0}
-            <a class="btn primary" href={href.review(group, show)}>Review {plural(due, "card")}</a>
-        {/if}
-        <!-- Last and smallest: what belongs to the group as a whole is rarely needed. -->
+        <!-- First and smallest: what belongs to the group as a whole is rarely needed. The review ends the row. -->
         {#if group !== undefined && all.length > 0}
             <button
                 class="btn icon-only"
@@ -237,6 +236,13 @@
                 title="Group settings"
                 onclick={() => (settings = true)}><Icon name="more" /></button
             >
+        {/if}
+        <a class="btn" href={href.newCard(group)}><Icon name="plus" />Add card</a>
+        {#if due > 0}
+            <!-- Across groups it says so: a review of all of them together is a choice, not the usual way. -->
+            <a class="btn primary" href={href.review(group, show)}>
+                {group === undefined ? `Review ${due} together` : `Review ${plural(due, "card")}`}
+            </a>
         {/if}
     </div>
 </div>
@@ -255,7 +261,7 @@
                 {#if starting === 0}
                     No more new cards today:
                 {:else}
-                    You can start {starting} of the {fresh} new cards today:
+                    {plural(starting, "new card")} {starting === 1 ? "starts" : "start"} today:
                 {/if}
                 <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
             </p>
@@ -313,10 +319,7 @@
                 {@const on = picked.has(keyOf(card))}
                 <li class:on>
                     {#snippet body()}
-                        <span class="front">
-                            {card.frontText}
-                            {#if group === undefined}<small class="in">{card.group}</small>{/if}
-                        </span>
+                        <span class="front">{card.frontText}</span>
                         <!-- The direction mark trails the text, so every back starts on the same line. -->
                         <span class="back muted">
                             {card.backText}
@@ -327,6 +330,8 @@
                             {/if}
                         </span>
                         <span class="when" class:due={next.due} class:fresh={next.text === "new"}>{next.text}</span>
+                        <!-- Under the front on a wide screen; after the back on a phone, so the two sides stay together. -->
+                        {#if group === undefined}<small class="in">{card.group}</small>{/if}
                     {/snippet}
                     {#if selecting}
                         <button
@@ -552,6 +557,10 @@
         transition: background-color 120ms;
     }
 
+    .pick .in {
+        grid-column: 2;
+    }
+
     @media (hover: hover) {
         .pick:hover {
             background: var(--surface-2);
@@ -655,6 +664,8 @@
 
     /* The card's group, where the list runs across groups. */
     .in {
+        grid-column: 1;
+        grid-row: 2;
         display: block;
         font-family: var(--font-ui);
         font-size: 0.78rem;
@@ -702,13 +713,22 @@
             grid-row: 2;
         }
 
+        .in {
+            grid-row: 3;
+        }
+
+        .pick .in {
+            grid-column: 2;
+        }
+
         /* Just the box, so the search field keeps the row. */
-        .select {
+        .select:not(.on) {
             width: 2.75rem;
             padding: 0;
         }
 
-        .select .label {
+        /* While picking it says Done: a lone tick would pass for one of the boxes below it. */
+        .select:not(.on) .label {
             position: absolute;
             width: 1px;
             height: 1px;
