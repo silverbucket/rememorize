@@ -418,7 +418,7 @@
     <h2>Import and export</h2>
     <p class="muted">
         Export a full backup (JSON, including review progress), or a spreadsheet of fronts, backs, hints and groups (CSV).
-        Import accepts either, and Anki's “Notes in Plain Text” export.
+        Import accepts either, and Anki decks (.apkg).
     </p>
     <div class="buttons even">
         <button

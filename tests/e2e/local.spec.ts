@@ -3,6 +3,7 @@
  * browser and works offline.
  */
 import { expect, test } from "@playwright/test";
+import { buildApkg, CZECH } from "../anki-fixture";
 import { acceptDialogs, addCard } from "./helpers";
 
 test("empty state", async ({ page }) => {
@@ -737,6 +738,70 @@ test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
     const text = readFileSync(exported, "utf8");
     expect(text).toContain("pes,dog,barks,Czech animals,both");
     expect(text).toContain('"voda, studená",cold water,,Czech animals,both');
+});
+
+test("import an Anki deck, choosing what goes on each side", async ({ page }) => {
+    const file = {
+        name: "Czech.apkg",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(await buildApkg(CZECH)),
+    };
+
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles(file);
+    // The group is named after the deck.
+    await expect(page.getByLabel("Group", { exact: true })).toHaveValue("Czech");
+
+    // Each note type gets a guessed mapping and an example card; lesson notes are left out.
+    const vocabulary = page.locator(".type").filter({ hasText: "Vocabulary" });
+    await expect(vocabulary.getByRole("checkbox")).toBeChecked();
+    await expect(vocabulary.getByLabel("Front")).toHaveValue("1");
+    await expect(vocabulary.locator(".example")).toHaveText("káva → coffee");
+    const announcement = page.locator(".type").filter({ hasText: "Announcement" });
+    await expect(announcement.getByRole("checkbox")).not.toBeChecked();
+    await expect(announcement).toContainText("Left out: its backs are long text, like notes to read.");
+    await expect(page.locator(".type").filter({ hasText: "Cloze" }).locator(".example")).toHaveText(
+        "[…]. Co si dáte? → Dobrý den",
+    );
+
+    await expect(page.getByText("5 new cards in Czech")).toBeVisible();
+    await expect(page.getByText("1 note couldn't be used: note 5 (front or back is empty)")).toBeVisible();
+    await expect(page.getByText("Anki's review progress isn't imported")).toBeVisible();
+
+    // A group per deck instead, then back to one.
+    await page.getByLabel("Put the cards in").selectOption({ label: "A group per deck (2 decks)" });
+    await expect(page.getByText("5 new cards in Unit 01: Greetings, Unit 02: Food-Drink")).toBeVisible();
+    await page.getByLabel("Put the cards in").selectOption({ label: "One group" });
+
+    // Swapping the sides changes the cards.
+    await vocabulary.getByLabel("Front").selectOption({ label: "English" });
+    await vocabulary.getByLabel("Back").selectOption({ label: "Word" });
+    await expect(vocabulary.locator(".example")).toHaveText("coffee → káva");
+    await vocabulary.getByLabel("Front").selectOption({ label: "Word" });
+    await vocabulary.getByLabel("Back").selectOption({ label: "English" });
+
+    await page.getByRole("button", { name: "Import 5 cards" }).click();
+    await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
+    // Studied one way, as the deck was (only other directions are marked).
+    await expect(page.locator(".direction")).toHaveCount(0);
+
+    // New cards come up in the deck's order, with the hint the mapping chose.
+    await page.goto("/#/review/Czech");
+    await expect(page.locator(".side.front")).toHaveText("káva");
+    await page.getByRole("button", { name: "Show hint" }).click();
+    await expect(page.getByText("f.", { exact: true })).toBeVisible();
+
+    // Importing it again adds nothing.
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles(file);
+    await expect(page.getByText("5 cards already here (skipped)")).toBeVisible();
+});
+
+test("an Anki deck in the newer format explains how to export it", async ({ page }) => {
+    const buffer = Buffer.from(await buildApkg({ ...CZECH, newerFormat: true }));
+    await page.goto("/#/import");
+    await page.getByLabel("File").setInputFiles({ name: "new.apkg", mimeType: "application/octet-stream", buffer });
+    await expect(page.getByRole("alert")).toContainText("Support older Anki versions");
 });
 
 test("a JSON backup restores cards with their review progress", async ({ page, browser }) => {

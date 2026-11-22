@@ -5,13 +5,15 @@ import { defineConfig, type Plugin } from "vitest/config";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
 
-// The app loads no third-party code; this makes that a guarantee. connect-src
+// The app loads no third-party code; this makes that a guarantee. Compiling
+// WebAssembly is allowed for sql.js, which reads Anki packages ('wasm-unsafe-eval'
+// doesn't allow JavaScript eval). connect-src
 // stays open because remoteStorage talks to whatever server the user's
 // WebFinger record points at (including plain-HTTP LAN servers). Build only,
 // so the dev server's HMR isn't affected.
 const CSP = [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "connect-src 'self' https: http:",
@@ -59,8 +61,8 @@ export default defineConfig({
                 ],
             },
             workbox: {
-                // woff2: the two typefaces, so text looks the same offline.
-                globPatterns: ["**/*.{js,css,html,svg,png,webmanifest,woff2}"],
+                // woff2: the two typefaces, so text looks the same offline. wasm: sql.js, so Anki decks import offline.
+                globPatterns: ["**/*.{js,css,html,svg,png,webmanifest,woff2,wasm}"],
                 cleanupOutdatedCaches: true,
                 navigateFallback: "index.html",
                 // Shows reminders that arrive while the app is closed.

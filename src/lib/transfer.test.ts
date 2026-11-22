@@ -195,7 +195,8 @@ describe("planImport", () => {
             existing,
         );
         expect(plan.add.map((c) => `${c.group}:${c.frontText}`)).toEqual(["drinks:pivo", "food:voda"]);
-        expect(plan.unchanged).toBe(2);
+        expect(plan.unchanged).toBe(1);
+        expect(plan.repeated).toBe(1);
     });
 
     it("restores backups without overwriting newer progress", () => {
@@ -203,7 +204,13 @@ describe("planImport", () => {
         const older = card({ updatedAt: "2026-02-01T00:00:00.000Z" });
         const newer = card({ updatedAt: "2026-04-01T00:00:00.000Z", backText: "a beer" });
         const missing = card({ "@id": "c9" });
-        expect(planImport([{ source: 1, card: older }], [here])).toEqual({ add: [], update: [], unchanged: 1 });
+        expect(planImport([{ source: 1, card: older }], [here])).toEqual({
+            add: [],
+            update: [],
+            unchanged: 1,
+            repeated: 0,
+            sameFront: 0,
+        });
         expect(
             planImport(
                 [
@@ -216,6 +223,41 @@ describe("planImport", () => {
             add: [missing],
             update: [{ card: newer, previousGroup: "moved" }],
             unchanged: 0,
+            repeated: 0,
+            sameFront: 0,
         });
+    });
+
+    it("counts new cards whose front is already in their group with another back", () => {
+        const existing = [card({ frontText: "moc", backText: "a lot", group: "czech" })];
+        const plan = planImport(
+            [
+                { source: 1, card: { frontText: "moc", backText: "power", group: "czech" } },
+                { source: 2, card: { frontText: "moc", backText: "power", group: "other" } },
+                { source: 3, card: { frontText: "moc", backText: "a lot", group: "czech" } },
+            ],
+            existing,
+        );
+        expect(plan.add).toHaveLength(2);
+        expect(plan.unchanged).toBe(1);
+        expect(plan.sameFront).toBe(1);
+    });
+
+    it("doesn't count a restored card whose front and back match the one here", () => {
+        const here = card({ "@id": "a", frontText: "moc", backText: "a lot", group: "czech" });
+        const restored = card({ "@id": "b", frontText: "moc", backText: "a lot", group: "czech" });
+        expect(planImport([{ source: 1, card: restored }], [here]).sameFront).toBe(0);
+    });
+
+    it("tells cards repeated in the file from cards already here", () => {
+        const existing = [card({ frontText: "pes", backText: "dog", group: "czech" })];
+        const row = (frontText: string, backText: string) => ({
+            source: 1,
+            card: { frontText, backText, group: "czech" },
+        });
+        const plan = planImport([row("pes", "dog"), row("voda", "water"), row("voda", "water")], existing);
+        expect(plan.add).toHaveLength(1);
+        expect(plan.unchanged).toBe(1);
+        expect(plan.repeated).toBe(1);
     });
 });

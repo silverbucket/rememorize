@@ -17,13 +17,13 @@ import {
 export const EXPORT_FORMAT = "rememorize-export";
 
 export interface ImportRow {
-    /** 1-based line (CSV) or index (JSON) the card came from. */
+    /** 1-based line (CSV), index (JSON) or note (Anki) the card came from. */
     source: number;
     card: FlashcardInput;
 }
 
 export interface ParsedImport {
-    format: "json" | "csv" | "tsv";
+    format: "json" | "csv" | "tsv" | "apkg";
     rows: ImportRow[];
     /** Rows that couldn't be used, with why. */
     skipped: { source: number; reason: string }[];
@@ -36,6 +36,10 @@ export interface ImportPlan {
     update: { card: FlashcardInput; previousGroup: string }[];
     /** Already here (same id and not newer, or same front/back in the same group). */
     unchanged: number;
+    /** Cards that appear more than once in the file, so are only added once. */
+    repeated: number;
+    /** New cards with the same front as a card already in their group, but a different back. */
+    sameFront: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +254,12 @@ export function planImport(rows: ImportRow[], existing: Flashcard[]): ImportPlan
     const contentKey = (c: { frontText: string; backText: string; group?: string }) =>
         `${c.group ?? ""}\u0000${c.frontText.trim()}\u0000${c.backText.trim()}`;
     const seen = new Set(existing.map(contentKey));
-    const plan: ImportPlan = { add: [], update: [], unchanged: 0 };
+    const here = new Set(seen);
+    const frontKey = (c: { frontText: string; group?: string }) => `${c.group ?? ""}\u0000${c.frontText.trim()}`;
+    /** The backs each front already has, by group. */
+    const backs = new Map<string, Set<string>>();
+    for (const c of existing) backs.set(frontKey(c), (backs.get(frontKey(c)) ?? new Set()).add(c.backText.trim()));
+    const plan: ImportPlan = { add: [], update: [], unchanged: 0, repeated: 0, sameFront: 0 };
 
     for (const { card } of rows) {
         const id = card["@id"];
@@ -264,10 +273,13 @@ export function planImport(rows: ImportRow[], existing: Flashcard[]): ImportPlan
             continue;
         }
         if (!id && seen.has(contentKey(card))) {
-            plan.unchanged += 1;
+            if (here.has(contentKey(card))) plan.unchanged += 1;
+            else plan.repeated += 1;
             continue;
         }
         seen.add(contentKey(card));
+        const others = backs.get(frontKey(card));
+        if (others && [...others].some((back) => back !== card.backText.trim())) plan.sameFront += 1;
         plan.add.push(card);
     }
     return plan;
