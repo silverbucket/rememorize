@@ -270,6 +270,7 @@
                                 <span class="content">{card.frontText}</span>
                                 <span class="arrow muted" aria-label="then">→</span>
                                 <span class="content">{card.backText}</span>
+                                {#if card.hint}<span class="muted"> · Hint: {card.hint}</span>{/if}
                             </p>
                         {:else}
                             <p class="error">{gaps ? "That field has no gaps in it." : "These fields are empty."}</p>

@@ -756,7 +756,7 @@ test("import an Anki deck, choosing what goes on each side", async ({ page }) =>
     const vocabulary = page.locator(".type").filter({ hasText: "Vocabulary" });
     await expect(vocabulary.getByRole("checkbox")).toBeChecked();
     await expect(vocabulary.getByLabel("Front")).toHaveValue("1");
-    await expect(vocabulary.locator(".example")).toHaveText("káva → coffee");
+    await expect(vocabulary.locator(".example")).toHaveText("káva → coffee · Hint: f.");
     const announcement = page.locator(".type").filter({ hasText: "Announcement" });
     await expect(announcement.getByRole("checkbox")).not.toBeChecked();
     await expect(announcement).toContainText("Left out: its backs are long text, like notes to read.");
@@ -781,7 +781,7 @@ test("import an Anki deck, choosing what goes on each side", async ({ page }) =>
     // Swapping the sides changes the cards.
     await vocabulary.getByLabel("Front").selectOption({ label: "English" });
     await vocabulary.getByLabel("Back").selectOption({ label: "Word" });
-    await expect(vocabulary.locator(".example")).toHaveText("coffee → káva");
+    await expect(vocabulary.locator(".example")).toHaveText("coffee → káva · Hint: f.");
     await vocabulary.getByLabel("Front").selectOption({ label: "Word" });
     await vocabulary.getByLabel("Back").selectOption({ label: "English" });
 
