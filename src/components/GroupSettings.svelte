@@ -253,11 +253,12 @@
         gap: 0.4rem;
     }
 
+    /* The rule stops where the fields above it do. */
     .danger-zone {
         justify-items: start;
         gap: 0.5rem;
-        margin-top: 0.25rem;
-        padding-top: 1.1rem;
+        margin: 0.25rem 0.25rem 0;
+        padding: 1.1rem 0 0;
         border-top: 1px solid var(--border);
     }
 

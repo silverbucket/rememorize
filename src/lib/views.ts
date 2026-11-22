@@ -14,13 +14,16 @@ import { isNew, itemsOf, type ReviewItem, stateOf } from "./scheduler";
 
 export type ViewId = "struggling" | "learning" | "new" | "recent" | "known";
 
-/** In the order they are offered. */
-export const VIEWS: { id: ViewId; label: string }[] = [
+/**
+ * In the order they are offered: the three stages in the order a card goes
+ * through them, then the slices that cut across the stages.
+ */
+export const VIEWS: { id: ViewId; label: string; stage?: true }[] = [
+    { id: "new", label: "Not started", stage: true },
+    { id: "learning", label: "Learning", stage: true },
+    { id: "known", label: "Well known", stage: true },
     { id: "struggling", label: "Struggling" },
-    { id: "learning", label: "Learning" },
-    { id: "new", label: "Not started" },
     { id: "recent", label: "Recently added" },
-    { id: "known", label: "Well known" },
 ];
 
 /** Forgotten this many times, a card isn't sticking. */

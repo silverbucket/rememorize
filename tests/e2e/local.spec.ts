@@ -252,7 +252,7 @@ test("views narrow the cards, in a group and across all of them, and can be revi
     await expect(page.getByRole("link", { name: "Review 3 cards" })).toBeVisible();
     const views = page.getByRole("navigation", { name: "Views" });
     // Views with no cards in them aren't offered.
-    await expect(views.getByRole("link")).toHaveText(["All 3", "Learning 1", "Not started 2"]);
+    await expect(views.getByRole("link")).toHaveText(["All 3", "Not started 2", "Learning 1"]);
     await views.getByRole("link", { name: "Learning" }).click();
     await expect(page.locator(".cards li")).toHaveCount(1);
     await expect(page.locator(".cards li")).toContainText("pes");
@@ -274,7 +274,7 @@ test("views narrow the cards, in a group and across all of them, and can be revi
     await page.goto("/");
     await page.getByRole("link", { name: /All cards/ }).click();
     await expect(page.getByRole("heading", { name: "All cards" })).toBeVisible();
-    await expect(views.getByRole("link")).toHaveText(["All 4", "Learning 1", "Not started 3"]);
+    await expect(views.getByRole("link")).toHaveText(["All 4", "Not started 3", "Learning 1"]);
     await views.getByRole("link", { name: "Not started" }).click();
     await expect(page.getByRole("heading", { name: "All cards" })).toBeVisible();
     await expect(page.locator(".cards li")).toHaveCount(3);
@@ -444,8 +444,8 @@ test("daily limit on new cards", async ({ page }) => {
 
     // The group says why its review is shorter than its count of new cards.
     await page.goto("/#/group/Numbers");
-    await expect(page.getByText("3 cards, 3 not started")).toBeVisible();
-    await expect(page.getByText("2 new cards start today: the daily limit is 2.")).toBeVisible();
+    await expect(page.getByText("3 cards, 2 new today, 3 not started")).toBeVisible();
+    await expect(page.getByText("The rest wait for another day: the daily limit is 2 new cards.")).toBeVisible();
 
     await page.goto("/");
     const start = page.locator(".today").getByRole("link", { name: /^Review Numbers/ });
@@ -456,13 +456,15 @@ test("daily limit on new cards", async ({ page }) => {
         await page.getByRole("button", { name: /Easy/ }).click();
     }
     await expect(page.getByText("All caught up for today")).toBeVisible();
-    await expect(page.getByText("1 more new card waiting: you've started 2 of 2 new cards for today.")).toBeVisible();
+    await expect(
+        page.getByText("You've started 2 of 2 new cards for today, and the rest wait for another day."),
+    ).toBeVisible();
     // Don't claim the next card is months away while a new one is waiting.
     await expect(page.getByText(/Next card is due/)).toHaveCount(0);
 
     await page.getByRole("link", { name: "Back to your cards" }).click();
     await page.getByRole("link", { name: /^Numbers/ }).click();
-    await expect(page.getByText("No more new cards today: the daily limit is 2.")).toBeVisible();
+    await expect(page.getByText("No more new cards today: the daily limit is 2 new cards.")).toBeVisible();
 
     // The setting is remembered, and today's count shows.
     await page.reload();

@@ -581,6 +581,20 @@ async function captureDone(options) {
         // Off the buttons: the pointer is still where the last rating was given.
         await page.mouse.move(0, 0);
         await onEachDevice(page, (device) => shoot(page, `${device}-done`));
+
+        // On through the rest of the day's groups, to the end of the last one, and back to a home page with nothing left.
+        for (let next = page.locator(".done-actions .next a"); (await next.count()) > 0; ) {
+            await next.click();
+            // The next group's first card, before looking for the end again: the last summary is still up for a moment.
+            await page.getByRole("button", { name: /Show answer/ }).waitFor();
+            await page.evaluate(reviewSession, { limit: 400, rolls, accuracy: ACCURACY });
+            await page.locator(".panel.done").waitFor();
+        }
+        await page.mouse.move(0, 0);
+        await onEachDevice(page, (device) => shoot(page, `${device}-caught-up`));
+        await page.getByRole("link", { name: "Back to your cards" }).click();
+        await page.locator(".groups li").first().waitFor();
+        await onEachDevice(page, (device) => shoot(page, `${device}-home-caught-up`));
     } finally {
         await context.close();
         rmSync(SPARE, { recursive: true, force: true });

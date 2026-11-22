@@ -55,7 +55,7 @@ describe("inView", () => {
     it("a forgotten card is struggling while it is relearned, and once it has been forgotten twice", () => {
         const { card: lapsed } = study(card(), [4, 1]);
         expect(lapsed.review?.state).toBe(3);
-        expect(viewsOf(lapsed)).toEqual(["struggling", "learning"]);
+        expect(viewsOf(lapsed)).toEqual(["learning", "struggling"]);
 
         // Back in review after one lapse: no longer struggling.
         const { card: recovered } = study(card(), [4, 1, 3, 3, 3]);
@@ -78,7 +78,7 @@ describe("inView", () => {
 
         // And it is struggling if either direction is.
         const { card: lapsed } = study(forward, [4, 1], true);
-        expect(viewsOf(lapsed)).toEqual(["struggling", "learning"]);
+        expect(viewsOf(lapsed)).toEqual(["learning", "struggling"]);
     });
 
     it("only looks at the directions a card is studied in", () => {

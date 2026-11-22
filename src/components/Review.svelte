@@ -330,7 +330,8 @@
         </div>
     </div>
 
-    {#if current}
+    <!-- Stays, full, once the last card is rated: the summary then sits where the card did. -->
+    {#if current || reviewed > 0}
         <div class="track" aria-hidden="true"><span style:width="{progress * 100}%"></span></div>
     {/if}
 
@@ -426,8 +427,6 @@
                         {/each}
                     </ul>
                 {/if}
-                <!-- These numbers are this review's; the link leads to all of them. -->
-                <a class="progress" href={href.stats()}><Icon name="chart" size={16} />See your progress</a>
             {:else if within.length === 0}
                 <h2>No cards to review</h2>
                 <p>Add some cards first.</p>
@@ -445,9 +444,8 @@
                 </p>
             {:else if library.newWaiting > 0 && !nextGroup}
                 <p class="muted">
-                    {plural(library.newWaiting, "more new card")} waiting: you've started {library.startedToday} of
-                    {library.newPerDay} new cards for today.
-                    <a href={href.account()}>Change the daily limit</a>.
+                    You've started {library.startedToday} of {library.newPerDay} new cards for today, and the rest wait
+                    for another day. <a href={href.account()}>Change the daily limit</a>.
                 </p>
             {/if}
             {#if held > 0}
@@ -457,6 +455,10 @@
             {/if}
             {#if nextDue(scope, library.now) && library.newWaiting === 0 && waiting === 0 && held === 0 && !comesBack}
                 <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
+            {/if}
+            <!-- The numbers above are this review's; the link leads to all of them. -->
+            {#if reviewed > 0}
+                <a class="progress" href={href.stats()}><Icon name="chart" size={16} />See your progress</a>
             {/if}
         </div>
         <!-- Where to go next, apart from the summary and at the bottom of a phone's screen, like the answer buttons. -->

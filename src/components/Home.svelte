@@ -26,11 +26,11 @@
     /** With more groups to follow, the button says it is the first of them. */
     const startLabel = $derived(first ? `${ready.length > 1 ? "Start with" : "Review"} ${first.name}` : "");
 
-    /** "3 new and 18 reviews across 4 groups", leaving out whichever is zero. */
+    /** "18 due and 3 new across 4 groups", leaving out whichever is zero. The rows below count in the same words. */
     const breakdown = $derived.by(() => {
         const kinds = [
+            reviews > 0 ? `${reviews} due` : "",
             fresh > 0 ? (reviews > 0 ? `${fresh} new` : plural(fresh, "new card")) : "",
-            reviews > 0 ? plural(reviews, "review") : "",
         ]
             .filter(Boolean)
             .join(" and ");
@@ -93,7 +93,8 @@
                     <p class="headline">You're all caught up</p>
                     <p class="muted">
                         {#if library.newWaiting > 0}
-                            {plural(library.newWaiting, "new card")} waiting for tomorrow.
+                            {plural(viewCounts(library.cards, library.now).new, "card")} not started yet: more start
+                            tomorrow.
                         {:else if next}
                             The next card is due {fromNow(next.toISOString(), library.now)}.
                         {:else}
@@ -167,6 +168,10 @@
                             {plural(group.total, "card")}{#if waiting === group.total}, none started yet{:else if waiting > 0},
                                 {waiting} not started{/if}{#if due}, next review {fromNow(due.toISOString(), library.now)}{/if}
                         </span>
+                        <!-- Today's new cards can go to this group instead: said on the row that does it. -->
+                        {#if waiting > 0 && library.newRemaining > 0}
+                            <span class="meta instead">Open to start its new cards today instead</span>
+                        {/if}
                     </a>
                 </li>
             {/each}
@@ -176,9 +181,8 @@
     <!-- Today's new cards are shared by every group. Says so where some are left out of the counts above. -->
     {#if first && library.newWaiting > 0}
         <p class="muted waiting">
-            The rest of your cards that aren't started wait for another day:
-            <a href={href.account()}>the daily limit</a> is {plural(library.newPerDay, "new card")}. Open a group to
-            start its new cards today instead.
+            The rest wait for another day: <a href={href.account()}>the daily limit</a> is
+            {plural(library.newPerDay, "new card")}.
         </p>
     {/if}
 
@@ -446,6 +450,10 @@
         font-weight: 650;
     }
 
+    .instead {
+        color: var(--accent-text);
+    }
+
     .due {
         color: var(--accent-text);
     }
@@ -537,7 +545,7 @@
     }
 
     .waiting {
-        margin: 0.75rem 0.25rem 0;
+        margin: 0.75rem 0 0;
         font-size: 0.9rem;
     }
 

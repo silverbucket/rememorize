@@ -40,7 +40,9 @@
         <a href={link()} aria-current={active === "all" ? "page" : undefined}>
             All <span class="n">{cards.length}</span>
         </a>
-        {#each offered as view (view.id)}
+        {#each offered as view, i (view.id)}
+            <!-- A rule between the stages, which add up to All, and the slices that cut across them. -->
+            {#if !view.stage && offered[i - 1]?.stage}<span class="rule" aria-hidden="true"></span>{/if}
             <a href={link(view.id)} aria-current={active === view.id ? "page" : undefined}>
                 {view.label} <span class="n">{counts[view.id]}</span>
             </a>
@@ -91,6 +93,12 @@
         font-weight: 650;
     }
 
+    /* Where the row wraps, it breaks here: the stages on one line, the slices on the next. */
+    .rule {
+        flex-basis: 100%;
+        height: 0;
+    }
+
 
     @media (max-width: 560px) {
         /* One row that scrolls sideways, out to the edges of the screen: a chip cut off there shows there are more. */
@@ -104,6 +112,16 @@
 
         .views::-webkit-scrollbar {
             display: none;
+        }
+
+        /* In the one scrolling row, a line stands between the two sets. */
+        .rule {
+            flex: none;
+            align-self: center;
+            width: 1px;
+            height: 1.25rem;
+            margin-inline: 0.2rem;
+            background: var(--border-strong);
         }
 
         /* Fades out at the edge only while there is more to scroll to, so a chip is never cut off cold. */

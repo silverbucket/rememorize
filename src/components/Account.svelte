@@ -238,8 +238,8 @@
                 onchange={setNewPerDay}
             />
             <p class="muted">
-                How many unseen cards to introduce each day, across all groups. Reviews of cards you've already
-                started don't count toward this.
+                How many cards that aren't started yet to begin each day, across all groups. Reviews of cards you've
+                already started don't count toward this.
             </p>
         </div>
 

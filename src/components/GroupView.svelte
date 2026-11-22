@@ -215,17 +215,16 @@
 </script>
 
 <a class="crumb" href={href.home()}><Icon name="back" size={16} />Your cards</a>
+<!-- On a wide screen the buttons sit beside the title and the counts run the full width under both. -->
 <div class="page-head">
-    <div class="about">
-        <h1>{group ?? "All cards"}</h1>
-        {#if library.loaded && cards.length > 0}
-            <p class="sub">
-                {#if show}{labelOf(show)}:{/if}
-                {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if notStarted > 0}, {notStarted} not
-                    started{/if}
-            </p>
-        {/if}
-    </div>
+    <h1>{group ?? "All cards"}</h1>
+    {#if library.loaded && cards.length > 0}
+        <p class="sub">
+            {#if show}{labelOf(show)}:{/if}
+            {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if starting > 0}, {starting} new
+                today{/if}{#if notStarted > 0}, {notStarted} not started{/if}
+        </p>
+    {/if}
     <div class="actions">
         <!-- First and quietest: what belongs to the group as a whole is rarely needed. The review ends the row. -->
         {#if group !== undefined && all.length > 0}
@@ -257,9 +256,9 @@
                 {#if starting === 0}
                     No more new cards today:
                 {:else}
-                    {plural(starting, "new card")} {starting === 1 ? "starts" : "start"} today:
+                    The rest wait for another day:
                 {/if}
-                <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
+                <a href={href.account()}>the daily limit</a> is {plural(library.newPerDay, "new card")}.
             </p>
         {/if}
     </div>
@@ -423,14 +422,23 @@
 />
 
 <style>
-    /* Takes the width the buttons leave, so a long name wraps instead of pushing them down. */
-    .about {
-        flex: 1 1 12rem;
-        min-width: 0;
+    /* The title takes the width the buttons leave, so a long name wraps instead of pushing them down. */
+    .page-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.4rem 1rem;
     }
 
-    .page-head {
-        align-items: center;
+    .page-head .actions {
+        grid-column: 2;
+        grid-row: 1;
+        flex-wrap: nowrap;
+    }
+
+    .page-head .sub {
+        grid-column: 1 / -1;
+        margin-top: 0;
     }
 
     h1 {
@@ -771,10 +779,15 @@
             flex-basis: 40%;
         }
 
-        /* The two buttons share the width, with the settings button at the end of their row. */
+        /* One under the other: the title, the counts, then the buttons sharing the width. */
+        .page-head {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
         .page-head .actions {
-            flex-wrap: nowrap;
-            width: 100%;
+            grid-column: 1;
+            grid-row: auto;
+            margin-top: 0.35rem;
         }
 
         .page-head .actions .btn {

@@ -105,7 +105,8 @@
     const allProgress = $derived(groupProgress[0]);
     const STAGES: { stage: Stage; label: string }[] = [
         { stage: "new", label: "Not started" },
-        { stage: "learning", label: "Learning" },
+        // Not "Learning": that is a card's stage in the card lists, counted by card. These count each direction.
+        { stage: "learning", label: "First steps" },
         { stage: "short", label: "Short-term" },
         { stage: "long", label: "Long-term" },
     ];
@@ -178,7 +179,7 @@
                 key,
                 value: total,
                 tick: i === 0 ? shortDay.format(date) : i === length - 1 ? "Today" : undefined,
-                text: `${dayName.format(date)}: ${plural(total, "card")} learned`,
+                text: `${dayName.format(date)}: ${total} started`,
             };
         });
     });
@@ -284,6 +285,7 @@
         <h2>How far along your cards are</h2>
         <p class="muted sub">
             Long-term cards are ones you're expected to remember for {LONG_TERM_DAYS} days or more without a review.
+            Counted by direction: a card studied both ways counts twice.
         </p>
         {#if allProgress.total === 0}
             <p class="muted">Nothing to show yet.</p>
@@ -384,7 +386,8 @@
                     show: (v: number) => `${v}%`,
                     unit: " pts",
                 },
-                { label: "New cards", now: weeks2.current.started, before: weeks2.previous.started, show: (v: number) => count.format(v), unit: "" },
+                // Neither better nor worse: the daily limit decides how many start.
+                { label: "New cards", now: weeks2.current.started, before: weeks2.previous.started, show: (v: number) => count.format(v), unit: "", plain: true },
             ] as row (row.label)}
                 <div>
                     <dt>{row.label}</dt>
@@ -392,7 +395,11 @@
                         {row.now === undefined ? "—" : row.show(row.now)}
                     </dd>
                     <!-- A line of its own in every column, so the three stay level whichever way each went. -->
-                    <dd class="delta {row.now !== undefined && row.before !== undefined ? (change(row.now, row.before) ?? '') : ''}">
+                    <dd
+                        class="delta {!row.plain && row.now !== undefined && row.before !== undefined
+                            ? (change(row.now, row.before) ?? '')
+                            : ''}"
+                    >
                         {#if row.now === undefined || row.before === undefined}
                             &nbsp;
                         {:else if change(row.now, row.before)}
@@ -499,7 +506,7 @@
     </section>
 
     <section class="panel">
-        <h2>Cards learned</h2>
+        <h2>Cards started</h2>
         <p class="muted sub">
             Running total of cards you've started, by the day you first reviewed them. A card studied both ways counts
             twice.
@@ -507,7 +514,7 @@
         {#if learnedPoints.length === 0}
             <p class="muted">Nothing to show yet.</p>
         {:else}
-            <LineChart points={learnedPoints} area summary="{plural(learnedTotal, 'card')} learned so far" />
+            <LineChart points={learnedPoints} area summary="{learnedTotal} started so far, counting each direction of a card" />
         {/if}
     </section>
 
@@ -1107,9 +1114,10 @@
         background: color-mix(in oklab, var(--accent) 42%, var(--surface-3));
     }
 
+    /* Mid green: dark figures read on it in light, as the chalkboard's do in dark. */
     .cell.l3 {
         background: color-mix(in oklab, var(--accent) 62%, var(--surface-3));
-        color: var(--surface);
+        color: light-dark(var(--text), var(--surface));
     }
 
     .cell.l4 {
@@ -1139,7 +1147,7 @@
         }
 
         .scroller {
-            mask-image: linear-gradient(to right, #000 0 1.75rem, transparent 1.75rem, #000 4.25rem);
+            mask-image: linear-gradient(to right, #000 0 1.75rem, transparent 1.75rem 3rem, #000 5rem);
         }
     }
 
