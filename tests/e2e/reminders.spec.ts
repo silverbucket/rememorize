@@ -832,7 +832,7 @@ test("a review on one device corrects the reminders of another", async ({ browse
     // While the laptop is closed, the phone reviews another card.
     await laptop.close();
     await phone.goto("/");
-    await expect(phone.locator(".groups li").filter({ hasText: "Verbs" }).locator(".fresh")).toHaveText("2 new", {
+    await expect(phone.locator(".groups li").filter({ hasText: "Verbs" }).locator(".fresh")).toHaveText("2 to start", {
         timeout: 30_000,
     });
     const reviewed = stored(phone, "/flashcards/Verbs/");
@@ -915,7 +915,7 @@ test("a reminder server chosen on one device is taken up by the others", async (
     // The phone's new subscription reaches storage, and the laptop. So has its review.
     await moved;
     await laptop.goto("/");
-    await expect(laptop.locator(".groups li").filter({ hasText: "Verbs" }).locator(".fresh")).toHaveText("2 new", {
+    await expect(laptop.locator(".groups li").filter({ hasText: "Verbs" }).locator(".fresh")).toHaveText("2 to start", {
         timeout: 30_000,
     });
 

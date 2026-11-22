@@ -262,7 +262,7 @@
     </dl>
 
     <section class="panel">
-        <h2>What you'd remember right now</h2>
+        <h2>What you'd likely remember right now</h2>
         <p class="muted sub">
             For each card you've started, the chance you'd recall it today, added up. A card studied both ways
             counts twice.

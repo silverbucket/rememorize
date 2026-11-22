@@ -448,7 +448,7 @@ test("daily limit on new cards", async ({ page }) => {
     await page.goto("/#/group/Numbers");
     await expect(page.getByText("3 cards, 2 to start today, 3 not started")).toBeVisible();
     await expect(
-        page.getByText("More new cards wait for another day. The daily limit is 2 across all groups."),
+        page.getByText("More new cards wait for another day. The daily limit is 2 new cards across all groups."),
     ).toBeVisible();
 
     await page.goto("/");
@@ -460,15 +460,15 @@ test("daily limit on new cards", async ({ page }) => {
         await page.getByRole("button", { name: /Easy/ }).click();
     }
     await expect(page.getByText("All caught up for today")).toBeVisible();
-    await expect(
-        page.getByText("You've started 2 of 2 new cards for today, and the rest wait for another day."),
-    ).toBeVisible();
+    await expect(page.getByText("You've reached today's limit of 2 new cards.")).toBeVisible();
     // Don't claim the next card is months away while a new one is waiting.
     await expect(page.getByText(/Next card is due/)).toHaveCount(0);
 
     await page.getByRole("link", { name: "Back to your cards" }).click();
     await page.getByRole("link", { name: /^Numbers/ }).click();
-    await expect(page.getByText("No more new cards today. The daily limit is 2 across all groups.")).toBeVisible();
+    await expect(
+        page.getByText("No more new cards today. The daily limit is 2 new cards across all groups."),
+    ).toBeVisible();
 
     // The setting is remembered, and today's count shows.
     await page.reload();
@@ -492,7 +492,7 @@ test("reviews of a few cards at a time, and the home page counts new cards apart
         await addCard(page, { front, back, group: "Numbers" });
     }
     await page.goto("/");
-    await expect(page.locator(".today .headline")).toHaveText("3 cards to study today");
+    await expect(page.locator(".today .headline")).toHaveText("3 cards ready to review");
     await expect(page.getByText("3 new cards in Numbers")).toBeVisible();
 
     await page.goto("/#/account");
@@ -501,10 +501,10 @@ test("reviews of a few cards at a time, and the home page counts new cards apart
     await page.getByLabel("Most cards per review").blur();
 
     await page.goto("/#/group/Numbers");
-    await expect(page.getByText("3 to study today, 2 at a time: the review size is 2.")).toBeVisible();
+    await expect(page.getByText("3 ready to review, 2 at a time: the review size is 2.")).toBeVisible();
     await page.goto("/");
     // Everything due is still counted; only the review is smaller.
-    await expect(page.locator(".today .headline")).toHaveText("3 cards to study today");
+    await expect(page.locator(".today .headline")).toHaveText("3 cards ready to review");
     await expect(page.getByText("3 new cards in Numbers, 2 at a time")).toBeVisible();
     await page.locator(".today").getByRole("link", { name: "Review Numbers, 2 cards" }).click();
     for (let i = 0; i < 2; i++) {
@@ -810,10 +810,10 @@ test("the home page says what is due and what was done today", async ({ page }) 
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
     await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
     await page.goto("/");
-    await expect(page.locator(".today .headline")).toHaveText("2 cards to study today");
+    await expect(page.locator(".today .headline")).toHaveText("2 cards ready to review");
     await expect(page.getByText("2 new cards in Animals")).toBeVisible();
     await expect(page.getByText("0 days in a row")).toBeVisible();
-    await expect(page.locator(".groups li")).toContainText("2 new");
+    await expect(page.locator(".groups li")).toContainText("2 to start");
 
     // The group's own row starts its review too.
     await page.locator(".groups li").getByRole("link", { name: "Review Animals, 2 cards" }).click();
@@ -822,10 +822,10 @@ test("the home page says what is due and what was done today", async ({ page }) 
     // A review started on the home page ends back there.
     await page.getByRole("link", { name: "End review" }).click();
 
-    await expect(page.getByText("1 card to study today")).toBeVisible();
+    await expect(page.getByText("1 card ready to review")).toBeVisible();
     await expect(page.getByText("1 day in a row")).toBeVisible();
     await expect(page.getByText("1 reviewed today")).toBeVisible();
-    await expect(page.locator(".groups li")).toContainText("1 new");
+    await expect(page.locator(".groups li")).toContainText("1 to start");
 
     await page.locator(".today").getByRole("link", { name: "Review Animals, 1 card" }).click();
     await page.getByRole("button", { name: /Show answer/ }).click();
@@ -839,7 +839,7 @@ test("a review keeps to one group, and offers the next group when it ends", asyn
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
     await addCard(page, { front: "voda", back: "water", group: "Drinks" });
     await page.goto("/");
-    await expect(page.locator(".today .headline")).toHaveText("2 cards to study today");
+    await expect(page.locator(".today .headline")).toHaveText("2 cards ready to review");
     await expect(page.getByText("2 new cards across 2 groups")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ready to review" })).toBeVisible();
 

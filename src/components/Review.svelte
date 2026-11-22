@@ -495,7 +495,7 @@
             {:else if nextGroup}
                 <!-- How much of the day is left, where the next step is taken. -->
                 <p class="muted left-today">
-                    <strong>{plural(cardsLeft, "card")}</strong> in {plural(groupsLeft, "group")} left today
+                    <strong>{plural(cardsLeft, "card")}</strong> ready in {plural(groupsLeft, "other group")}
                 </p>
                 <!-- The label sits on the one button it is about. -->
                 <div class="next">
@@ -513,8 +513,12 @@
             <!-- The day's, not this review's: it stands with the way on, not in the summary. -->
             {#if waiting === 0 && !nextGroup && library.newWaiting > 0}
                 <p class="muted left-today">
-                    You've started {library.startedToday} of {library.newPerDay} new cards for today, and the rest wait
-                    for another day. <a href={href.account()}>Change the daily limit</a>.
+                    {#if library.startedToday >= library.newPerDay}
+                        You've reached today's limit of {plural(library.newPerDay, "new card")}.
+                    {:else}
+                        You've started {library.startedToday} of {library.newPerDay} new cards for today.
+                    {/if}
+                    <a href={href.account()}>Change the limit</a>
                 </p>
             {/if}
             <a class="btn" class:primary={waiting === 0 && !nextGroup} href={back}>Back to {backName}</a>
@@ -1020,6 +1024,10 @@
     .day strong {
         color: var(--text);
         font-weight: 600;
+    }
+
+    .left-today a {
+        white-space: nowrap;
     }
 
     .left-today {

@@ -253,7 +253,7 @@
     <div class="limits">
         {#if capped}
             <p>
-                {today.length} to study today, {due} at a time:
+                {today.length} ready to review, {due} at a time:
                 <a href={href.account()}>the review size</a> is {library.cardsPerReview}.
             </p>
         {/if}
@@ -264,7 +264,7 @@
                 {:else}
                     More new cards wait for another day.
                 {/if}
-                <a href={href.account()}>The daily limit</a> is {library.newPerDay} across all groups.
+                <a href={href.account()}>The daily limit</a> is {plural(library.newPerDay, "new card")} across all groups.
             </p>
         {/if}
     </div>
@@ -457,6 +457,11 @@
     }
 
     /* A line under the heading, as wide as the page: it reads in one go instead of wrapping beside the buttons. */
+    /* A link this short isn't broken across lines. */
+    .limits a {
+        white-space: nowrap;
+    }
+
     .limits {
         display: grid;
         gap: 0.2rem;
@@ -767,6 +772,13 @@
         .bar {
             width: calc(100vw - 1.5rem);
             flex-wrap: wrap;
+        }
+
+        /* Nothing of the list shows in the gap between the bar and the tab bar under it. */
+        .bar:not(.note) {
+            box-shadow:
+                0 0.75rem 0 var(--bg),
+                var(--shadow-lg);
         }
 
         .bar .picked {

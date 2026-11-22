@@ -45,6 +45,9 @@
         return names.length === 0 ? "" : names.length === 1 ? names[0] : "other groups";
     });
 
+    /** More comes due before the day is out. */
+    const moreToday = $derived(!!next && next.toDateString() === library.now.toDateString());
+
     /** A group with nothing due could still be given today's new cards. */
     const canStartElsewhere = $derived(library.newRemaining > 0 && rest.some((g) => notStartedIn(g.name) > 0));
 
@@ -101,13 +104,15 @@
         <section class="panel today" class:caught={!first} aria-label="Today">
             <div class="today-text">
                 {#if first}
-                    <p class="headline">{plural(today.length, "card")} to study today</p>
+                    <!-- Ready now, not all of today's: more can come due before the day is out. -->
+                    <p class="headline">{plural(today.length, "card")} ready to review</p>
                     <p class="muted">{breakdown}</p>
                 {:else}
-                    <p class="headline">You're all caught up</p>
+                    <!-- The same words as the end of a review: only for now while more comes due today. -->
+                    <p class="headline">{moreToday ? "You're caught up for now" : "You're all caught up"}</p>
                     <p class="muted">
                         <!-- What comes back later today is said first: caught up is then only for now. -->
-                        {#if next && next.toDateString() === library.now.toDateString()}
+                        {#if next && moreToday}
                             {#if soonestGroup && library.groups.length > 1}
                                 <strong>{soonestGroup}</strong> is due {fromNow(next.toISOString(), library.now)}.
                             {:else}
@@ -159,7 +164,7 @@
                         <!-- What its review holds: the two counts add up to the button's, a review size aside. -->
                         <span class="meta">
                             {#if group.reviews > 0}<span class="due">{group.reviews} due</span>{/if}{#if group.reviews > 0 && group.starting}{", "}{/if}{#if group.starting}<span
-                                    class="fresh">{group.starting} new</span
+                                    class="fresh">{group.starting} to start</span
                                 >{/if}
                             of {plural(group.total, "card")}
                         </span>
@@ -197,8 +202,17 @@
                         <!-- Today's new cards can go to this group instead: said on the row that does it. -->
                         {#if waiting > 0 && library.newRemaining > 0}
                             <span class="meta instead">
-                                You can start today's {plural(Math.min(waiting, library.newRemaining), "new card")} here{#if takers}{" "}instead
-                                    of in <strong>{takers}</strong>{/if}
+                                {#if takers}
+                                    Today's {plural(library.newRemaining, "new card")}
+                                    {library.newRemaining === 1 ? "is" : "are"} set for <strong>{takers}</strong>. You can start
+                                    {waiting >= library.newRemaining
+                                        ? library.newRemaining === 1
+                                            ? "it"
+                                            : "them"
+                                        : waiting} here instead.
+                                {:else}
+                                    You can start today's {plural(Math.min(waiting, library.newRemaining), "new card")} here.
+                                {/if}
                             </span>
                         {/if}
                     </a>
@@ -599,6 +613,10 @@
         font-size: 0.925rem;
     }
 
+    .waiting a {
+        white-space: nowrap;
+    }
+
     .waiting {
         margin: 0.75rem 0 0;
         font-size: 0.9rem;
@@ -610,15 +628,9 @@
             padding: 1.35rem 1.25rem 1rem;
         }
 
-        /* The mark keeps its place beside the text, smaller, so the line beside it isn't squeezed into two. */
-        .today.caught {
-            grid-template-columns: minmax(0, 1fr) auto;
-            column-gap: 0.75rem;
-        }
-
+        /* The mark fills the place of the button on a wide card. Here it would only squeeze the heading into two lines. */
         .seal {
-            width: 2.25rem;
-            height: 2.25rem;
+            display: none;
         }
 
         .start {

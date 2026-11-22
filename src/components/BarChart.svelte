@@ -51,11 +51,11 @@
         align-items: flex-end;
         gap: 3px;
         height: 7.5rem;
-        /* Room for the scale's top value beside the bars. */
-        padding-left: 1.75rem;
-        border-bottom: 1px solid var(--border-strong);
-        /* A line at the top value and one halfway, to read the bars against. They start where the bars do. */
+        /* Room for the scale's top value beside the bars: as much as the line charts leave, so every chart's plot starts on one line. */
+        padding-left: 2.25rem;
+        /* The baseline, a line at the top value and one halfway, to read the bars against. They start where the bars do. */
         background:
+            linear-gradient(var(--border-strong), var(--border-strong)) 0 100% / 100% 1px no-repeat,
             linear-gradient(var(--border), var(--border)) 0 0 / 100% 1px no-repeat,
             linear-gradient(var(--border), var(--border)) 0 50% / 100% 1px no-repeat;
         background-origin: content-box;
@@ -102,7 +102,7 @@
         display: flex;
         gap: 3px;
         margin-top: 0.4rem;
-        padding-left: 1.75rem;
+        padding-left: 2.25rem;
         height: 1rem;
     }
 
