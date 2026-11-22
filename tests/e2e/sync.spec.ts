@@ -151,3 +151,61 @@ test("the connection survives a reload", async ({ page }) => {
     await expect(page.getByText(`Connected as ${user.address}`)).toBeVisible();
     await expect(page.getByRole("link", { name: new RegExp(user.username) })).toBeVisible();
 });
+
+test("a big sync shows how far along it is, and carries on after a reload", async ({ browser }, testInfo) => {
+    test.setTimeout(180_000);
+    const total = 1500;
+    const user = await createUser();
+    const a = await (await browser.newContext()).newPage();
+    await connect(a, user);
+    // Stored straight on the server, as another device would have left them.
+    const { href, token } = await a.evaluate(() =>
+        JSON.parse(localStorage.getItem("remotestorage:wireclient") ?? "{}"),
+    );
+    const ids = Array.from({ length: total }, (_, i) => `c${i}`);
+    for (let i = 0; i < total; i += 50) {
+        await Promise.all(
+            ids.slice(i, i + 50).map(async (id) => {
+                const resp = await fetch(`${href}/flashcards/Big/${id}`, {
+                    method: "PUT",
+                    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        "@id": id,
+                        "@type": "flashcard",
+                        frontText: id,
+                        backText: id,
+                        group: "Big",
+                    }),
+                });
+                expect(resp.ok).toBe(true);
+            }),
+        );
+    }
+
+    // A phone on a slow connection.
+    const context = await browser.newContext({ viewport: { width: 390, height: 780 } });
+    await context.route(`http://${RS_HOST}/storage/**`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await route.continue();
+    });
+    const b = await context.newPage();
+    await connect(b, user);
+    await b.goto("/");
+    const note = b.getByRole("status").filter({ hasText: /^Syncing/ });
+    const synced = async () => Number((await note.textContent())?.match(/Syncing ([\d,]+) of/)?.[1].replace(/,/g, ""));
+    await expect(note).toContainText(`of ${total.toLocaleString("en-US")} cards`, { timeout: 30_000 });
+    await expect.poll(synced, { timeout: 60_000 }).toBeGreaterThan(200);
+    await expect(b.locator(".pill")).toHaveText(/^Syncing \d+%$/);
+    await b.screenshot({ path: testInfo.outputPath("syncing.png") });
+
+    // Closed partway through: what arrived is still there, and the count carries on from it.
+    const before = await synced();
+    await b.reload();
+    await expect(note).toBeVisible({ timeout: 30_000 });
+    expect(await synced()).toBeGreaterThanOrEqual(before);
+    await b.screenshot({ path: testInfo.outputPath("after-reload.png") });
+
+    await expect(note).toHaveCount(0, { timeout: 120_000 });
+    await expect(b.getByRole("link", { name: /^Big/ })).toContainText(`${total.toLocaleString("en-US")} cards`);
+    await b.screenshot({ path: testInfo.outputPath("done.png") });
+});
