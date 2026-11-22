@@ -6,6 +6,7 @@ import {
     type AnkiNoteType,
     apkgImport,
     clozeCards,
+    clozeText,
     deckGroups,
     guessMapping,
     htmlToText,
@@ -68,6 +69,13 @@ describe("clozeCards", () => {
 
     it("gives nothing without deletions", () => {
         expect(clozeCards("plain text")).toEqual([]);
+    });
+});
+
+describe("clozeText", () => {
+    it("fills in every gap, dropping hints, including a gap inside a gap", () => {
+        expect(clozeText("{{c1::Dobrý den}}. Co si {{c2::dáte::verb}}?")).toBe("Dobrý den. Co si dáte?");
+        expect(clozeText("{{c1::I saw {{c2::her}} yesterday.}}")).toBe("I saw her yesterday.");
     });
 });
 
@@ -190,6 +198,16 @@ describe("apkgImport", () => {
             ["[…]. Co si dáte?", "Dobrý den", "Hello. What will you have?", "forward"],
             ["Dobrý den. Co si [verb]?", "dáte", "Hello. What will you have?", "forward"],
         ]);
+    });
+
+    it("fills in the gaps on whichever side has them", async () => {
+        const collection = await czech();
+        const mappings = guessed(collection);
+        mappings[2] = { include: true, front: 1, back: 0, hint: -1, gaps: false };
+        const result = apkgImport(collection, { mappings, groupFor: () => "g", directionFor: () => "both" });
+        expect(result.rows.find((r) => r.card.frontText.startsWith("Hello"))?.card.backText).toBe(
+            "Dobrý den. Co si dáte?",
+        );
     });
 
     it("guesses one card per gap for a cloze with nothing else to show", () => {

@@ -201,10 +201,18 @@ export function htmlToText(html: string): string {
 
 const CLOZE = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g;
 const HAS_CLOZE = /\{\{c\d+::/;
+/** A gap with no other gap inside it, and its optional hint. */
+const INNERMOST_CLOZE = /\{\{c\d+::((?:(?!\{\{)[\s\S])*?)(?:::(?:(?!\{\{)[\s\S])*?)?\}\}/g;
 
 /** The text with every gap filled in. */
 export function clozeText(html: string): string {
-    return htmlToText(html.replace(CLOZE, (_, _number: string, answer: string) => answer));
+    // Innermost first, so a gap inside a gap ({{c1::I saw {{c2::her}}}}) keeps all its words.
+    let text = html;
+    for (let previous = ""; previous !== text; ) {
+        previous = text;
+        text = text.replace(INNERMOST_CLOZE, (_, answer: string) => answer);
+    }
+    return htmlToText(text);
 }
 
 /** One card per cloze number: the text with that deletion hidden, and what it hides. */
@@ -291,8 +299,9 @@ export function apkgImport(collection: AnkiCollection, options: ApkgOptions): Pa
             ? clozeCards(text)
             : [
                   {
+                      // Either side can be the field with gaps.
                       front: type.cloze ? clozeText(text) : htmlToText(text),
-                      back: htmlToText(note.fields[mapping.back] ?? ""),
+                      back: (type.cloze ? clozeText : htmlToText)(note.fields[mapping.back] ?? ""),
                   },
               ];
         // A gap holding only a sound or a picture leaves that card with nothing to answer; the note's other gaps still count.
