@@ -84,13 +84,13 @@ test("settings are shared between devices", async ({ browser }) => {
     await expect(a.getByLabel("New cards per day")).toHaveValue("3");
 
     // The review size too, including turning it back off.
-    await expect(b.getByLabel("Most cards per review")).toHaveValue("");
-    await a.getByLabel("Most cards per review").fill("40");
-    await a.getByLabel("Most cards per review").blur();
-    await expect(b.getByLabel("Most cards per review")).toHaveValue("40", { timeout: SYNC_TIMEOUT });
-    await b.getByLabel("Most cards per review").fill("");
-    await b.getByLabel("Most cards per review").blur();
-    await expect(a.getByLabel("Most cards per review")).toHaveValue("", { timeout: SYNC_TIMEOUT });
+    await expect(b.getByLabel("Cards per review")).toHaveValue("");
+    await a.getByLabel("Cards per review").fill("40");
+    await a.getByLabel("Cards per review").blur();
+    await expect(b.getByLabel("Cards per review")).toHaveValue("40", { timeout: SYNC_TIMEOUT });
+    await b.getByLabel("Cards per review").fill("");
+    await b.getByLabel("Cards per review").blur();
+    await expect(a.getByLabel("Cards per review")).toHaveValue("", { timeout: SYNC_TIMEOUT });
     await expect(a.getByLabel("New cards per day")).toHaveValue("3");
 });
 
@@ -139,8 +139,8 @@ test("a connection that wasn't granted the app's folder asks to sign in again", 
     await page.locator("form[action='/oauth'] [type=submit]").first().click();
     await expect(page.getByText(`Connected as ${user.address}`)).toBeVisible({ timeout: 20_000 });
     // A setting saved now reaches the server, which it couldn't before.
-    await page.getByLabel("Most cards per review").fill("25");
-    await page.getByLabel("Most cards per review").blur();
+    await page.getByLabel("Cards per review").fill("25");
+    await page.getByLabel("Cards per review").blur();
     await expect(page.getByRole("button", { name: "Sign in again" })).toHaveCount(0, { timeout: 30_000 });
 });
 

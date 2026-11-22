@@ -7,8 +7,7 @@
 
 ### Flashcards that come back just before you forget them.
 
-Works offline. No account needed.<br>
-Sync through your own remoteStorage.
+Offline, private, and yours to keep.
 
 [![CI](https://github.com/silverbucket/rememorize/actions/workflows/ci.yml/badge.svg)](https://github.com/silverbucket/rememorize/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/silverbucket/rememorize?color=158f44)](https://github.com/silverbucket/rememorize/releases)
@@ -30,47 +29,55 @@ Sync through your own remoteStorage.
 
 <br>
 
-Rememorize is a flashcard app. You write the cards, and it shows each one
-again just before you would forget it.
+Rememorize is an [unhosted](https://unhosted.org), offline-first flashcard app.
+It pairs Anki's proven [FSRS](https://github.com/open-spaced-repetition/ts-fsrs)
+scheduling with a quiet, phone-first interface built for a few minutes of study
+a day.
 
-It works offline, in your browser or installed on your phone. Link your own
-[remoteStorage](https://remotestorage.io) and your cards sync across all your
-devices.
+Start right away in your browser or install it on your phone with no account
+needed. When you want to sync across devices, connect your own
+[remoteStorage](https://remotestorage.io): your cards live in an open format on
+storage you control, never on our servers.
+
+**Works offline** · **Anki's FSRS algorithm** · **Bring your own storage** · **Encrypted push reminders** · **Free & open source**
 
 ## What it does
 
-- **Smart scheduling.** Rate each answer: Again, Hard, Good or Easy. Cards you
-  know come back less and less often. Cards you miss come back soon. It uses
+- **Smart scheduling.** Rate each answer: Again, Hard, Good, or Easy. Cards you
+  know come back less and less often; cards you miss come back soon. Uses
   [FSRS](https://github.com/open-spaced-repetition/ts-fsrs), the same
-  algorithm as Anki.
+  spaced-repetition algorithm as Anki.
 - **Works offline.** Install it on your phone or desktop. Study and edit your
   cards without a connection.
 - **Made for a phone.** A review fills the screen, the answer buttons sit
   under your thumb, and a tap on the card shows the answer.
 - **One subject at a time.** A review keeps to one group, so Spanish verbs
-  don't arrive between chemical elements. When it ends, the next group that
-  has cards due is one tap away.
-- **Your own storage.** Link a remoteStorage account and your cards sync
-  across all your devices. Without one, they stay in your browser.
-- **Reminders.** A notification when cards are due, even while the app is
-  closed.
+  don't arrive between chemical elements. When one group finishes, the next
+  group with cards due is one tap away.
+- **A manageable pace.** A daily limit on new cards keeps a big deck from
+  piling up, and a session limit lets you take reviews a few cards at a time.
+- **Your own storage.** Connect a remoteStorage account to back up and sync
+  your cards across all your devices. Without one, everything stays in your
+  browser.
+- **Encrypted push reminders, with no app backend.** Get a notification when
+  cards are due, even while the app is closed, encrypted on your device before
+  it leaves the browser.
 - **Both directions.** Study a card front to back, back to front, or both.
-  Set the direction for new cards once in Settings or per group, and change a
-  whole group, or the cards you pick, in one go.
+  Set the default direction in Settings or per group, and update a whole group
+  or any selection of cards at once.
 - **Progress you can see.** A review calendar, your streak, how much you
-  remember and what is due next.
-- **Views instead of filing.** Put a whole subject in one group. Rememorize
-  works out the rest from how your reviews go: the cards you are struggling
-  with, the ones you are learning, know well, haven't started or added this
-  week, in one group or across all of them.
-- **Regroup in a few taps.** Pick cards in a group or across all of them and
+  remember, and what is due next.
+- **Automatic views.** Put a whole subject in one group. Rememorize works out
+  the rest from how your reviews go: cards you are struggling with, ones you
+  are learning, know well, haven't started, or added this week, in one group or
+  across all of them.
+- **Move and merge groups.** Select cards in a group or across all of them and
   move them to another group, or a new one, with their schedules intact.
   Rename a group, or merge it into another.
 - **Import and export.** Bring in cards from CSV or Anki's plain-text export.
-  A daily limit on new cards keeps a big deck manageable, and reviews can
-  come a few cards at a time. Export whenever you like.
+  Export a full JSON backup or a CSV spreadsheet whenever you like.
 - **Easy on the eyes.** Light is tinted like ledger paper, dark like a
-  chalkboard. It follows your system, or you choose.
+  chalkboard. Follows your system theme, or you choose.
 - **Quick with a keyboard.** Space shows the answer, 1 to 4 rate it, and U
   takes the last rating back.
 
@@ -104,28 +111,30 @@ To install it, use your browser's _Install_ or _Add to Home Screen_.
 
 ## Your cards, your storage
 
-[remoteStorage](https://remotestorage.io) is an open protocol for storage that
-belongs to you. You sign up with a storage provider, not with the app, or you
-run your own server.
+Rememorize is an [unhosted](https://unhosted.org), local-first app: there is no
+Rememorize server holding your data. By default your cards stay in your
+browser. When you want to back them up and sync across devices, connect via
+[remoteStorage](https://remotestorage.io), an open protocol for storage that
+belongs to you. You choose a storage provider or run your own server.
 
-To link yours, open **Settings** and enter your address (`user@host`). No
+To connect yours, open **Settings** and enter your address (`user@host`). No
 account yet? [Get one](https://remotestorage.io/get).
 
 - **No backend.** Your cards go from your browser to your storage, and nowhere
   else.
 - **No trackers.** No analytics and no third-party scripts. Even the fonts
   are served by the app itself.
-- **Open format.** Cards use
+- **Open, interoperable format.** Cards use
   [remotestorage-module-flashcards](https://github.com/silverbucket/remotestorage-module-flashcards),
-  so other apps can use them too.
+  so other apps can read and use them too.
 
 Disconnecting removes the cards from that browser, not from your storage.
 
 ## Reminders
 
 Turn on **Reminders** in Settings and Rememorize tells you how many cards are
-due: first at a time you choose, then again later in the day when more come
-due. On an iPhone or iPad, add Rememorize to your Home Screen first.
+due: first when your quiet hours end, then again later in the day when more
+come due. On an iPhone or iPad, add Rememorize to your Home Screen first.
 
 A web app that is closed can't notify anyone, so a server has to send each
 reminder when it is due. Rememorize uses [Sockethub](https://sockethub.org)

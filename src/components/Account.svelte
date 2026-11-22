@@ -195,9 +195,9 @@
         <form class="connect" onsubmit={connect}>
             <label class="title" for="address">Connect your storage</label>
             <p class="muted">
-                Your cards are currently saved in this browser only. Connect a
-                <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> account to back them
-                up and sync them across devices. New to remoteStorage?
+                Rememorize doesn't store your cards on its servers. Your cards stay in this browser by default. Connect a
+                <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> account you own to
+                back them up and sync across devices. New to remoteStorage?
                 <a href="https://remotestorage.io/get/" target="_blank" rel="noreferrer">Get a storage account</a>.
             </p>
             <div class="row">
@@ -245,7 +245,7 @@
         </div>
 
         <div class="setting">
-            <label for="cards-per-review">Most cards per review</label>
+            <label for="cards-per-review">Cards per review</label>
             <input
                 id="cards-per-review"
                 class="field number"
@@ -259,21 +259,21 @@
             />
             <p class="muted">
                 Splits what's due into reviews of this many cards, so you never face a huge pile in one sitting. When
-                one ends you can start the next straight away or come back later: nothing is pushed back. Leave it
-                empty for no limit.
+                one ends you can start the next right away or come back later: nothing is pushed back. Leave it empty
+                for no limit.
             </p>
         </div>
 
         <div class="setting">
-            <label for="direction">Cards you add</label>
+            <label for="direction">Default study direction</label>
             <select id="direction" class="field direction" value={library.direction} onchange={setDirection}>
                 {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
                     <option {value}>{label}</option>
                 {/each}
             </select>
             <p class="muted">
-                Which way round the cards you add are studied, unless their group says otherwise. A group's settings
-                can give it a direction of its own, and each card can still be changed by itself.
+                Default direction for new cards, unless their group sets its own. You can still change the direction on
+                any individual card.
             </p>
         </div>
     </div>
@@ -331,10 +331,10 @@
             <div class="hours"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
         </div>
         <p class="muted">
-            Nothing arrives during quiet hours. What comes due during them is counted in one reminder when they
-            end. The rest of the day, another follows when more cards come due than you last saw: cards you
-            answered Hard or Again get one shortly after you put Rememorize away, and the others come at least six
-            hours apart while it stays closed.
+            No notifications arrive during quiet hours. Cards that come due during quiet hours are rolled into one
+            reminder when quiet hours end. During the day, you'll only get another reminder if more cards come due:
+            missed or hard cards get a prompt shortly after you leave Rememorize, and other follow-ups come at least six
+            hours apart while the app stays closed.
         </p>
         <p class="muted">
             Quiet hours are the same on every device you connect, and follow the clock of the one you used last.

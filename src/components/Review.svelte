@@ -482,10 +482,7 @@
             {/if}
             {#if waiting > 0}
                 <p>{plural(waiting, "more card")} {waiting === 1 ? "is" : "are"} due.</p>
-                <p class="muted">
-                    Carry on now or come back later: they stay due, and a few hours makes little difference to how
-                    well you remember them.
-                </p>
+                <p class="muted">Keep going now, or take a break and finish them later.</p>
             {/if}
             {#if held > 0}
                 <p class="muted">

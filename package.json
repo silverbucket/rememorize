@@ -4,7 +4,7 @@
     "private": true,
     "license": "GPL-3.0-or-later",
     "type": "module",
-    "description": "Flashcards with FSRS spaced repetition, stored in your own remoteStorage",
+    "description": "Flashcards that come back just before you forget them: offline, private, and yours to keep.",
     "scripts": {
         "dev": "vite",
         "build": "vite build",

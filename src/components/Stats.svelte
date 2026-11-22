@@ -237,8 +237,7 @@
 {:else}
     {#if log.length === 0}
         <p class="panel muted note">
-            No reviews recorded yet. Your activity shows up here as you review; reviews from before this was added
-            aren't included.
+            No reviews recorded yet. Your activity will show up here as you study.
         </p>
     {/if}
 
@@ -517,7 +516,7 @@
     </section>
 
     <section class="panel">
-        <h2>Cards started</h2>
+        <h2>Total cards started</h2>
         <p class="muted sub">
             Running total of cards you've started, by the day you first reviewed them. A card studied both ways counts
             twice.
@@ -530,8 +529,8 @@
     </section>
 
     <section class="panel">
-        <h2>New cards started</h2>
-        <p class="muted sub">Per day, over the last {DAYS} days.</p>
+        <h2>Cards started per day</h2>
+        <p class="muted sub">Over the last {DAYS} days.</p>
         <BarChart bars={startedBars} summary="{plural(startedTotal, 'new card')} started in the last {DAYS} days" />
     </section>
 

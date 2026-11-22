@@ -362,7 +362,7 @@
             <Icon name="close" size={18} />
         </button>
         <span class="picked" aria-live="polite">
-            {pickedCards.length === 0 ? "Pick cards to move" : `${pickedCards.length} selected`}
+            {pickedCards.length === 0 ? "Select cards" : `${pickedCards.length} selected`}
         </span>
         <button class="btn ghost" type="button" onclick={toggleAll} disabled={!allShownPicked && shown.length === 0}>
             {allShownPicked ? "Select none" : `Select all${shown.length < cards.length ? " shown" : ""}`}
