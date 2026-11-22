@@ -812,11 +812,13 @@ test("an Anki deck in the newer format explains how to export it", async ({ page
 test("cards can be taken out of an import in the preview", async ({ page }) => {
     const words = ["jedna", "dvě", "tři", "čtyři", "pět", "šest", "sedm"];
     const csv = words.map((w, i) => `${w},${i + 1}`).join("\n");
+    await addCard(page, { front: "jedna", back: "one", group: "Numbers" });
     await page.goto("/#/import");
     await page
         .getByLabel("File")
         .setInputFiles({ name: "Numbers.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
     await expect(page.getByText("7 new cards in Numbers")).toBeVisible();
+    await expect(page.getByText("1 new card has the same front as a card already in the group")).toBeVisible();
 
     // The first five are listed; the rest are a tap away.
     const rows = page.locator(".summary tbody tr");
@@ -834,11 +836,20 @@ test("cards can be taken out of an import in the preview", async ({ page }) => {
     await page.getByRole("button", { name: "Put back" }).click();
     await expect(page.getByText("7 new cards in Numbers")).toBeVisible();
     await page.getByRole("button", { name: "Remove dvě" }).click();
+    // The warning is about the cards being imported: it goes with the card it was about.
+    await page.getByRole("button", { name: "Remove jedna" }).click();
+    await expect(page.getByText(/same front/)).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Import 6 cards" }).click();
-    await expect(page.getByRole("heading", { name: "Numbers" })).toBeVisible();
-    await expect(page.getByText("jedna")).toBeVisible();
+    // Removed cards stay out when the group changes.
+    await page.getByLabel("Group for cards without one").fill("Čísla");
+    await expect(page.getByText("5 new cards in Čísla")).toBeVisible();
+    await expect(page.getByText("2 cards removed")).toBeVisible();
+
+    await page.getByRole("button", { name: "Import 5 cards" }).click();
+    await expect(page.getByRole("heading", { name: "Čísla" })).toBeVisible();
+    await expect(page.getByText("tři")).toBeVisible();
     await expect(page.getByText("dvě")).toHaveCount(0);
+    await expect(page.getByText("jedna")).toHaveCount(0);
 });
 
 test("a JSON backup restores cards with their review progress", async ({ page, browser }) => {

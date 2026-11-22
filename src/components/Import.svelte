@@ -63,16 +63,27 @@ import {
             return { error: e instanceof Error ? e.message : String(e) };
         }
     });
-    const plan: ImportPlan | undefined = $derived(
-        parsed.result ? planImport(parsed.result.rows, library.cards) : undefined,
-    );
-    /** New cards taken out of the import in the preview, by `rowKey`. */
+    /**
+     * New cards taken out of the import in the preview, by `removalKey`: a
+     * card's id, or its two sides, so changing the group keeps them out.
+     */
     const removed = new SvelteSet<string>();
+    const removalKey = (c: FlashcardInput) => c["@id"] ?? `${c.frontText}\u0000${c.backText}`;
+    // Removed cards are left out before planning, so every count is of the cards that will be imported.
+    const plan: ImportPlan | undefined = $derived(
+        parsed.result
+            ? planImport(
+                  parsed.result.rows.filter((r) => !removed.has(removalKey(r.card))),
+                  library.cards,
+              )
+            : undefined,
+    );
+    const removedCount = $derived(
+        new Set((parsed.result?.rows ?? []).map((r) => removalKey(r.card)).filter((k) => removed.has(k))).size,
+    );
     /** The whole list of new cards is shown, rather than the first few. */
     let showAll = $state(false);
-    const rowKey = (c: FlashcardInput) => c["@id"] ?? `${c.group ?? ""}\u0000${c.frontText}\u0000${c.backText}`;
-    const adding = $derived(plan ? plan.add.filter((c) => !removed.has(rowKey(c))) : []);
-    const removedCount = $derived(plan ? plan.add.length - adding.length : 0);
+    const adding = $derived(plan?.add ?? []);
     const total = $derived(plan ? adding.length + plan.update.length : 0);
     const groups = $derived([...new Set(adding.map((c) => c.group ?? "default"))]);
     // Per deck, the groups are named after the decks and this name isn't used.
@@ -140,7 +151,7 @@ import {
 
     async function run() {
         if (!plan || importing || defaultGroupError) return;
-        const job = { plan: { ...plan, add: adding }, total, groups };
+        const job = { plan, total, groups };
         running = job;
         importing = true;
         importError = "";
@@ -378,7 +389,7 @@ import {
                     </tr>
                 </thead>
                 <tbody>
-                    {#each showAll ? adding : adding.slice(0, 5) as card (rowKey(card))}
+                    {#each showAll ? adding : adding.slice(0, 5) as card, i (i)}
                         <tr>
                             <td class="content">{card.frontText}</td><td class="content">{card.backText}</td>
                             {#if groups.length > 1}<td>{card.group}</td>{/if}
@@ -388,7 +399,7 @@ import {
                                     type="button"
                                     aria-label="Remove {card.frontText}"
                                     title="Don't import this card"
-                                    onclick={() => removed.add(rowKey(card))}><Icon name="close" size={16} /></button
+                                    onclick={() => removed.add(removalKey(card))}><Icon name="close" size={16} /></button
                                 >
                             </td>
                         </tr>
