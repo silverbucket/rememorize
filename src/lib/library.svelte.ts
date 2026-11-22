@@ -138,9 +138,10 @@ export class Library {
     /**
      * Cards still on their way from storage, while a sync runs. Already
      * synced cards stay on this device, so a sync that stops (the app is
-     * closed or in the background) carries on from here next time.
+     * closed or in the background) carries on from here next time. Not
+     * counted until the cards already here have been read.
      */
-    toSync = $derived(this.syncing ? Math.max(0, this.listed - this.cards.length) : 0);
+    toSync = $derived(this.syncing && this.loaded ? Math.max(0, this.listed - this.cards.length) : 0);
 
     /** Every recorded review, oldest first. */
     log = $derived(
@@ -266,8 +267,9 @@ export class Library {
             this.offline = false;
         });
         rs.on("sync-started", () => {
+            // Said again as a sync starts more requests; one count per sync is enough.
+            if (!this.syncing) void this.#countListed();
             this.syncing = true;
-            void this.#countListed();
         });
         // A folder listing may have just arrived, and with it more cards to come.
         rs.on("sync-req-done", () => {

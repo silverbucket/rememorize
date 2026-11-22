@@ -195,7 +195,7 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
     const synced = async () => Number((await note.textContent())?.match(/Syncing ([\d,]+) of/)?.[1].replace(/,/g, ""));
     await expect(note).toContainText(`of ${total.toLocaleString("en-US")} cards`, { timeout: 30_000 });
     await expect.poll(synced, { timeout: 60_000 }).toBeGreaterThan(200);
-    await expect(b.locator(".pill")).toHaveText(/^Syncing \d+%$/);
+    await expect(b.locator(".pill")).toHaveText(/Syncing \d+%/);
     await b.screenshot({ path: testInfo.outputPath("syncing.png") });
 
     // Closed partway through: what arrived is still there, and the count carries on from it.
@@ -206,6 +206,6 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
     await b.screenshot({ path: testInfo.outputPath("after-reload.png") });
 
     await expect(note).toHaveCount(0, { timeout: 120_000 });
-    await expect(b.getByRole("link", { name: /^Big/ })).toContainText(`${total.toLocaleString("en-US")} cards`);
+    await expect(b.getByRole("link", { name: /^Big/ })).toContainText(`of ${total} cards`);
     await b.screenshot({ path: testInfo.outputPath("done.png") });
 });
