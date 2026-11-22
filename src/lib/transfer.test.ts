@@ -276,6 +276,9 @@ describe("planImport", () => {
         expect(sameText("byt’")).not.toBe(sameText("byt"));
         expect(sameText("こんにちは。")).toBe("こんにちは");
         expect(sameText("¿Qué tal?")).toBe("qué tal");
+        // Punctuation outside the Basic Multilingual Plane (U+10100 AEGEAN WORD SEPARATOR LINE).
+        expect(sameText("\u{10100}hello\u{10100}")).toBe("hello");
+        expect(sameText("😀 hi 😀")).toBe("😀 hi 😀");
         // Long runs of punctuation inside the text don't slow it down.
         const started = performance.now();
         expect(sameText(`a${"_".repeat(40_000)}b`)).toHaveLength(40_002);

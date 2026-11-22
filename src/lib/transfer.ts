@@ -262,8 +262,18 @@ export function sameText(text: string): string {
     // A loop rather than a regex anchored at the end, which slows to a crawl on long runs of punctuation.
     let start = 0;
     let end = normalized.length;
-    while (start < end && trimmable(normalized[start])) start += 1;
-    while (end > start && trimmable(normalized[end - 1])) end -= 1;
+    // By code point, so punctuation outside the Basic Multilingual Plane counts too.
+    while (start < end) {
+        const char = String.fromCodePoint(normalized.codePointAt(start) ?? 0);
+        if (!trimmable(char)) break;
+        start += char.length;
+    }
+    while (end > start) {
+        const low = normalized.charCodeAt(end - 1);
+        const size = low >= 0xdc00 && low <= 0xdfff && end - 2 >= start ? 2 : 1;
+        if (!trimmable(normalized.slice(end - size, end))) break;
+        end -= size;
+    }
     return normalized.slice(start, end);
 }
 
