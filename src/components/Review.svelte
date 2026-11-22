@@ -519,9 +519,13 @@
         <!-- Where to go next, apart from the summary and at the bottom of a phone's screen, like the answer buttons. -->
         <div class="done-actions">
             {#if waiting > 0}
-                <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>
-                    Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
-                </button>
+                {@const label = `Review ${plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}`}
+                <!-- Cards that came due during extra study are a review of their own, not another extra round. -->
+                {#if extra}
+                    <a class="btn primary" href={href.review(group, show, from)}>{label}</a>
+                {:else}
+                    <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>{label}</button>
+                {/if}
             {:else if nextGroup}
                 <!-- How much of the day is left, where the next step is taken. -->
                 <p class="muted left-today">
