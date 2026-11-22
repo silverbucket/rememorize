@@ -38,7 +38,7 @@
     let { group, show, from, extra = false }: { group?: string; show?: ViewId; from?: "home"; extra?: boolean } =
         $props();
 
-    /** How many cards one round of extra study takes, unless the review size says fewer. */
+    /** How many cards one round of extra study takes, unless the review size is smaller. */
     const EXTRA_CARDS = 20;
 
     const within = $derived(group ? library.cardsIn(group) : library.cards);
@@ -49,7 +49,7 @@
             .filter(Boolean)
             .join(" · "),
     );
-    const extraSize = $derived(library.cardsPerReview ?? EXTRA_CARDS);
+    const extraSize = $derived(Math.min(EXTRA_CARDS, library.cardsPerReview ?? EXTRA_CARDS));
 
     let queue: ReviewItem[] = $state([]);
     /** Cards rated Again, which come back in this review once they are due again, soonest first. */

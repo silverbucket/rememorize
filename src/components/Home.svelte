@@ -225,7 +225,7 @@
                     {#if group.due === 0 && group.fresh > 0}
                         <a
                             class="btn ghost small review"
-                            href={href.extra(group.name)}
+                            href={href.extra(group.name, undefined, "home")}
                             aria-label="Study extra cards in {group.name}"
                         >
                             Study extra
