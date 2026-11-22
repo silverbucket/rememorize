@@ -268,6 +268,10 @@ describe("planImport", () => {
         expect(sameText("byt’")).not.toBe(sameText("byt"));
         expect(sameText("こんにちは。")).toBe("こんにちは");
         expect(sameText("¿Qué tal?")).toBe("qué tal");
+        // Long runs of punctuation inside the text don't slow it down.
+        const started = performance.now();
+        expect(sameText(`a${"_".repeat(40_000)}b`)).toHaveLength(40_002);
+        expect(performance.now() - started).toBeLessThan(200);
     });
 
     it("doesn't count a restored card whose front and back match the one here", () => {

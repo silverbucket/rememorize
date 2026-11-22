@@ -251,11 +251,17 @@ export function parseDelimited(text: string, delimiter: string): string[][] {
  * around it don't count. Apostrophes do: "byt’" is byť (though), not byt (flat).
  */
 export function sameText(text: string): string {
-    return text
-        .normalize("NFC")
-        .toLocaleLowerCase()
-        .replace(/\s+/g, " ")
-        .replace(/^(?:(?!['‘’])[\s\p{P}])+|(?:(?!['‘’])[\s\p{P}])+$/gu, "");
+    const normalized = text.normalize("NFC").toLocaleLowerCase().replace(/\s+/g, " ");
+    // A loop rather than a regex anchored at the end, which slows to a crawl on long runs of punctuation.
+    let start = 0;
+    let end = normalized.length;
+    while (start < end && trimmable(normalized[start])) start += 1;
+    while (end > start && trimmable(normalized[end - 1])) end -= 1;
+    return normalized.slice(start, end);
+}
+
+function trimmable(char: string): boolean {
+    return !"'‘’".includes(char) && /[\s\p{P}]/u.test(char);
 }
 
 /**
