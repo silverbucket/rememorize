@@ -11,6 +11,7 @@
  *   #/review[/:group]      review due cards
  *
  * The card lists and the review take `?show=:view` to keep to one view (see `views.ts`).
+ * A review started from the home page says so with `?from=home`, and ends back there.
  *
  *   #/account              storage connection
  *   #/import[?from=settings]  import cards from a file (and where to go back to)
@@ -24,7 +25,7 @@ export type Route =
     | { name: "group"; group: string; show?: ViewId }
     | { name: "edit"; group: string; id: string }
     | { name: "new"; group?: string }
-    | { name: "review"; group?: string; show?: ViewId }
+    | { name: "review"; group?: string; show?: ViewId; from?: "home" }
     | { name: "account" }
     | { name: "import"; from?: "settings" }
     | { name: "stats" };
@@ -53,8 +54,10 @@ export function parseHash(hash: string): Route {
             const group = params.get("group") || undefined;
             return group ? { name: "new", group } : { name: "new" };
         }
-        case "review":
-            return a ? { name: "review", group: a, ...show } : { name: "review", ...show };
+        case "review": {
+            const from = params.get("from") === "home" ? { from: "home" as const } : {};
+            return a ? { name: "review", group: a, ...show, ...from } : { name: "review", ...show, ...from };
+        }
         case "account":
             return { name: "account" };
         case "import":
@@ -68,6 +71,11 @@ export function parseHash(hash: string): Route {
 
 const enc = encodeURIComponent;
 const shown = (show?: ViewId) => (show ? `?show=${show}` : "");
+/** A query string of the values that are set. */
+const query = (values: Record<string, string | undefined>) => {
+    const set = Object.entries(values).filter(([, value]) => value);
+    return set.length ? `?${set.map(([key, value]) => `${key}=${value}`).join("&")}` : "";
+};
 
 export const href = {
     home: () => "#/",
@@ -75,7 +83,8 @@ export const href = {
     group: (group: string, show?: ViewId) => `#/group/${enc(group)}${shown(show)}`,
     card: (group: string, id: string) => `#/card/${enc(group)}/${enc(id)}`,
     newCard: (group?: string) => (group ? `#/new?group=${enc(group)}` : "#/new"),
-    review: (group?: string, show?: ViewId) => `${group ? `#/review/${enc(group)}` : "#/review"}${shown(show)}`,
+    review: (group?: string, show?: ViewId, from?: "home") =>
+        `${group ? `#/review/${enc(group)}` : "#/review"}${query({ show, from })}`,
     account: () => "#/account",
     import: (from?: "settings") => (from ? `#/import?from=${from}` : "#/import"),
     stats: () => "#/stats",

@@ -48,17 +48,18 @@
 </script>
 
 <dialog
+    class="modal"
     bind:this={dialog}
     aria-labelledby="direction-title"
     onclose={onclose}
     oncancel={(e) => saving && e.preventDefault()}
     onclick={(e) => e.target === dialog && !saving && dialog?.close()}
 >
-    <div class="sheet">
-        <header>
+    <div class="modal-body">
+        <header class="modal-head">
             <h2 id="direction-title">Study {plural(cards.length, "card")}</h2>
             <button
-                class="btn ghost close"
+                class="btn ghost icon-only"
                 type="button"
                 aria-label="Close"
                 disabled={saving}
@@ -97,46 +98,6 @@
 </dialog>
 
 <style>
-    dialog {
-        width: min(26rem, calc(100vw - 2rem));
-        padding: 0;
-        border: 1px solid var(--border-strong);
-        border-radius: var(--radius-xl);
-        background: var(--surface);
-        color: var(--text);
-        box-shadow: var(--shadow);
-    }
-
-    dialog::backdrop {
-        background: oklch(0.2 0.02 160 / 0.35);
-    }
-
-    .sheet {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        padding: 1rem 1rem 1.25rem;
-    }
-
-    header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        padding-left: 0.25rem;
-    }
-
-    h2 {
-        font-family: var(--font-content);
-        font-size: 1.35rem;
-        font-weight: 560;
-    }
-
-    .close {
-        padding-inline: 0.6rem;
-        margin-right: -0.25rem;
-    }
-
     .about,
     .status {
         padding: 0 0.25rem;
@@ -214,20 +175,5 @@
 
     p.error[role="alert"] {
         margin: 0;
-    }
-
-    /* On a phone it comes up from the bottom, in reach of a thumb, like the move dialog. */
-    @media (max-width: 560px) {
-        dialog {
-            width: 100%;
-            max-width: none;
-            margin: auto 0 0;
-            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-            border-bottom: none;
-        }
-
-        .sheet {
-            padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
-        }
     }
 </style>

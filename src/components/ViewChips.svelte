@@ -7,14 +7,11 @@
         cards,
         active,
         link,
-        oneLine = false,
     }: {
         cards: Flashcard[];
         /** The view being shown, or "all" for every card. Leave out where no list is showing. */
         active?: ViewId | "all";
         link: (show?: ViewId) => string;
-        /** On a phone, keep to one row that scrolls sideways instead of wrapping. */
-        oneLine?: boolean;
     } = $props();
 
     const counts = $derived(viewCounts(cards, library.now));
@@ -23,7 +20,7 @@
 </script>
 
 {#if cards.length > 0}
-    <nav class="views" class:one-line={oneLine} aria-label="Views">
+    <nav class="views" aria-label="Views">
         <a href={link()} aria-current={active === "all" ? "page" : undefined}>
             All <span class="n">{cards.length}</span>
         </a>
@@ -79,13 +76,18 @@
     }
 
     @media (max-width: 560px) {
-        /* Runs to the edges of the screen, so a chip cut off there shows there are more. */
-        .one-line {
+        /* One row that scrolls sideways. A chip cut off at the edge shows there are more. */
+        .views {
             flex-wrap: nowrap;
             overflow-x: auto;
-            margin-inline: -1rem;
-            padding-inline: 1rem;
             scrollbar-width: none;
+            /* Fades out at the end it scrolls towards, where the next chip is waiting. */
+            mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+            padding-right: 1.5rem;
+        }
+
+        .views::-webkit-scrollbar {
+            display: none;
         }
     }
 </style>

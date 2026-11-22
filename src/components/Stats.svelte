@@ -320,7 +320,7 @@
                     <li class:new={busiestDay.key === today}>
                         {#if busiestDay.key === today}<span class="pill">Today</span>{/if}
                         <strong>{count.format(busiestDay.reviews)}</strong>
-                        <span>Most reviews in a day · {shortDay.format(fromKey(busiestDay.key))}</span>
+                        <span>Most reviews in a day, on {shortDay.format(fromKey(busiestDay.key))}</span>
                     </li>
                 {/if}
                 <li>
@@ -334,19 +334,19 @@
                 {#if streakNext}
                     <li class="goal">
                         <strong>{plural(streakNext, "day")}</strong>
-                        <span>Streak · {streakNext - currentStreak} to go</span>
+                        <span>Next streak goal, {streakNext - currentStreak} to go</span>
                     </li>
                 {/if}
                 {#if reviewsNext}
                     <li class="goal">
                         <strong>{count.format(reviewsNext)}</strong>
-                        <span>Reviews · {count.format(reviewsNext - log.length)} to go</span>
+                        <span>Next review goal, {count.format(reviewsNext - log.length)} to go</span>
                     </li>
                 {/if}
                 {#if longTermNext}
                     <li class="goal">
                         <strong>{count.format(longTermNext)}</strong>
-                        <span>Long-term cards · {longTermNext - longTerm} to go</span>
+                        <span>Next long-term goal, {longTermNext - longTerm} to go</span>
                     </li>
                 {/if}
             </ul>
@@ -939,10 +939,8 @@
         position: absolute;
         top: 0.6rem;
         right: 0.7rem;
-        font-size: 0.68rem;
+        font-size: 0.75rem;
         font-weight: 650;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
         color: var(--accent-text);
     }
 

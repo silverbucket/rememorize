@@ -30,7 +30,8 @@
     import { inView, labelOf, type ViewId } from "../lib/views";
     import Icon from "./Icon.svelte";
 
-    let { group, show }: { group?: string; show?: ViewId } = $props();
+    /** `from` says the review was started on the home page, which is then where it ends. */
+    let { group, show, from }: { group?: string; show?: ViewId; from?: "home" } = $props();
 
     const within = $derived(group ? library.cardsIn(group) : library.cards);
     const scope = $derived(show ? within.filter((c) => inView(c, show, library.now)) : within);
@@ -78,10 +79,21 @@
     const revealed = $derived(currentKey !== "" && revealedFor === currentKey);
     const showHint = $derived(currentKey !== "" && hintFor === currentKey);
     const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt, reverse) : undefined);
-    const back = $derived(group ? href.group(group, show) : show ? href.cards(show) : href.home());
+    const back = $derived(
+        from === "home" ? href.home() : group ? href.group(group, show) : show ? href.cards(show) : href.cards(),
+    );
+    /** Where `back` leads, for its label. */
+    const backName = $derived(from === "home" ? "your cards" : (group ?? "all cards"));
     const held = $derived(heldUntilTomorrow(scope, library.now));
     /** Cards still due once this review is over: they didn't fit in it, and can make the next one. */
     const waiting = $derived(live.length === 0 ? library.todayIn(scope, library.now).length : 0);
+    /**
+     * The group to carry on with once this one is done: a review keeps to one group,
+     * and the next one is a tap away. Not offered from a view, which is a review of its own kind.
+     */
+    const nextGroup = $derived(
+        group !== undefined && !show && live.length === 0 ? library.ready.find((g) => g.name !== group) : undefined,
+    );
     /** How far through the session: ratings given, out of those plus what is left. */
     const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
     const dueAt = (i: ReviewItem) => new Date(stateOf(i.card, i.reverse)?.due ?? 0).getTime();
@@ -287,7 +299,8 @@
 <div class="review">
     <div class="session">
         <a class="btn ghost end" href={back} aria-label="End review" title="End review"><Icon name="close" /></a>
-        <h1>Review{title ? `: ${title}` : ""}</h1>
+        <!-- The bar is short on a phone: it shows what is being reviewed, and says "Review" to a screen reader. -->
+        <h1>{#if title}<span class="visually-hidden">Review: </span>{title}{:else}Review{/if}</h1>
         <div class="head-side">
             {#if last}
                 <button class="btn ghost undo" type="button" onclick={undo} disabled={busy}>
@@ -319,7 +332,13 @@
                     <!-- The question ends at a fixed line and the answer starts below it, so showing the answer moves nothing. -->
                     <div class="faces">
                         <div class="asked">
-                            {#if reverse}<span class="direction">Back → front</span>{/if}
+                            <!-- Across groups, each card says which one it is from. -->
+                            {#if !group || reverse}
+                                <span class="tags">
+                                    {#if !group}<span class="tag content">{current.group}</span>{/if}
+                                    {#if reverse}<span class="tag">Back → front</span>{/if}
+                                </span>
+                            {/if}
                             <div class="side front content {sizeOf(question)}">{question}</div>
                         </div>
                         <hr class:shown={revealed} />
@@ -405,7 +424,7 @@
                     Carry on now or come back later: they stay due, and a few hours makes little difference to how
                     well you remember them.
                 </p>
-            {:else if library.newWaiting > 0}
+            {:else if library.newWaiting > 0 && !nextGroup}
                 <p class="muted">
                     {plural(library.newWaiting, "more new card")} waiting: you've started {library.startedToday} of
                     {library.newPerDay} new cards for today.
@@ -420,15 +439,29 @@
             {#if nextDue(scope, library.now) && library.newWaiting === 0 && waiting === 0 && held === 0 && !comesBack}
                 <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
             {/if}
+            {#if nextGroup && waiting === 0}
+                <p class="next-up">
+                    Next up: <strong class="content">{nextGroup.name}</strong>, with
+                    {plural(nextGroup.due, "card")} to review.
+                </p>
+            {/if}
             <div class="done-actions">
                 {#if waiting > 0}
                     <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>
                         Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
                     </button>
+                {:else if nextGroup}
+                    <a
+                        class="btn primary"
+                        href={href.review(nextGroup.name, undefined, from)}
+                        aria-label="Review {nextGroup.name}, {plural(nextGroup.due, 'card')}"
+                    >
+                        Review {nextGroup.name}
+                    </a>
                 {/if}
-                <a class="btn" class:primary={waiting === 0} href={back}>Back to {group ?? "your cards"}</a>
+                <a class="btn" class:primary={waiting === 0 && !nextGroup} href={back}>Back to {backName}</a>
                 {#if reviewed > 0}
-                    <a class="btn" href={href.stats()}>See your progress</a>
+                    <a class="btn ghost" href={href.stats()}>See your progress</a>
                 {/if}
             </div>
         </div>
@@ -614,13 +647,22 @@
         }
     }
 
-    .direction {
+    .tags {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.35rem;
+    }
+
+    .tag {
         padding: 0.15rem 0.7rem;
         border-radius: 999px;
         background: var(--surface-2);
         color: var(--text-muted);
+        font-family: var(--font-ui);
         font-size: 0.82rem;
         font-weight: 500;
+        line-height: 1.5;
     }
 
     .side {
@@ -881,6 +923,17 @@
     .win-icon.flame {
         background: color-mix(in oklab, var(--hard) 16%, transparent);
         color: var(--hard);
+    }
+
+    .next-up {
+        width: 100%;
+        padding: 0.7rem 0.9rem;
+        border-radius: var(--radius);
+        background: var(--accent-subtle);
+    }
+
+    .next-up strong {
+        font-weight: 600;
     }
 
     .done-actions {

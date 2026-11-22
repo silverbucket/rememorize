@@ -111,6 +111,16 @@ describe("Library", () => {
         expect(library.groups).toEqual([{ name: "one", total: 2, due: 2, reviews: 1, fresh: 1 }]);
     });
 
+    it("offers the groups with something to review, the ones with reviews due first", async () => {
+        const old = await library.save({ frontText: "a", backText: "a", group: "zebra" });
+        await library.save({ frontText: "b", backText: "b", group: "apple" });
+        const done = await library.save({ frontText: "c", backText: "c", group: "mango" });
+        await library.review(old, 3, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+        await library.review(done, 4);
+        // "mango" was studied just now and has nothing left; "zebra" has a review due, "apple" only a new card.
+        expect(library.ready.map((g) => g.name)).toEqual(["zebra", "apple"]);
+    });
+
     it("counts the unstudied side of a two-way card as new, in the queue's units", async () => {
         library.newPerDay = 1;
         const yesterday = new Date(2026, 4, 1, 12);

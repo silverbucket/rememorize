@@ -153,6 +153,16 @@ export class Library {
             .sort((a, b) => a.name.localeCompare(b.name));
     });
 
+    /**
+     * Groups with something to review now, in the order they are offered: the ones
+     * with reviews due first, then the ones with only new cards to start.
+     */
+    ready: GroupSummary[] = $derived(
+        this.groups
+            .filter((g) => g.due > 0)
+            .sort((a, b) => Number(b.reviews > 0) - Number(a.reviews > 0) || a.name.localeCompare(b.name)),
+    );
+
     /** Cards that a review of everything would show now (new cards capped). */
     dueCount = $derived(this.dueIn(this.cards).length);
 

@@ -5,22 +5,38 @@
     import { library } from "../lib/state";
     import { lastDays, streak } from "../lib/stats";
     import Icon from "./Icon.svelte";
-    import ViewChips from "./ViewChips.svelte";
 
-    /** One review's worth; `today` is everything due, however many reviews it takes. */
-    const queue = $derived(library.dueIn(library.cards));
+    /** Everything due today, however many reviews it takes. */
     const today = $derived(library.todayIn(library.cards));
     const fresh = $derived(today.filter((i) => isNew(i.card, i.reverse)).length);
+    const reviews = $derived(today.length - fresh);
     const next = $derived(nextDue(library.cards, library.now));
     const days = $derived(streak(library.log, library.now));
     const reviewedToday = $derived(lastDays(library.log, library.now, 1)[0].reviews);
 
-    /** "20 new · 10 reviews", leaving out whichever is zero. New first: that's the number the daily limit sets. */
-    const breakdown = $derived(
-        [fresh > 0 ? `${fresh} new` : "", today.length > fresh ? plural(today.length - fresh, "review") : ""]
+    /**
+     * A review keeps to one group: groups can have nothing to do with each other.
+     * The ones with something to review come first, and the button starts with the top one.
+     */
+    const ready = $derived(library.ready);
+    const rest = $derived(library.groups.filter((g) => g.due === 0));
+    const first = $derived(ready[0]);
+
+    /** "3 new and 18 reviews across 4 groups", leaving out whichever is zero. */
+    const breakdown = $derived.by(() => {
+        const kinds = [
+            fresh > 0 ? (reviews > 0 ? `${fresh} new` : plural(fresh, "new card")) : "",
+            reviews > 0 ? plural(reviews, "review") : "",
+        ]
             .filter(Boolean)
-            .join(" · "),
-    );
+            .join(" and ");
+        const where = ready.length === 1 ? `in ${ready[0].name}` : `across ${ready.length} groups`;
+        const size = library.cardsPerReview;
+        return `${kinds} ${where}${size !== null && today.length > size ? `, ${size} at a time` : ""}`;
+    });
+
+    /** When a group with nothing due comes up next. */
+    const nextIn = (group: string) => nextDue(library.cardsIn(group), library.now);
 </script>
 
 <div class="page-head">
@@ -60,63 +76,100 @@
         </div>
     </div>
 {:else}
-    <section class="panel today" aria-label="Today">
-        <div class="today-text">
-            {#if queue.length > 0}
-                <!-- The split leads: a total of new plus reviews read as if the new-card limit were ignored. -->
-                <p class="headline">{breakdown}</p>
-                <p class="muted">
-                    {plural(today.length, "card")} to study today{#if queue.length < today.length}, {queue.length} at a
-                        time{/if}
-                </p>
-            {:else}
-                <p class="headline">You're all caught up</p>
-                <p class="muted">
-                    {#if library.newWaiting > 0}
-                        {plural(library.newWaiting, "new card")} waiting for tomorrow.
-                    {:else if next}
-                        The next card is due {fromNow(next.toISOString(), library.now)}.
-                    {:else}
-                        Nothing is scheduled yet.
-                    {/if}
-                </p>
-            {/if}
-        </div>
-        {#if queue.length > 0}
-            <a class="btn primary large" href={href.review()}>Review {plural(queue.length, "card")}</a>
-        {/if}
-        <ul class="facts">
-            <li class:lit={days > 0}><Icon name="flame" size={18} />{plural(days, "day")} in a row</li>
-            <li class:lit={reviewedToday > 0}><Icon name="check" size={18} />{reviewedToday} reviewed today</li>
-        </ul>
-    </section>
-
-    <h2 class="section">All cards</h2>
-    <ViewChips cards={library.cards} link={href.cards} oneLine />
-
-    <h2 class="section groups-head">Groups</h2>
-    <ul class="groups rows">
-        {#each library.groups as group (group.name)}
-            <li>
-                <a class="group" href={href.group(group.name)}>
-                    <span class="about">
-                        <span class="name content">{group.name}</span>
-                        <span class="count muted">{plural(group.total, "card")}</span>
-                    </span>
-                    <!-- Due counts only reviews, so the groups add up to the total above; new cards are counted apart. -->
-                    <span class="due">
-                        {#if group.reviews > 0}
-                            <span class="badge" title="Due for review">{group.reviews} due</span>
+    <!-- Today's cards as a deck: the top card says what is due, with the rest of the pile showing under it. -->
+    <div class="stage" class:two={ready.length > 0} class:three={today.length > 1}>
+        <section class="panel today" aria-label="Today">
+            <div class="today-text">
+                {#if first}
+                    <p class="headline">{plural(today.length, "card")} to study today</p>
+                    <p class="muted">{breakdown}</p>
+                {:else}
+                    <p class="headline">You're all caught up</p>
+                    <p class="muted">
+                        {#if library.newWaiting > 0}
+                            {plural(library.newWaiting, "new card")} waiting for tomorrow.
+                        {:else if next}
+                            The next card is due {fromNow(next.toISOString(), library.now)}.
+                        {:else}
+                            Nothing is scheduled yet.
                         {/if}
-                        {#if group.fresh > 0}
-                            <span class="badge fresh" title="Not started yet">{group.fresh} new</span>
-                        {/if}
-                    </span>
-                    <span class="go"><Icon name="chevron" size={18} /></span>
+                    </p>
+                {/if}
+            </div>
+            {#if first}
+                <a
+                    class="btn primary large start"
+                    href={href.review(first.name, undefined, "home")}
+                    aria-label="Review {first.name}, {plural(first.due, 'card')}"
+                >
+                    <span class="what">Review {first.name}</span>
+                    <span class="n">{first.due}</span>
                 </a>
-            </li>
-        {/each}
-    </ul>
+            {/if}
+            <ul class="facts">
+                <li class:lit={days > 0}><Icon name="flame" size={18} />{plural(days, "day")} in a row</li>
+                <li class:lit={reviewedToday > 0}><Icon name="check" size={18} />{reviewedToday} reviewed today</li>
+            </ul>
+        </section>
+    </div>
+
+    {#if ready.length > 0}
+        <h2 class="section-label">Ready to review</h2>
+        <ul class="groups rows">
+            {#each ready as group (group.name)}
+                <li class="row">
+                    <a class="group" href={href.group(group.name)}>
+                        <span class="name content">{group.name}</span>
+                        <!-- Due counts only reviews; new cards are counted apart, as the daily limit decides how many start. -->
+                        <span class="meta">
+                            {plural(group.total, "card")}{#if group.reviews > 0}, <span class="due"
+                                    >{group.reviews} due</span
+                                >{/if}{#if group.fresh > 0}, <span class="fresh">{group.fresh} new</span>{/if}
+                        </span>
+                    </a>
+                    <a
+                        class="btn tonal small review"
+                        href={href.review(group.name, undefined, "home")}
+                        aria-label="Review {group.name}, {plural(group.due, 'card')}"
+                    >
+                        Review <span class="n">{group.due}</span>
+                    </a>
+                    <span class="go" aria-hidden="true"><Icon name="chevron" size={18} /></span>
+                </li>
+            {/each}
+        </ul>
+    {/if}
+
+    {#if rest.length > 0}
+        <h2 class="section-label">{ready.length > 0 ? "Up to date" : "Groups"}</h2>
+        <ul class="groups rows">
+            {#each rest as group (group.name)}
+                {@const due = nextIn(group.name)}
+                <li class="row">
+                    <a class="group" href={href.group(group.name)}>
+                        <span class="name content">{group.name}</span>
+                        <span class="meta">
+                            {plural(group.total, "card")}{#if group.fresh > 0}, <span class="fresh">{group.fresh} new</span>{/if}{#if due}, next
+                                review {fromNow(due.toISOString(), library.now)}{/if}
+                        </span>
+                    </a>
+                    <span class="go" aria-hidden="true"><Icon name="chevron" size={18} /></span>
+                </li>
+            {/each}
+        </ul>
+    {/if}
+
+    <!-- Every card in one list, whatever its group: for finding one, or studying a slice of them all. -->
+    <a class="all" href={href.cards()}>
+        <span class="all-mark"><Icon name="cards" size={20} /></span>
+        <span class="all-text">
+            <span class="all-name">All cards</span>
+            <span class="meta">Search, filter and review across every group</span>
+        </span>
+        <span class="count">{library.cards.length}</span>
+        <span class="go" aria-hidden="true"><Icon name="chevron" size={18} /></span>
+    </a>
+
     {#if library.status === "local"}
         <p class="muted hint">
             Saved in this browser only. <a href={href.account()}>Connect storage</a> to sync across devices.
@@ -180,24 +233,99 @@
         box-shadow: var(--shadow);
     }
 
+    /* The same pile as the review's: the cards under the top one show while there is something to study. */
+    .stage {
+        position: relative;
+        transition: margin-bottom 200ms;
+    }
+
+    .stage.two {
+        margin-bottom: 0.625rem;
+    }
+
+    .stage.three {
+        margin-bottom: 1.25rem;
+    }
+
+    .stage::before,
+    .stage::after {
+        content: "";
+        position: absolute;
+        height: 4rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-sm);
+        opacity: 0;
+        transition: opacity 200ms;
+    }
+
+    .stage::after {
+        inset: auto 0.875rem -0.625rem;
+        background: color-mix(in oklab, var(--surface) 70%, var(--bg));
+    }
+
+    .stage::before {
+        inset: auto 1.75rem -1.25rem;
+        background: color-mix(in oklab, var(--surface) 40%, var(--bg));
+    }
+
+    .stage.two::after,
+    .stage.three::before {
+        opacity: 1;
+    }
+
     .today {
+        position: relative;
+        z-index: 1;
         display: grid;
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
-        gap: 1rem 1.5rem;
-        padding: 1.5rem;
+        gap: 1.1rem 1.5rem;
+        padding: 1.6rem 1.6rem 1.1rem;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow);
     }
 
     .headline {
         font-family: var(--font-content);
-        font-size: clamp(1.5rem, 1.25rem + 1vw, 1.85rem);
+        font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2rem);
         font-weight: 540;
         line-height: 1.15;
-        letter-spacing: -0.01em;
+        letter-spacing: -0.012em;
+        text-wrap: balance;
     }
 
     .today-text .muted {
-        margin-top: 0.3rem;
+        margin-top: 0.35rem;
+        overflow-wrap: anywhere;
+    }
+
+    /* The group's name gives way before the button outgrows its place. */
+    .start {
+        gap: 0.7rem;
+        min-width: 0;
+        max-width: 22rem;
+        padding-right: 1rem;
+    }
+
+    .what {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .n {
+        font-variant-numeric: tabular-nums;
+    }
+
+    .start .n {
+        flex: none;
+        min-width: 1.75rem;
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--primary-ink) 18%, transparent);
+        font-size: 0.925rem;
+        text-align: center;
     }
 
     .facts {
@@ -227,30 +355,59 @@
         color: var(--accent-text);
     }
 
-    .section {
-        margin: 2rem 0 0.75rem;
-        color: var(--text-muted);
-        font-size: 0.925rem;
-        font-weight: 600;
+    /* The whole row opens the group; the button on it starts the group's review. */
+    .row {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 4.25rem;
+        padding: 0.75rem 0.75rem 0.75rem 1.25rem;
+        transition: background-color 120ms;
     }
 
-    /* The chips above already leave a gap. */
-    .groups-head {
-        margin-top: 1.1rem;
+    @media (hover: hover) {
+        .row:hover {
+            background: var(--surface-2);
+        }
+
+        .rows .row .group:hover {
+            background: none;
+        }
     }
 
     .group {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
-        align-items: center;
-        gap: 1rem;
-        min-height: 4.25rem;
-        padding: 0.75rem 0.75rem 0.75rem 1.25rem;
+        gap: 0.1rem;
     }
 
-    .about {
-        display: grid;
-        gap: 0.1rem;
+    .group::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+    }
+
+    .group:focus-visible {
+        outline: none;
+    }
+
+    .group:focus-visible::after {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+        border-radius: inherit;
+    }
+
+    .rows .row:first-child .group::after {
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .rows .row:last-child .group::after {
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+
+    .rows .row:only-child .group::after {
+        border-radius: var(--radius-lg);
     }
 
     .name {
@@ -259,24 +416,80 @@
         overflow-wrap: anywhere;
     }
 
-    .count {
+    .meta {
+        color: var(--text-muted);
         font-size: 0.875rem;
     }
 
     .due {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 0.3rem;
+        color: var(--accent-text);
+        font-weight: 650;
     }
 
-    .fresh {
+    .review {
+        position: relative;
+        z-index: 1;
+        gap: 0.4rem;
+        border-radius: 999px;
+    }
+
+    .review .n {
+        font-weight: 700;
+    }
+
+    .go {
+        display: grid;
+        place-items: center;
+        color: var(--text-faint);
+    }
+
+    .all {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 0.5rem 0.9rem;
+        margin-top: 2rem;
+        padding: 0.75rem 0.75rem 0.75rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        color: var(--text);
+        text-decoration: none;
+        transition:
+            background-color 120ms,
+            border-color 120ms;
+    }
+
+    @media (hover: hover) {
+        .all:hover {
+            background: var(--surface);
+            border-color: var(--border-strong);
+        }
+    }
+
+    .all-mark {
+        display: grid;
+        place-items: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius);
         background: var(--surface-2);
         color: var(--text-muted);
     }
 
-    .go {
-        color: var(--text-faint);
+    .all-text {
+        display: grid;
+        gap: 0.05rem;
+    }
+
+    .all-name {
+        font-weight: 620;
+    }
+
+    .count {
+        color: var(--text-muted);
+        font-size: 0.925rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
     }
 
     .hint {
@@ -286,16 +499,16 @@
 
     @media (max-width: 560px) {
         .today {
-            grid-template-columns: 1fr;
-            padding: 1.25rem;
+            grid-template-columns: minmax(0, 1fr);
+            padding: 1.35rem 1.25rem 1rem;
         }
 
-        .today .btn {
+        .start {
+            max-width: none;
             width: 100%;
         }
 
-        .group {
-            gap: 0.6rem;
+        .row {
             padding-left: 1rem;
         }
 

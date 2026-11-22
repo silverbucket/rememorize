@@ -7,7 +7,8 @@
  * several months of reviews through the real UI (with the page's clock moved
  * forward a day at a time) so the statistics look lived-in. It then captures
  * each page in light and dark and frames the captures as a browser window and
- * a phone.
+ * a phone. Every capture is kept in node_modules/.cache/rememorize-screenshots/raw,
+ * the README's and the rest, to look over after a change to the design.
  *
  * The run is seeded, so the same build gives the same history; only the dates
  * move, because the history always ends today.
@@ -18,7 +19,7 @@
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -29,6 +30,8 @@ const CACHE = join(ROOT, "node_modules/.cache/rememorize-screenshots");
 const RAW = join(CACHE, "raw");
 /** The seeded browser profile and what it synced, kept so REUSE=1 can capture again without replaying. */
 const PROFILE = join(CACHE, "profile");
+/** A copy of the profile for the captures that change the cards for good. Thrown away after. */
+const SPARE = join(CACHE, "spare");
 const STORED = join(CACHE, "storage.json");
 const REUSE = process.env.REUSE === "1" && existsSync(PROFILE) && existsSync(STORED);
 const PORT = Number(process.env.SCREENSHOT_PORT || 4318);
@@ -41,6 +44,9 @@ const STORAGE = "https://rs.example";
 const DAYS = 372;
 const NEW_PER_DAY = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Pages longer than a screen, captured whole as well. */
+const LONG = ["home", "stats", "settings", "card"];
 
 const DESKTOP = { width: 1040, height: 740 };
 const PHONE = { width: 390, height: 780 };
@@ -273,11 +279,11 @@ async function seed(page, today) {
  * the storage API for ADDRESS, answered from memory. Lets the screenshots show
  * a connected, synced app without a server to run or an account to sign in to.
  */
-async function mockStorage(context) {
+async function mockStorage(context, stored = REUSE) {
     /** path → { body, type, etag } */
     const files = new Map();
     let version = 0;
-    if (REUSE) {
+    if (stored) {
         for (const [path, file] of JSON.parse(readFileSync(STORED, "utf-8"))) {
             files.set(path, { ...file, body: Buffer.from(file.body, "base64") });
             version = Math.max(version, Number(file.etag));
@@ -416,29 +422,41 @@ function keepStorage(files) {
 // ---------------------------------------------------------------------------
 // Capture
 
+/** Capture what the page shows, in dark and in light. `connected` is false where there is no account to wait for. */
+async function shoot(page, name, connected = true) {
+    for (const scheme of ["dark", "light"]) {
+        await page.emulateMedia({ colorScheme: scheme });
+        if (connected) await synced(page);
+        // Colours ease from one theme to the other; wait for them to settle.
+        await page.waitForTimeout(250);
+        await page.screenshot({ path: join(RAW, `${name}-${scheme}.png`) });
+    }
+}
+
+/**
+ * Size the page as a desktop or a phone, and run `each` for both.
+ * A phone has no hover, which hides the key hints: touch is emulated for those captures.
+ */
+async function onEachDevice(page, each) {
+    const devtools = await page.context().newCDPSession(page);
+    for (const [device, viewport] of Object.entries({ desktop: DESKTOP, phone: PHONE })) {
+        await page.setViewportSize(viewport);
+        await devtools.send("Emulation.setTouchEmulationEnabled", { enabled: device === "phone", maxTouchPoints: 5 });
+        await each(device);
+    }
+}
+
 async function capture(page) {
     rmSync(RAW, { recursive: true, force: true });
     mkdirSync(RAW, { recursive: true });
     await page.goto(`${BASE}/`);
     const now = await page.evaluate(() => Date.now());
-    // A phone has no hover, which hides the key hints: emulate touch for those captures.
-    const devtools = await page.context().newCDPSession(page);
-
-    const shoot = async (name) => {
-        for (const scheme of ["dark", "light"]) {
-            await page.emulateMedia({ colorScheme: scheme });
-            await synced(page);
-            // Colours ease from one theme to the other; wait for them to settle.
-            await page.waitForTimeout(250);
-            await page.screenshot({ path: join(RAW, `${name}-${scheme}.png`) });
-        }
-    };
 
     // Review Spanish if any of it is due today; otherwise everything.
     await page.goto(`${BASE}/?t=${now}#/`);
     await page.locator(".groups li").first().waitFor();
-    const due = await page.locator(".groups li:has(.badge:not(.fresh)) .name").allTextContents();
-    const reviewHash = due.includes("Spanish") ? "/review/Spanish" : "/review";
+    const due = await page.locator(".groups li:has(.review) .name").allTextContents();
+    const reviewHash = due.includes("Spanish") ? "/review/Spanish" : `/review/${encodeURIComponent(due[0])}`;
 
     const pages = {
         home: async () => {
@@ -492,20 +510,90 @@ async function capture(page) {
             await page.goto(`${BASE}/?t=${now}#/account`);
             await page.getByLabel("New cards per day").waitFor();
         },
+        // The rest are not in the README: they are here to be looked over.
+        cards: async () => {
+            await page.goto(`${BASE}/?t=${now}#/cards`);
+            await page.locator(".cards li").first().waitFor();
+        },
+        "group-settings": async () => {
+            await pages.group();
+            await page.getByRole("button", { name: "Group settings" }).click();
+            await page.getByLabel("New cards here").waitFor();
+            return () => page.keyboard.press("Escape");
+        },
+        select: async () => {
+            await pages.group();
+            await page.getByRole("button", { name: "Select" }).click();
+            for (const row of [0, 1, 3]) await page.locator(".cards li button").nth(row).click();
+            return () => page.keyboard.press("Escape");
+        },
+        new: async () => {
+            await page.goto(`${BASE}/?t=${now}#/new?group=Spanish`);
+            await page.getByLabel("Front").fill("la madrugada");
+            await page.getByLabel("Back").fill("the small hours");
+            await page.getByLabel("Back").blur();
+        },
+        import: async () => {
+            await page.goto(`${BASE}/?t=${now}#/import`);
+            await page.getByLabel("File").waitFor();
+        },
     };
 
-    for (const [device, viewport] of Object.entries({ desktop: DESKTOP, phone: PHONE })) {
-        await page.setViewportSize(viewport);
-        await devtools.send("Emulation.setTouchEmulationEnabled", { enabled: device === "phone", maxTouchPoints: 5 });
+    await onEachDevice(page, async (device) => {
         for (const [name, open] of Object.entries(pages)) {
             const restore = await open();
             await page.mouse.move(0, 0);
             // Let the card's entrance and the answer's reveal finish.
             await page.waitForTimeout(350);
-            await shoot(`${device}-${name}`);
+            await shoot(page, `${device}-${name}`);
+            if (LONG.includes(name)) {
+                // The whole page, top to bottom: a window as tall as the page, so the bars stay at its edges.
+                const viewport = page.viewportSize();
+                const height = await page.evaluate(() => document.documentElement.scrollHeight);
+                await page.setViewportSize({ width: viewport.width, height });
+                await shoot(page, `${device}-${name}-full`);
+                await page.setViewportSize(viewport);
+            }
             await restore?.();
         }
+    });
+}
+
+/**
+ * The end of a review. Finishing one can't be taken back, so this runs on a
+ * copy of the profile, against a copy of what was synced.
+ */
+async function captureDone(options) {
+    rmSync(SPARE, { recursive: true, force: true });
+    cpSync(PROFILE, SPARE, { recursive: true });
+    const context = await chromium.launchPersistentContext(SPARE, options);
+    try {
+        await context.addInitScript(fakeClock);
+        await mockStorage(context, true);
+        const page = context.pages()[0] ?? (await context.newPage());
+        await page.goto(`${BASE}/`);
+        const now = await page.evaluate(() => Date.now());
+        await page.goto(`${BASE}/?t=${now}#/`);
+        await page.locator(".today .start").click();
+        const rolls = Array.from({ length: 97 }, () => [random(), 0, random()]);
+        await page.evaluate(reviewSession, { limit: 400, rolls, accuracy: ACCURACY });
+        await page.locator(".panel.done").waitFor();
+        await onEachDevice(page, (device) => shoot(page, `${device}-done`));
+    } finally {
+        await context.close();
+        rmSync(SPARE, { recursive: true, force: true });
     }
+}
+
+/** The app before anything is in it: a browser that has never opened it. */
+async function captureEmpty(browser) {
+    const context = await browser.newContext({ deviceScaleFactor: 2, locale: "en-US", serviceWorkers: "block" });
+    const page = await context.newPage();
+    await page.goto(`${BASE}/`);
+    await page.getByText("No cards yet").waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    await onEachDevice(page, (device) => shoot(page, `${device}-empty`, false));
+    await context.close();
 }
 
 // ---------------------------------------------------------------------------
@@ -607,7 +695,7 @@ try {
     if (process.env.FRAME_ONLY !== "1") {
         if (!REUSE) rmSync(PROFILE, { recursive: true, force: true });
         // A profile on disk, so the replayed history outlives the run (see REUSE above).
-        const context = await chromium.launchPersistentContext(PROFILE, {
+        const options = {
             channel,
             viewport: DESKTOP,
             deviceScaleFactor: 2,
@@ -615,7 +703,8 @@ try {
             timezoneId: "Europe/Berlin",
             // The fake clock would confuse nothing in the worker, but there is no need for it either.
             serviceWorkers: "block",
-        });
+        };
+        const context = await chromium.launchPersistentContext(PROFILE, options);
         await context.addInitScript(fakeClock);
         const files = await mockStorage(context);
         const page = context.pages()[0] ?? (await context.newPage());
@@ -635,6 +724,8 @@ try {
         // After the captures: one of them rates a card and takes it back, which the storage saw.
         keepStorage(files);
         await context.close();
+        await captureDone(options);
+        await captureEmpty(browser);
     }
     await frame(browser);
     console.log(`Wrote ${Object.keys(LAYOUTS).length * 2} images to ${OUT}`);

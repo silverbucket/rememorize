@@ -47,6 +47,9 @@ devices.
   cards without a connection.
 - **Made for a phone.** A review fills the screen, the answer buttons sit
   under your thumb, and a tap on the card shows the answer.
+- **One subject at a time.** A review keeps to one group, so Spanish verbs
+  don't arrive between chemical elements. When it ends, the next group that
+  has cards due is one tap away.
 - **Your own storage.** Link a remoteStorage account and your cards sync
   across all your devices. Without one, they stay in your browser.
 - **Reminders.** A notification when cards are due, even while the app is

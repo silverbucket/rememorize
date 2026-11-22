@@ -17,10 +17,11 @@
     import { fromNow, plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { isBuried, isDue, isNew, itemsOf, nextDue, stateOf } from "../lib/scheduler";
-    import { DIRECTION_LABELS, isDirection } from "../lib/settings";
+    import { DIRECTION_LABELS } from "../lib/settings";
     import { library } from "../lib/state";
     import { inView, labelOf, type ViewId } from "../lib/views";
     import DirectionDialog from "./DirectionDialog.svelte";
+    import GroupSettings from "./GroupSettings.svelte";
     import Icon from "./Icon.svelte";
     import MoveDialog from "./MoveDialog.svelte";
     import ViewChips from "./ViewChips.svelte";
@@ -71,8 +72,9 @@
         if (due.length > 0) return { text: "tomorrow", due: false };
         return { text: fromNow(nextDue([card], library.now)?.toISOString(), library.now), due: false };
     }
-    let deleting = $state(false);
     let error = $state("");
+    /** The group's own settings (its name, its direction, deleting it) are open. */
+    let settings = $state(false);
 
     /** Picking cards to move. A card is known by its group and id, as it is stored. */
     const keyOf = (card: Flashcard) => `${card.group}/${card["@id"]}`;
@@ -175,49 +177,6 @@
         }
     }
 
-    /**
-     * The group's own direction for new cards. Once it changes, the cards
-     * already here that are studied another way can be brought in line.
-     */
-    const ownDirection = $derived(
-        group !== undefined && Object.hasOwn(library.groupDirections, group) ? library.groupDirections[group] : undefined,
-    );
-    const groupDirection = $derived(group === undefined ? library.direction : library.directionFor(group));
-    /** Cards here studied another way than the group's new cards, offered a change after the group's changes. */
-    let offeredFor: string | undefined = $state();
-    const offerAll = $derived(group !== undefined && offeredFor === group);
-    const others = $derived(all.filter((c) => (c.direction ?? "forward") !== groupDirection));
-    let applying = $state(false);
-
-    async function setGroupDirection(event: Event) {
-        const value = (event.currentTarget as HTMLSelectElement).value;
-        if (group === undefined) return;
-        error = "";
-        try {
-            await library.setGroupDirection(group, isDirection(value) ? value : undefined);
-            offeredFor = group;
-        } catch (e) {
-            error = `Could not save the direction: ${e instanceof Error ? e.message : String(e)}`;
-        }
-    }
-
-    async function applyToAll() {
-        if (applying) return;
-        const to = groupDirection;
-        applying = true;
-        error = "";
-        try {
-            const from = await library.setCardDirection(others, to);
-            offeredFor = undefined;
-            moved = undefined;
-            redirected = { to, from };
-        } catch (e) {
-            error = e instanceof Error ? e.message : String(e);
-        } finally {
-            applying = false;
-        }
-    }
-
     async function undo() {
         if (!moved || undoing) return;
         const note = moved;
@@ -251,144 +210,28 @@
         });
     });
 
-    let renaming = $state(false);
-    let moving = $state(false);
-    let name = $state("");
-    let nameInput: HTMLInputElement | undefined = $state();
-    const newName = $derived(name.trim());
-    const nameError = $derived(newName.includes("/") ? 'Group names can\'t contain "/".' : "");
-    /** The group that already has the new name, if there is one: renaming onto it merges the two. */
-    const target = $derived(library.groups.find((g) => g.name === newName && g.name !== group));
-    const canRename = $derived(newName !== "" && newName !== group && !nameError && !moving && !deleting);
-
-    async function startRenaming() {
-        name = group ?? "";
-        renaming = true;
-        await tick();
-        nameInput?.select();
-    }
-
-    async function rename(event: SubmitEvent) {
-        event.preventDefault();
-        if (group === undefined || !canRename) return;
-        const to = newName;
-        moving = true;
-        error = "";
-        try {
-            await library.renameGroup(group, to);
-            // A long move may have been left for another page; only follow the group from its own.
-            const route = router.route;
-            if (route.name === "group" && route.group === group) router.go(href.group(to));
-        } catch (e) {
-            error = e instanceof Error ? e.message : String(e);
-            moving = false;
-        }
-    }
-
-    async function deleteGroup() {
-        if (group === undefined || moving) return;
-        if (!confirm(`Delete the group "${group}" and all ${plural(all.length, "card")} in it?`)) return;
-        deleting = true;
-        error = "";
-        try {
-            await library.removeGroup(group);
-            router.go(href.home());
-        } catch (e) {
-            error = e instanceof Error ? e.message : String(e);
-            deleting = false;
-        }
-    }
 </script>
 
 <a class="crumb" href={href.home()}><Icon name="back" size={16} />All groups</a>
 <div class="page-head">
     <div class="about">
-        {#if renaming}
-            <form class="rename" onsubmit={rename}>
-                <label class="visually-hidden" for="group-name">Group name</label>
-                <input
-                    id="group-name"
-                    class="field content"
-                    bind:this={nameInput}
-                    bind:value={name}
-                    list="other-groups"
-                    autocomplete="off"
-                    disabled={moving}
-                    onkeydown={(e) => e.key === "Escape" && !moving && (renaming = false)}
-                />
-                <datalist id="other-groups">
-                    {#each library.groupNames().filter((n) => n !== group) as other (other)}
-                        <option value={other}></option>
-                    {/each}
-                </datalist>
-                <button class="btn primary" type="submit" disabled={!canRename}>
-                    {moving ? "Moving…" : target ? "Merge" : "Rename"}
-                </button>
-                <button class="btn ghost" type="button" disabled={moving} onclick={() => (renaming = false)}>
-                    Cancel
-                </button>
-                {#if nameError}
-                    <small class="error">{nameError}</small>
-                {:else if target}
-                    <small class="muted">
-                        “{newName}” already has {plural(target.total, "card")}. The {plural(all.length, "card")} here will
-                        join {target.total === 1 ? "it" : "them"}.
-                    </small>
-                {/if}
-            </form>
-        {:else}
-            <div class="title">
-                <h1>{group ?? "All cards"}</h1>
-                {#if group !== undefined && all.length > 0}
-                    <button
-                        class="btn ghost rename-btn"
-                        type="button"
-                        aria-label="Rename group"
-                        title="Rename group"
-                        onclick={startRenaming}><Icon name="edit" size={18} /></button
-                    >
-                {/if}
-            </div>
-        {/if}
+        <div class="title">
+            <h1>{group ?? "All cards"}</h1>
+            {#if group !== undefined && all.length > 0}
+                <button
+                    class="btn ghost icon-only more"
+                    type="button"
+                    aria-label="Group settings"
+                    title="Group settings"
+                    onclick={() => (settings = true)}><Icon name="more" /></button
+                >
+            {/if}
+        </div>
         {#if library.loaded && cards.length > 0}
             <p class="sub">
                 {#if show}{labelOf(show)}:{/if}
                 {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if fresh > 0}, {fresh} new{/if}
             </p>
-            <!-- Says why the button's count is smaller than due plus new. -->
-            {#if capped}
-                <p class="sub limit">
-                    {today.length} to study today, {due} at a time:
-                    <a href={href.account()}>the review size</a> is {library.cardsPerReview}.
-                </p>
-            {/if}
-            {#if starting < fresh}
-                <p class="sub limit">
-                    {#if starting === 0}
-                        No more new cards today:
-                    {:else}
-                        You can start {starting} of the {fresh} new cards today:
-                    {/if}
-                    <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
-                </p>
-            {/if}
-        {/if}
-        {#if group !== undefined && all.length > 0}
-            <div class="new-direction">
-                <label for="group-direction">New cards here</label>
-                <select
-                    id="group-direction"
-                    class="field"
-                    value={ownDirection ?? ""}
-                    onchange={setGroupDirection}
-                    disabled={applying}
-                >
-                    <option value="">{DIRECTION_LABELS[library.direction]} (the default)</option>
-                    {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
-                        <option {value}>{label}</option>
-                    {/each}
-                </select>
-            </div>
         {/if}
     </div>
     <div class="actions">
@@ -399,21 +242,27 @@
     </div>
 </div>
 
-    {#if offerAll && others.length > 0}
-        <div class="offer" role="status">
-            <span>
-                {others.length === all.length
-                    ? `Study the ${plural(all.length, "card")} already here ${DIRECTION_LABELS[groupDirection].toLocaleLowerCase()} too?`
-                    : `${plural(others.length, "card")} of ${all.length} here ${others.length === 1 ? "is" : "are"} studied another way. Change ${others.length === 1 ? "it" : "them"} to ${DIRECTION_LABELS[groupDirection].toLocaleLowerCase()} too?`}
-            </span>
-            <button class="btn primary" type="button" onclick={applyToAll} disabled={applying}>
-                {applying ? "Changing…" : `Change ${others.length === 1 ? "it" : others.length === 2 ? "both" : `all ${others.length}`}`}
-            </button>
-            <button class="btn ghost" type="button" onclick={() => (offeredFor = undefined)} disabled={applying}>
-                Keep as they are
-            </button>
-        </div>
-    {/if}
+<!-- Says why the button's count is smaller than due plus new. -->
+{#if library.loaded && cards.length > 0 && (capped || starting < fresh)}
+    <div class="limits">
+        {#if capped}
+            <p>
+                {today.length} to study today, {due} at a time:
+                <a href={href.account()}>the review size</a> is {library.cardsPerReview}.
+            </p>
+        {/if}
+        {#if starting < fresh}
+            <p>
+                {#if starting === 0}
+                    No more new cards today:
+                {:else}
+                    You can start {starting} of the {fresh} new cards today:
+                {/if}
+                <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
+            </p>
+        {/if}
+    </div>
+{/if}
 
 {#if error}
     <p class="error" role="alert">{error}</p>
@@ -441,7 +290,6 @@
             type="button"
             bind:this={selectButton}
             onclick={selecting ? stopSelecting : startSelecting}
-            disabled={!selecting && (moving || deleting)}
         >
             <Icon name={selecting ? "check" : "select"} size={17} /><span class="label">{selecting ? "Done" : "Select"}</span>
         </button>
@@ -499,13 +347,6 @@
         </ul>
     {/if}
 
-    {#if group !== undefined && !selecting}
-        <div class="danger-zone">
-            <button class="btn danger" type="button" onclick={deleteGroup} disabled={deleting || moving}>
-                <Icon name="trash" size={18} />{deleting ? "Deleting…" : "Delete group"}
-            </button>
-        </div>
-    {/if}
 {/if}
 
 {#if selecting}
@@ -564,6 +405,10 @@
     <DirectionDialog cards={pickedCards} onchanged={turned} onclose={() => (turning = false)} />
 {/if}
 
+{#if settings && group !== undefined}
+    <GroupSettings {group} cards={all} onredirected={turned} onclose={() => (settings = false)} />
+{/if}
+
 {#if choosing && pickedCards.length > 0}
     <MoveDialog cards={pickedCards} onmoved={done} onclose={() => (choosing = false)} />
 {/if}
@@ -580,10 +425,14 @@
         min-width: 0;
     }
 
+    .page-head {
+        align-items: center;
+    }
+
     .title {
         display: flex;
         align-items: center;
-        gap: 0.25rem;
+        gap: 0.35rem;
     }
 
     .title h1 {
@@ -591,65 +440,17 @@
         overflow-wrap: anywhere;
     }
 
-    .rename-btn {
-        flex: none;
-        padding-inline: 0.6rem;
-        color: var(--text-faint);
-    }
-
-    .rename {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .rename .field {
-        flex: 1 1 8rem;
-        width: auto;
-        min-width: 0;
-        font-size: 1.15rem;
-    }
-
-    .rename small {
-        flex-basis: 100%;
-    }
-
-    .limit {
-        font-size: 0.9rem;
-    }
-
-    .new-direction {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.35rem 0.6rem;
-        margin-top: 0.6rem;
-        font-size: 0.9rem;
+    .more {
         color: var(--text-muted);
     }
 
-    .new-direction .field {
-        width: auto;
-        min-height: 0;
-        padding-block: 0.35rem;
+    /* A line under the heading, as wide as the page: it reads in one go instead of wrapping beside the buttons. */
+    .limits {
+        display: grid;
+        gap: 0.2rem;
+        margin: -0.75rem 0 1.25rem;
+        color: var(--text-muted);
         font-size: 0.9rem;
-    }
-
-    .offer {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem 0.6rem;
-        margin: -0.5rem 0 1.25rem;
-        padding: 0.75rem 0.9rem;
-        border-radius: var(--radius);
-        background: var(--accent-subtle);
-        font-size: 0.925rem;
-    }
-
-    .offer span {
-        flex: 1 1 14rem;
     }
 
     .none {
@@ -951,11 +752,6 @@
             flex: 1 1 auto;
         }
 
-        /* The name gets a row to itself, with Rename and Cancel under it. */
-        .rename .field {
-            flex-basis: 100%;
-        }
-
         /* The two buttons share the width. */
         .page-head .actions {
             width: 100%;
@@ -964,11 +760,5 @@
         .page-head .actions .btn {
             flex: 1 1 0;
         }
-    }
-
-    .danger-zone {
-        margin-top: 2.5rem;
-        display: flex;
-        justify-content: flex-end;
     }
 </style>

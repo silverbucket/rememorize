@@ -220,58 +220,60 @@
 </section>
 
 <section class="panel">
-    <label class="title" for="new-per-day">New cards per day</label>
-    <p class="muted">
-        How many unseen cards to introduce each day, across all groups. Reviews of cards you've already started don't
-        count toward this.
-    </p>
-    <div class="row">
-        <input
-            id="new-per-day"
-            class="field number"
-            type="number"
-            inputmode="numeric"
-            min="0"
-            max={MAX_NEW_PER_DAY}
-            value={library.newPerDay}
-            onchange={setNewPerDay}
-        />
-        <span class="muted">Started today: {library.startedToday}</span>
-    </div>
+    <h2>Studying</h2>
+    <div class="settings">
+        <div class="setting">
+            <label for="new-per-day">New cards per day</label>
+            <input
+                id="new-per-day"
+                class="field number"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                max={MAX_NEW_PER_DAY}
+                value={library.newPerDay}
+                onchange={setNewPerDay}
+            />
+            <p class="muted">
+                How many unseen cards to introduce each day, across all groups. Reviews of cards you've already
+                started don't count toward this. <span class="started">Started today: {library.startedToday}</span>
+            </p>
+        </div>
 
-    <label class="title next" for="cards-per-review">Most cards per review</label>
-    <p class="muted">
-        Splits what's due into reviews of this many cards, reviews and new cards together, so you never face a huge
-        pile in one sitting. When one ends you can start the next straight away, or come back later: nothing is
-        pushed back. Leave it empty to review everything due at once.
-    </p>
-    <div class="row">
-        <input
-            id="cards-per-review"
-            class="field number"
-            type="number"
-            inputmode="numeric"
-            min="1"
-            max={MAX_NEW_PER_DAY}
-            placeholder="No limit"
-            value={library.cardsPerReview ?? ""}
-            onchange={setCardsPerReview}
-        />
-    </div>
+        <div class="setting">
+            <label for="cards-per-review">Most cards per review</label>
+            <input
+                id="cards-per-review"
+                class="field number"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                max={MAX_NEW_PER_DAY}
+                placeholder="No limit"
+                value={library.cardsPerReview ?? ""}
+                onchange={setCardsPerReview}
+            />
+            <p class="muted">
+                Splits what's due into reviews of this many cards, so you never face a huge pile in one sitting. When
+                one ends you can start the next straight away or come back later: nothing is pushed back. Leave it
+                empty to review everything due at once.
+            </p>
+        </div>
 
-    <label class="title next" for="direction">Study new cards</label>
-    <p class="muted">
-        Which way round new cards are studied, unless their group says otherwise. A group's page can give it a
-        direction of its own, and each card can still be changed by itself.
-    </p>
-    <div class="row">
-        <select id="direction" class="field direction" value={library.direction} onchange={setDirection}>
-            {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
-                <option {value}>{label}</option>
-            {/each}
-        </select>
+        <div class="setting">
+            <label for="direction">Study new cards</label>
+            <select id="direction" class="field direction" value={library.direction} onchange={setDirection}>
+                {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
+                    <option {value}>{label}</option>
+                {/each}
+            </select>
+            <p class="muted">
+                Which way round new cards are studied, unless their group says otherwise. A group's settings can give
+                it a direction of its own, and each card can still be changed by itself.
+            </p>
+        </div>
     </div>
-    <p class="muted">These settings are the same on every device you connect.</p>
+    <p class="muted foot">These settings are the same on every device you connect.</p>
     {#if settingsError}<p class="error" role="alert">{settingsError}</p>{/if}
 </section>
 
@@ -409,7 +411,7 @@
 </section>
 
 <section class="panel">
-    <h2>Your cards</h2>
+    <h2>Import and export</h2>
     <p class="muted">
         Export a full backup (JSON, including review progress), or a spreadsheet of fronts, backs, hints and groups (CSV).
         Import accepts either, and Anki's “Notes in Plain Text” export.
@@ -494,6 +496,53 @@
 
     section p {
         max-width: 38rem;
+    }
+
+    /* What a setting does is read once; it sits back from the setting itself. */
+    section p.muted {
+        font-size: 0.925rem;
+    }
+
+    /* Settings one under the other: the name and its control on a line, what it does below. */
+    .settings {
+        display: grid;
+    }
+
+    .setting {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        padding: 1rem 0;
+    }
+
+    .setting:first-child {
+        padding-top: 0.25rem;
+    }
+
+    .setting + .setting {
+        border-top: 1px solid var(--border);
+    }
+
+    .setting label {
+        font-weight: 620;
+    }
+
+    .setting p {
+        grid-column: 1 / -1;
+        font-size: 0.925rem;
+    }
+
+    .started {
+        color: var(--text);
+        font-weight: 550;
+        white-space: nowrap;
+    }
+
+    .foot {
+        padding-top: 0.9rem;
+        border-top: 1px solid var(--border);
+        font-size: 0.925rem;
     }
 
     .account {

@@ -24,7 +24,7 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     acceptDialogs(b);
     await connect(b, user);
     await b.goto("/");
-    await expect(b.getByText("Verbs")).toBeVisible({ timeout: SYNC_TIMEOUT });
+    await expect(b.getByRole("link", { name: /^Verbs/ })).toBeVisible({ timeout: SYNC_TIMEOUT });
 
     // B reviews; A sees the new schedule without reloading.
     await a.goto("/#/group/Verbs");
@@ -43,7 +43,8 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
 
     // A deletes the group; B (sitting on the home page) sees it disappear.
     await b.goto("/");
-    await expect(b.getByText("Verbs")).toBeVisible();
+    await expect(b.getByRole("link", { name: /^Verbs/ })).toBeVisible();
+    await a.getByRole("button", { name: "Group settings" }).click();
     await a.getByRole("button", { name: "Delete group" }).click();
     await expect(a.getByText("No cards yet")).toBeVisible();
     await expect(b.getByText("No cards yet")).toBeVisible({ timeout: SYNC_TIMEOUT });
@@ -51,7 +52,7 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     // Disconnecting clears the local copy; reconnecting brings data back.
     await addCard(a, { front: "být", back: "to be", group: "Verbs" });
     await b.goto("/");
-    await expect(b.getByText("Verbs")).toBeVisible({ timeout: SYNC_TIMEOUT });
+    await expect(b.getByRole("link", { name: /^Verbs/ })).toBeVisible({ timeout: SYNC_TIMEOUT });
     await b.goto("/#/account");
     await b.getByRole("button", { name: "Disconnect" }).click();
     await expect(b.getByRole("button", { name: "Connect" })).toBeVisible();
@@ -59,7 +60,7 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     await expect(b.getByText("No cards yet")).toBeVisible();
     await connect(b, user);
     await b.goto("/");
-    await expect(b.getByText("Verbs")).toBeVisible({ timeout: SYNC_TIMEOUT });
+    await expect(b.getByRole("link", { name: /^Verbs/ })).toBeVisible({ timeout: SYNC_TIMEOUT });
 });
 
 test("settings are shared between devices", async ({ browser }) => {
