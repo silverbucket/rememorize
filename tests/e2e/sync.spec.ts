@@ -32,7 +32,7 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     await b.goto("/#/review/Verbs");
     await b.getByRole("button", { name: /Show answer/ }).click();
     await b.getByRole("button", { name: /Easy/ }).click();
-    await expect(b.getByText("Done for now")).toBeVisible();
+    await expect(b.getByText("All caught up for today")).toBeVisible();
     await expect(a.locator(".when")).toHaveText(/^in /, { timeout: SYNC_TIMEOUT });
     // The review itself is in A's statistics too.
     await a.goto("/#/stats");

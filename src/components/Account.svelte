@@ -223,7 +223,10 @@
     <h2>Studying</h2>
     <div class="settings">
         <div class="setting">
-            <label for="new-per-day">New cards per day</label>
+            <div class="name">
+                <label for="new-per-day">New cards per day</label>
+                <span class="status">Started today: {library.startedToday}</span>
+            </div>
             <input
                 id="new-per-day"
                 class="field number"
@@ -236,7 +239,7 @@
             />
             <p class="muted">
                 How many unseen cards to introduce each day, across all groups. Reviews of cards you've already
-                started don't count toward this. <span class="started">Started today: {library.startedToday}</span>
+                started don't count toward this.
             </p>
         </div>
 
@@ -256,7 +259,7 @@
             <p class="muted">
                 Splits what's due into reviews of this many cards, so you never face a huge pile in one sitting. When
                 one ends you can start the next straight away or come back later: nothing is pushed back. Leave it
-                empty to review everything due at once.
+                empty for no limit.
             </p>
         </div>
 
@@ -416,7 +419,7 @@
         Export a full backup (JSON, including review progress), or a spreadsheet of fronts, backs, hints and groups (CSV).
         Import accepts either, and Anki's “Notes in Plain Text” export.
     </p>
-    <div class="buttons">
+    <div class="buttons even">
         <button
             class="btn"
             type="button"
@@ -533,16 +536,27 @@
         font-size: 0.925rem;
     }
 
-    .started {
-        color: var(--text);
-        font-weight: 550;
-        white-space: nowrap;
+    .name {
+        display: grid;
+        gap: 0.1rem;
     }
 
-    .foot {
+    /* Where the setting stands today, under its name. */
+    .status {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* The rule runs the width of the panel, like the ones between the settings above it. */
+    section p.foot {
+        max-width: none;
         padding-top: 0.9rem;
         border-top: 1px solid var(--border);
-        font-size: 0.925rem;
+    }
+
+    .setting:last-child {
+        padding-bottom: 0.25rem;
     }
 
     .account {
@@ -688,6 +702,11 @@
     @media (max-width: 560px) {
         section {
             padding: 1.1rem;
+        }
+
+        /* The three fill their lines, so the wrapped row ends flush with the one above. */
+        .buttons.even .btn {
+            flex: 1 1 auto;
         }
 
         .segments {

@@ -212,21 +212,10 @@
 
 </script>
 
-<a class="crumb" href={href.home()}><Icon name="back" size={16} />All groups</a>
+<a class="crumb" href={href.home()}><Icon name="back" size={16} />Your cards</a>
 <div class="page-head">
     <div class="about">
-        <div class="title">
-            <h1>{group ?? "All cards"}</h1>
-            {#if group !== undefined && all.length > 0}
-                <button
-                    class="btn ghost icon-only more"
-                    type="button"
-                    aria-label="Group settings"
-                    title="Group settings"
-                    onclick={() => (settings = true)}><Icon name="more" /></button
-                >
-            {/if}
-        </div>
+        <h1>{group ?? "All cards"}</h1>
         {#if library.loaded && cards.length > 0}
             <p class="sub">
                 {#if show}{labelOf(show)}:{/if}
@@ -238,6 +227,16 @@
         <a class="btn" href={href.newCard(group)}><Icon name="plus" />Add card</a>
         {#if due > 0}
             <a class="btn primary" href={href.review(group, show)}>Review {plural(due, "card")}</a>
+        {/if}
+        <!-- Last and smallest: what belongs to the group as a whole is rarely needed. -->
+        {#if group !== undefined && all.length > 0}
+            <button
+                class="btn icon-only"
+                type="button"
+                aria-label="Group settings"
+                title="Group settings"
+                onclick={() => (settings = true)}><Icon name="more" /></button
+            >
         {/if}
     </div>
 </div>
@@ -276,13 +275,21 @@
         <a class="btn primary" href={href.newCard(group)}>Add a card</a>
     </div>
 {:else}
-    <!-- Select sits with the views: both decide what the list below is for. -->
-    <div class="list-head">
-        <ViewChips
-            cards={all}
-            active={show ?? "all"}
-            link={(view) => (group === undefined ? href.cards(view) : href.group(group, view))}
-        />
+    <ViewChips
+        cards={all}
+        active={show ?? "all"}
+        link={(view) => (group === undefined ? href.cards(view) : href.group(group, view))}
+    />
+
+    <!-- Finding cards and picking them share a line: both work on the list below. -->
+    <div class="tools">
+        {#if all.length >= SEARCH_FROM}
+            <label class="search">
+                <span class="visually-hidden">Find a card</span>
+                <Icon name="search" size={18} />
+                <input class="field" type="search" placeholder="Find a card" autocomplete="off" bind:value={query} />
+            </label>
+        {/if}
         <!-- One button that stays put, so focus stays on it. -->
         <button
             class="select"
@@ -291,17 +298,9 @@
             bind:this={selectButton}
             onclick={selecting ? stopSelecting : startSelecting}
         >
-            <Icon name={selecting ? "check" : "select"} size={17} /><span class="label">{selecting ? "Done" : "Select"}</span>
+            <Icon name={selecting ? "check" : "select"} size={18} /><span class="label">{selecting ? "Done" : "Select"}</span>
         </button>
     </div>
-
-    {#if all.length >= SEARCH_FROM}
-        <label class="search">
-            <span class="visually-hidden">Find a card</span>
-            <Icon name="search" size={18} />
-            <input class="field" type="search" placeholder="Find a card" autocomplete="off" bind:value={query} />
-        </label>
-    {/if}
 
     {#if cards.length === 0}
         <p class="muted nothing">No cards in this view.</p>
@@ -351,6 +350,10 @@
 
 {#if selecting}
     <div class="bar" role="toolbar" aria-label="Selected cards">
+        <!-- The way out stays with the bar: the button that started picking may have scrolled away. -->
+        <button class="btn ghost close" type="button" aria-label="Done selecting" title="Done" onclick={stopSelecting}>
+            <Icon name="close" size={18} />
+        </button>
         <span class="picked" aria-live="polite">
             {pickedCards.length === 0 ? "Pick cards to move" : `${pickedCards.length} selected`}
         </span>
@@ -429,25 +432,16 @@
         align-items: center;
     }
 
-    .title {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-    }
-
-    .title h1 {
+    h1 {
         min-width: 0;
         overflow-wrap: anywhere;
-    }
-
-    .more {
-        color: var(--text-muted);
     }
 
     /* A line under the heading, as wide as the page: it reads in one go instead of wrapping beside the buttons. */
     .limits {
         display: grid;
         gap: 0.2rem;
+        text-wrap: pretty;
         margin: -0.75rem 0 1.25rem;
         color: var(--text-muted);
         font-size: 0.9rem;
@@ -459,47 +453,39 @@
         justify-items: start;
     }
 
-    .list-head {
+    .tools {
         display: flex;
-        align-items: flex-start;
-        gap: 0.4rem;
-        margin-bottom: 0.9rem;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
     }
 
-    .list-head > :global(.views) {
-        flex: 1;
-        min-width: 0;
-        margin-bottom: 0;
-    }
-
-    /* Shaped like the view chips beside it. */
+    /* Shaped like the search field beside it. */
     .select {
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
+        justify-content: center;
+        gap: 0.45rem;
         flex: none;
-        margin-left: auto;
-        min-height: 2.25rem;
-        padding: 0.25rem 0.85rem 0.25rem 0.7rem;
+        min-height: 2.75rem;
+        padding: 0.25rem 0.95rem 0.25rem 0.8rem;
         border: 1px solid var(--border-strong);
-        border-radius: 999px;
+        border-radius: var(--radius);
         background: var(--surface);
         color: var(--text);
-        font-size: 0.875rem;
+        font-size: 0.925rem;
         font-weight: 600;
         cursor: pointer;
-        transition: background-color 120ms;
+        transition:
+            background-color 120ms,
+            border-color 120ms;
     }
 
     @media (hover: hover) {
-        .select:hover:not(:disabled) {
+        .select:hover {
             background: var(--surface-2);
+            border-color: var(--text-faint);
         }
-    }
-
-    .select:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
     }
 
     /* Marked like the view that is showing. */
@@ -512,13 +498,15 @@
     @media (hover: hover) {
         .select.on:hover {
             background: color-mix(in oklab, var(--accent) 20%, transparent);
+            border-color: transparent;
         }
     }
 
     .search {
         position: relative;
         display: block;
-        margin-bottom: 0.75rem;
+        flex: 1;
+        min-width: 0;
         color: var(--text-faint);
     }
 
@@ -615,11 +603,11 @@
         gap: 0.35rem;
         width: max-content;
         max-width: calc(100vw - 1.5rem);
-        padding: 0.4rem 0.4rem 0.4rem 1rem;
+        padding: 0.4rem;
         background: var(--surface);
         border: 1px solid var(--border-strong);
         border-radius: var(--radius-lg);
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-lg);
         animation: rise 160ms ease-out;
     }
 
@@ -632,6 +620,7 @@
     }
 
     .note .picked {
+        margin-left: 0.6rem;
         font-weight: 500;
     }
 
@@ -713,10 +702,9 @@
             grid-row: 2;
         }
 
-        /* Just the box, so the views keep their row. */
+        /* Just the box, so the search field keeps the row. */
         .select {
-            justify-content: center;
-            width: 2.25rem;
+            width: 2.75rem;
             padding: 0;
         }
 
@@ -741,24 +729,37 @@
             grid-column: 2;
         }
 
-        /* Across the screen, with the count above the buttons when they don't fit beside it. */
+        /* Across the screen: the count and its controls on one line, the two actions sharing the next. */
         .bar {
             width: calc(100vw - 1.5rem);
             flex-wrap: wrap;
-            justify-content: flex-end;
         }
 
         .bar .picked {
             flex: 1 1 auto;
         }
 
-        /* The two buttons share the width. */
+        .bar:not(.note) .btn:not(.ghost) {
+            flex: 1 1 0;
+        }
+
+        /* The count and Select all take the first line whole, so the actions start the second. */
+        .bar:not(.note) .picked {
+            flex-basis: 40%;
+        }
+
+        /* The two buttons share the width, with the settings button at the end of their row. */
         .page-head .actions {
+            flex-wrap: nowrap;
             width: 100%;
         }
 
         .page-head .actions .btn {
             flex: 1 1 0;
+        }
+
+        .page-head .actions .icon-only {
+            flex: none;
         }
     }
 </style>

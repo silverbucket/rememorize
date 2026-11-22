@@ -11,7 +11,7 @@
     const back = $derived(group ? href.group(group) : href.home());
 </script>
 
-<a class="crumb" href={back}><Icon name="back" size={16} />{group ?? "All groups"}</a>
+<a class="crumb" href={back}><Icon name="back" size={16} />{group ?? "Your cards"}</a>
 <div class="page-head">
     <h1>{isNew ? "New card" : "Edit card"}</h1>
 </div>

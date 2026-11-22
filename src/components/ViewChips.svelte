@@ -76,14 +76,13 @@
     }
 
     @media (max-width: 560px) {
-        /* One row that scrolls sideways. A chip cut off at the edge shows there are more. */
+        /* One row that scrolls sideways, out to the edges of the screen: a chip cut off there shows there are more. */
         .views {
             flex-wrap: nowrap;
             overflow-x: auto;
+            margin-inline: -1rem;
+            padding-inline: 1rem;
             scrollbar-width: none;
-            /* Fades out at the end it scrolls towards, where the next chip is waiting. */
-            mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
-            padding-right: 1.5rem;
         }
 
         .views::-webkit-scrollbar {

@@ -51,6 +51,8 @@ export interface GroupSummary {
     reviews: number;
     /** New cards a review could start now if there were no daily limits. */
     fresh: number;
+    /** Of those, the ones today's limit lets it start. Only set on the groups in `ready`. */
+    starting?: number;
 }
 
 type ChangeEvent = { relativePath?: string; newValue?: unknown; origin?: string };
@@ -156,12 +158,27 @@ export class Library {
     /**
      * Groups with something to review now, in the order they are offered: the ones
      * with reviews due first, then the ones with only new cards to start.
+     *
+     * `due` is what a review of each would show if they are taken in that order.
+     * Today's new cards are shared by every group, so they go to the first groups
+     * that have some, and the counts add up to what there is to study today. A
+     * group whose new cards all have to wait isn't offered.
      */
-    ready: GroupSummary[] = $derived(
-        this.groups
-            .filter((g) => g.due > 0)
-            .sort((a, b) => Number(b.reviews > 0) - Number(a.reviews > 0) || a.name.localeCompare(b.name)),
-    );
+    ready: GroupSummary[] = $derived.by(() => {
+        let slots = this.newRemaining;
+        const size = this.cardsPerReview ?? Number.POSITIVE_INFINITY;
+        const ready: GroupSummary[] = [];
+        const inOrder = [...this.groups].sort(
+            (a, b) => Number(b.reviews > 0) - Number(a.reviews > 0) || a.name.localeCompare(b.name),
+        );
+        for (const group of inOrder) {
+            const starting = Math.min(group.fresh, slots);
+            slots -= starting;
+            const today = group.reviews + starting;
+            if (today > 0) ready.push({ ...group, due: Math.min(today, size), starting });
+        }
+        return ready;
+    });
 
     /** Cards that a review of everything would show now (new cards capped). */
     dueCount = $derived(this.dueIn(this.cards).length);

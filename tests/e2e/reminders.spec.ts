@@ -317,7 +317,7 @@ test("turning reminders on shows a notification and schedules a month of them", 
     await page.reload();
     await expect(page.getByRole("button", { name: "Turn on reminders" })).toBeVisible();
     await reviewOne(page, "Animals");
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
     await putAway(page);
     expect(posted).toHaveLength(after);
 });
@@ -454,7 +454,7 @@ test("reminders that can't be renewed say so, and can be turned on again", async
     // This device is off the list, so nothing keeps scheduling for a subscription that is gone.
     const before = hub.posted.length;
     await reviewOne(page, "Animals");
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
     await putAway(page);
     expect(hub.posted).toHaveLength(before);
 

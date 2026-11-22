@@ -62,7 +62,7 @@ test("a group can be renamed, and renamed onto another group to merge them", asy
     await page.goto("/#/review/Verbs");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("Verbs done")).toBeVisible();
 
     await page.goto("/#/group/Nouns");
     // A group's name is in its settings, with the rest of what belongs to the group as a whole.
@@ -310,7 +310,7 @@ test("review session schedules cards", async ({ page }) => {
     await expect(page.getByText("1 card left")).toBeVisible();
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Good/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 
     await page.goto("/");
     await expect(page.getByText("You're all caught up")).toBeVisible();
@@ -342,7 +342,7 @@ test("a card answered Again comes back before the review ends, and one answered 
     // Hard: remembered, so it keeps its schedule and the review is done.
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Hard/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 });
 
 test("undo the last rating", async ({ page, isMobile }) => {
@@ -382,7 +382,7 @@ test("undo the last rating", async ({ page, isMobile }) => {
         await expect(page.getByText("1 card left")).toBeVisible();
         await page.keyboard.press("Space");
         await page.keyboard.press("3");
-        await expect(page.getByText("Done for now")).toBeVisible();
+        await expect(page.getByText("All caught up for today")).toBeVisible();
         await page.keyboard.press("u");
         await expect(page.getByText("1 card left")).toBeVisible();
         await expect(page.locator(".side.front")).toHaveText("kočka");
@@ -396,7 +396,7 @@ test("keyboard review", async ({ page, isMobile }) => {
     await page.keyboard.press("Space");
     await expect(page.locator(".side.back")).toHaveText("water");
     await page.keyboard.press("4");
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 });
 
 test("works offline once loaded", async ({ page, context }) => {
@@ -455,7 +455,7 @@ test("daily limit on new cards", async ({ page }) => {
         await page.getByRole("button", { name: /Show answer/ }).click();
         await page.getByRole("button", { name: /Easy/ }).click();
     }
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
     await expect(page.getByText("1 more new card waiting: you've started 2 of 2 new cards for today.")).toBeVisible();
     // Don't claim the next card is months away while a new one is waiting.
     await expect(page.getByText(/Next card is due/)).toHaveCount(0);
@@ -540,7 +540,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByRole("button", { name: /Show answer/ }).click();
     await expect(page.locator(".side.back")).toHaveText("pivo");
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 
     // Undo works on the reversed schedule.
     await page.getByRole("button", { name: /Undo/ }).click();
@@ -572,7 +572,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await expect(page.getByText("Back → front")).toHaveCount(0);
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
     // The other direction of both cards is next, not the months-away reviews.
     await expect(page.getByText("2 cards held until tomorrow")).toBeVisible();
     await expect(page.getByText(/Next card is due/)).toHaveCount(0);
@@ -583,7 +583,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByText("voda").click();
     // Its schedule has a row for each direction: one studied today, one not yet.
     await expect(page.getByRole("row", { name: /Front → back/ })).toContainText(/in \d+/);
-    await expect(page.getByRole("row", { name: /Back → front/ })).toContainText("not reviewed yet");
+    await expect(page.getByRole("row", { name: /Back → front/ })).toContainText("not started");
 });
 
 test("new cards take a direction from the settings or their group, and many cards change at once", async ({ page }) => {
@@ -670,7 +670,7 @@ test("statistics follow reviews", async ({ page }) => {
     await page.getByRole("button", { name: /Easy/ }).click();
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Good/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 
     // An undone rating isn't counted.
     await page.getByRole("button", { name: /Undo/ }).click();
@@ -738,7 +738,7 @@ test("a JSON backup restores cards with their review progress", async ({ page, b
     await page.goto("/#/review");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 
     await page.goto("/#/account");
     const download = page.waitForEvent("download");
@@ -797,7 +797,7 @@ test("the navigation reaches each part of the app and marks where you are", asyn
     await nav.getByRole("link", { name: "Cards" }).click();
     await page.getByRole("link", { name: "Import" }).click();
     await expect(nav.getByRole("link", { name: "Cards" })).toHaveAttribute("aria-current", "page");
-    await expect(page.locator(".crumb")).toHaveText("All groups");
+    await expect(page.locator(".crumb")).toHaveText("Your cards");
 });
 
 test("the home page says what is due and what was done today", async ({ page }) => {
@@ -838,20 +838,20 @@ test("a review keeps to one group, and offers the next group when it ends", asyn
     await expect(page.getByRole("heading", { name: "Ready to review" })).toBeVisible();
 
     // The button starts with the first group, and only that group's card comes up.
-    await page.locator(".today").getByRole("link", { name: "Review Animals, 1 card" }).click();
+    await page.locator(".today").getByRole("link", { name: "Start with Animals, 1 card" }).click();
     await expect(page.getByRole("heading", { name: "Review: Animals" })).toBeVisible();
     await expect(page.getByText("1 card left")).toBeVisible();
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("Animals done")).toBeVisible();
 
     // The next group is one tap away.
-    await expect(page.getByText("Next up: Drinks, with 1 card to review.")).toBeVisible();
+    await expect(page.getByText("Next up")).toBeVisible();
     await page.getByRole("link", { name: "Review Drinks, 1 card" }).click();
     await expect(page.locator(".side.front")).toHaveText("voda");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
     await expect(page.getByText(/Next up/)).toHaveCount(0);
 
     // It all started on the home page, so that is where it ends.

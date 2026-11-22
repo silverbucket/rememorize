@@ -9,7 +9,7 @@
     const back = $derived(
         router.route.name === "import" && router.route.from === "settings"
             ? { href: href.account(), label: "Settings" }
-            : { href: href.home(), label: "All groups" },
+            : { href: href.home(), label: "Your cards" },
     );
 
     let fileName = $state("");
@@ -130,7 +130,8 @@
                 <span class="muted">Choose another file</span>
             {:else}
                 <strong>Choose a file</strong>
-                <span class="muted">or drop one here</span>
+                <!-- Nothing can be dropped on a touch screen. -->
+                <span class="muted droppable">or drop one here</span>
             {/if}
         </span>
     </label>
@@ -147,8 +148,7 @@
         </label>
     {/if}
 
-    <!-- Open until a file is chosen; after that the preview matters more. -->
-    <details open={!text}>
+    <details>
         <summary>How to lay out a file</summary>
         <dl class="formats muted">
             <div>
@@ -238,11 +238,13 @@
 
     .drop {
         display: flex;
-        grid-template-columns: none;
+        flex-direction: column;
         align-items: center;
-        gap: 0.9rem;
-        min-height: 5rem;
-        padding: 1rem 1.1rem;
+        justify-content: center;
+        gap: 0.75rem;
+        min-height: 10rem;
+        padding: 1.5rem 1.1rem;
+        text-align: center;
         border: 1.5px dashed var(--border-strong);
         border-radius: var(--radius-lg);
         background: var(--bg);
@@ -264,8 +266,14 @@
         background: var(--accent-subtle);
     }
 
+    /* Once it holds a file it steps back: the preview below is what matters now. */
     .drop.chosen {
+        flex-direction: row;
+        justify-content: flex-start;
+        min-height: 0;
+        padding: 0.9rem 1.1rem;
         border-style: solid;
+        text-align: left;
     }
 
     .drop:has(input:focus-visible) {
@@ -305,6 +313,16 @@
     .drop-text .muted {
         font-size: 0.9rem;
         font-weight: 400;
+    }
+
+    @media (hover: none) {
+        .droppable {
+            display: none;
+        }
+
+        .drop:not(.chosen) {
+            min-height: 7.5rem;
+        }
     }
 
     summary {

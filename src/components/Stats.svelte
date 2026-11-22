@@ -120,6 +120,15 @@
     const streakNext = $derived(milestone(currentStreak, STREAK_MILESTONES).next);
     const longTermNext = $derived(milestone(longTerm, LONG_TERM_MILESTONES).next);
 
+    /** The next milestone of each kind, and how far along it is. */
+    const goals = $derived(
+        [
+            streakNext && { name: `${streakNext}-day streak`, now: currentStreak, next: streakNext },
+            reviewsNext && { name: `${count.format(reviewsNext)} reviews`, now: log.length, next: reviewsNext },
+            longTermNext && { name: `${count.format(longTermNext)} long-term cards`, now: longTerm, next: longTermNext },
+        ].filter((goal) => !!goal),
+    );
+
     // This week against the one before.
     const weeks2 = $derived(weekOverWeek(log, now));
     const change = (current: number, before: number) =>
@@ -133,7 +142,13 @@
         weekly.map((w, i) => ({
             key: dayKey(w.start),
             value: w.retention.rate === undefined ? undefined : w.retention.rate * 100,
-            tick: i === weekly.length - 1 ? "This week" : i % 4 === 0 ? shortDay.format(w.start) : undefined,
+            // Counted back from this week, so the last date never runs into it.
+            tick:
+                i === weekly.length - 1
+                    ? "This week"
+                    : (weekly.length - 1 - i) % 4 === 0
+                      ? shortDay.format(w.start)
+                      : undefined,
             text: `${i === weekly.length - 1 ? "This week" : `Week of ${shortDay.format(w.start)}`}: ${
                 w.retention.rate === undefined
                     ? "no reviews"
@@ -331,25 +346,23 @@
                     <strong>{count.format(longTerm)}</strong>
                     <span>Long-term {longTerm === 1 ? "card" : "cards"}</span>
                 </li>
-                {#if streakNext}
-                    <li class="goal">
-                        <strong>{plural(streakNext, "day")}</strong>
-                        <span>Next streak goal, {streakNext - currentStreak} to go</span>
-                    </li>
-                {/if}
-                {#if reviewsNext}
-                    <li class="goal">
-                        <strong>{count.format(reviewsNext)}</strong>
-                        <span>Next review goal, {count.format(reviewsNext - log.length)} to go</span>
-                    </li>
-                {/if}
-                {#if longTermNext}
-                    <li class="goal">
-                        <strong>{count.format(longTermNext)}</strong>
-                        <span>Next long-term goal, {longTermNext - longTerm} to go</span>
-                    </li>
-                {/if}
             </ul>
+            {#if goals.length > 0}
+                <h3>Next goals</h3>
+                <table class="goals">
+                    <tbody>
+                        {#each goals as goal (goal.name)}
+                            <tr>
+                                <th scope="row">{goal.name}</th>
+                                <td class="meter-cell">
+                                    <div class="meter"><div style:width="{(goal.now / goal.next) * 100}%"></div></div>
+                                </td>
+                                <td class="num">{count.format(goal.next - goal.now)} to go</td>
+                            </tr>
+                        {/each}
+                    </tbody>
+                </table>
+            {/if}
         {/if}
     </section>
 
@@ -372,11 +385,16 @@
                     <dt>{row.label}</dt>
                     <dd>
                         {row.now === undefined ? "—" : row.show(row.now)}
-                        {#if row.now !== undefined && row.before !== undefined && change(row.now, row.before)}
-                            <span class="delta {change(row.now, row.before)}">
-                                {change(row.now, row.before) === "up" ? "▲" : "▼"}
-                                {Math.abs(row.now - row.before)}{row.unit}
-                            </span>
+                    </dd>
+                    <!-- A line of its own in every column, so the three stay level whichever way each went. -->
+                    <dd class="delta {row.now !== undefined && row.before !== undefined ? (change(row.now, row.before) ?? '') : ''}">
+                        {#if row.now === undefined || row.before === undefined}
+                            &nbsp;
+                        {:else if change(row.now, row.before)}
+                            {change(row.now, row.before) === "up" ? "▲" : "▼"}
+                            {Math.abs(row.now - row.before)}{row.unit}
+                        {:else}
+                            No change
                         {/if}
                     </dd>
                     <dd class="was">was {row.before === undefined ? "—" : row.show(row.before)}</dd>
@@ -455,7 +473,7 @@
         {#if groups.length === 0}
             <p class="muted">Nothing to show yet.</p>
         {:else}
-            <table>
+            <table class="by-group">
                 <thead>
                     <tr><th scope="col">Group</th><td></td><th scope="col" class="num">Retention</th><th scope="col" class="num">Reviews</th></tr>
                 </thead>
@@ -899,7 +917,7 @@
 
     .badges {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
         gap: 0.6rem;
         margin: 1rem 0 0;
         padding: 0;
@@ -944,13 +962,8 @@
         color: var(--accent-text);
     }
 
-    .badges li.goal {
-        border-style: dashed;
-        background: transparent;
-    }
-
-    .badges li.goal strong {
-        color: var(--text-muted);
+    .goals .meter-cell {
+        width: 38%;
     }
 
     .compare {
@@ -976,7 +989,7 @@
         color: var(--text-muted);
     }
 
-    .compare dd {
+    .compare dd:first-of-type {
         margin: 0.15rem 0 0;
         font-family: var(--font-content);
         font-size: 2rem;
@@ -985,8 +998,13 @@
         font-variant-numeric: lining-nums tabular-nums;
     }
 
+    .compare dd {
+        margin: 0;
+    }
+
     .compare .delta {
-        font-family: var(--font-ui);
+        margin-top: 0.2rem;
+        color: var(--text-muted);
         font-size: 0.85rem;
         font-weight: 650;
         white-space: nowrap;
@@ -1001,7 +1019,6 @@
     }
 
     .compare .was {
-        font-family: var(--font-ui);
         font-size: 0.8rem;
         color: var(--text-faint);
     }
@@ -1141,8 +1158,17 @@
             padding: 0 0.6rem;
         }
 
-        .compare dd {
+        .compare dd:first-of-type {
             font-size: 1.5rem;
+        }
+
+        .goals .meter-cell {
+            width: 22%;
+        }
+
+        /* Four columns here: the bar gives way so a group's name stays on one line. */
+        .by-group .meter-cell {
+            width: 16%;
         }
 
         .big {

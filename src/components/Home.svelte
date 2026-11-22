@@ -5,6 +5,7 @@
     import { library } from "../lib/state";
     import { lastDays, streak } from "../lib/stats";
     import Icon from "./Icon.svelte";
+    import Logo from "./Logo.svelte";
 
     /** Everything due today, however many reviews it takes. */
     const today = $derived(library.todayIn(library.cards));
@@ -19,8 +20,10 @@
      * The ones with something to review come first, and the button starts with the top one.
      */
     const ready = $derived(library.ready);
-    const rest = $derived(library.groups.filter((g) => g.due === 0));
+    const rest = $derived(library.groups.filter((g) => !ready.some((r) => r.name === g.name)));
     const first = $derived(ready[0]);
+    /** With more groups to follow, the button says it is the first of them. */
+    const startLabel = $derived(first ? `${ready.length > 1 ? "Start with" : "Review"} ${first.name}` : "");
 
     /** "3 new and 18 reviews across 4 groups", leaving out whichever is zero. */
     const breakdown = $derived.by(() => {
@@ -45,7 +48,7 @@
     {#if library.loaded && library.groups.length > 0}
         <div class="actions">
             <a class="btn ghost import" href={href.import()}><Icon name="import" />Import</a>
-            <a class="btn" href={href.newCard()}><Icon name="plus" />New card</a>
+            <a class="btn" href={href.newCard()}><Icon name="plus" />Add card</a>
         </div>
     {/if}
 </div>
@@ -58,7 +61,7 @@
     <p class="muted">Loading…</p>
 {:else if library.groups.length === 0}
     <div class="panel empty">
-        <div class="deck" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="deck" aria-hidden="true"><span></span><span></span><span><Logo size={30} /></span></div>
         <h2>No cards yet</h2>
         <p>
             Add a card to get started. Cards are grouped by topic, and Rememorize schedules each one for review just
@@ -77,7 +80,7 @@
     </div>
 {:else}
     <!-- Today's cards as a deck: the top card says what is due, with the rest of the pile showing under it. -->
-    <div class="stage" class:two={ready.length > 0} class:three={today.length > 1}>
+    <div class="stage" class:deck-under={ready.length > 0}>
         <section class="panel today" aria-label="Today">
             <div class="today-text">
                 {#if first}
@@ -100,10 +103,10 @@
                 <a
                     class="btn primary large start"
                     href={href.review(first.name, undefined, "home")}
-                    aria-label="Review {first.name}, {plural(first.due, 'card')}"
+                    aria-label="{startLabel}, {plural(first.due, 'card')}"
                 >
-                    <span class="what">Review {first.name}</span>
-                    <span class="n">{first.due}</span>
+                    <span class="what">{startLabel}</span>
+                    <span class="n">{plural(first.due, "card")}</span>
                 </a>
             {/if}
             <ul class="facts">
@@ -120,11 +123,12 @@
                 <li class="row">
                     <a class="group" href={href.group(group.name)}>
                         <span class="name content">{group.name}</span>
-                        <!-- Due counts only reviews; new cards are counted apart, as the daily limit decides how many start. -->
+                        <!-- What its review holds: the two counts add up to the button's, a review size aside. -->
                         <span class="meta">
-                            {plural(group.total, "card")}{#if group.reviews > 0}, <span class="due"
-                                    >{group.reviews} due</span
-                                >{/if}{#if group.fresh > 0}, <span class="fresh">{group.fresh} new</span>{/if}
+                            {#if group.reviews > 0}<span class="due">{group.reviews} due</span>{/if}{#if group.reviews > 0 && group.starting}{", "}{/if}{#if group.starting}<span
+                                    class="fresh">{group.starting} new</span
+                                >{/if}
+                            of {plural(group.total, "card")}
                         </span>
                     </a>
                     <a
@@ -134,14 +138,13 @@
                     >
                         Review <span class="n">{group.due}</span>
                     </a>
-                    <span class="go" aria-hidden="true"><Icon name="chevron" size={18} /></span>
                 </li>
             {/each}
         </ul>
     {/if}
 
     {#if rest.length > 0}
-        <h2 class="section-label">{ready.length > 0 ? "Up to date" : "Groups"}</h2>
+        <h2 class="section-label">{ready.length > 0 ? "Nothing due today" : "Groups"}</h2>
         <ul class="groups rows">
             {#each rest as group (group.name)}
                 {@const due = nextIn(group.name)}
@@ -149,7 +152,7 @@
                     <a class="group" href={href.group(group.name)}>
                         <span class="name content">{group.name}</span>
                         <span class="meta">
-                            {plural(group.total, "card")}{#if group.fresh > 0}, <span class="fresh">{group.fresh} new</span>{/if}{#if due}, next
+                            {plural(group.total, "card")}{#if group.fresh > 0}, {group.fresh} not started{/if}{#if due}, next
                                 review {fromNow(due.toISOString(), library.now)}{/if}
                         </span>
                     </a>
@@ -157,6 +160,14 @@
                 </li>
             {/each}
         </ul>
+    {/if}
+
+    <!-- Today's new cards are shared by every group. Says so where some are left out of the counts above. -->
+    {#if first && library.newWaiting > 0}
+        <p class="muted waiting">
+            {plural(library.newWaiting, "more new card")} will wait for another day:
+            <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
+        </p>
     {/if}
 
     <!-- Every card in one list, whatever its group: for finding one, or studying a slice of them all. -->
@@ -229,48 +240,40 @@
 
     .deck span:nth-child(3) {
         inset: 0;
+        display: grid;
+        place-items: center;
         background: var(--surface);
         box-shadow: var(--shadow);
     }
 
-    /* The same pile as the review's: the cards under the top one show while there is something to study. */
+    /* The brain, faint: a card waiting for something to remember. */
+    .deck :global(.logo) {
+        opacity: 0.28;
+    }
+
+    /* The top card of today's pile: the next one shows under it while there is something to study. */
     .stage {
         position: relative;
         transition: margin-bottom 200ms;
     }
 
-    .stage.two {
-        margin-bottom: 0.625rem;
+    .stage.deck-under {
+        margin-bottom: 0.5rem;
     }
 
-    .stage.three {
-        margin-bottom: 1.25rem;
-    }
-
-    .stage::before,
     .stage::after {
         content: "";
         position: absolute;
+        inset: auto 0.875rem -0.5rem;
         height: 4rem;
         border: 1px solid var(--border);
         border-radius: var(--radius-xl);
-        box-shadow: var(--shadow-sm);
+        background: color-mix(in oklab, var(--surface) 60%, var(--bg));
         opacity: 0;
         transition: opacity 200ms;
     }
 
-    .stage::after {
-        inset: auto 0.875rem -0.625rem;
-        background: color-mix(in oklab, var(--surface) 70%, var(--bg));
-    }
-
-    .stage::before {
-        inset: auto 1.75rem -1.25rem;
-        background: color-mix(in oklab, var(--surface) 40%, var(--bg));
-    }
-
-    .stage.two::after,
-    .stage.three::before {
+    .stage.deck-under::after {
         opacity: 1;
     }
 
@@ -320,8 +323,7 @@
 
     .start .n {
         flex: none;
-        min-width: 1.75rem;
-        padding: 0.1rem 0.5rem;
+        padding: 0.1rem 0.6rem;
         border-radius: 999px;
         background: color-mix(in oklab, var(--primary-ink) 18%, transparent);
         font-size: 0.925rem;
@@ -332,7 +334,7 @@
         grid-column: 1 / -1;
         display: flex;
         flex-wrap: wrap;
-        gap: 0.4rem 1.5rem;
+        gap: 0.4rem 1.25rem;
         list-style: none;
         margin: 0;
         padding: 0.9rem 0 0;
@@ -359,11 +361,11 @@
     .row {
         position: relative;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.75rem;
         min-height: 4.25rem;
-        padding: 0.75rem 0.75rem 0.75rem 1.25rem;
+        padding: 0.75rem 0.9rem 0.75rem 1.25rem;
         transition: background-color 120ms;
     }
 
@@ -421,15 +423,25 @@
         font-size: 0.875rem;
     }
 
-    .due {
-        color: var(--accent-text);
+    .due,
+    .fresh {
         font-weight: 650;
     }
 
-    .review {
+    .due {
+        color: var(--accent-text);
+    }
+
+    .fresh {
+        color: var(--text);
+    }
+
+    /* Outlined as well as tinted: it is a button on the row, not a count beside it. */
+    .rows .row .review {
         position: relative;
         z-index: 1;
         gap: 0.4rem;
+        border-color: color-mix(in oklab, var(--accent) 30%, transparent);
         border-radius: 999px;
     }
 
@@ -497,6 +509,11 @@
         font-size: 0.925rem;
     }
 
+    .waiting {
+        margin: 0.75rem 0.25rem 0;
+        font-size: 0.9rem;
+    }
+
     @media (max-width: 560px) {
         .today {
             grid-template-columns: minmax(0, 1fr);
@@ -506,6 +523,16 @@
         .start {
             max-width: none;
             width: 100%;
+        }
+
+        /* Both facts on one line. */
+        .facts {
+            gap: 0.4rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .facts li {
+            gap: 0.3rem;
         }
 
         .row {

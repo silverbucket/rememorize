@@ -94,6 +94,19 @@
     const nextGroup = $derived(
         group !== undefined && !show && live.length === 0 ? library.ready.find((g) => g.name !== group) : undefined,
     );
+    /**
+     * What the wrap-up is called. One group done is not the day done: it says which,
+     * so the button that carries on to the next group doesn't contradict it.
+     */
+    const doneTitle = $derived(
+        waiting > 0
+            ? "Done for now"
+            : nextGroup
+              ? `${group} done`
+              : library.ready.length === 0
+                ? "All caught up for today"
+                : "Done for now",
+    );
     /** How far through the session: ratings given, out of those plus what is left. */
     const progress = $derived(reviewed + live.length === 0 ? 0 : reviewed / (reviewed + live.length));
     const dueAt = (i: ReviewItem) => new Date(stateOf(i.card, i.reverse)?.due ?? 0).getTime();
@@ -385,8 +398,12 @@
     {:else}
         <div class="panel done">
             {#if reviewed > 0}
-                <span class="seal"><Icon name="check" size={26} /></span>
-                <h2>Done for now</h2>
+                <!-- The numbers below are this review's; the link leads to all of them. -->
+                <div class="done-head">
+                    <span class="seal"><Icon name="check" size={26} /></span>
+                    <a class="btn ghost small progress" href={href.stats()}><Icon name="chart" size={18} />See your progress</a>
+                </div>
+                <h2>{doneTitle}</h2>
                 <dl class="summary">
                     <div><dt>Reviewed</dt><dd>{reviewed}</dd></div>
                     <div><dt>Remembered</dt><dd>{Math.round(((reviewed - tally[1]) / reviewed) * 100)}%</dd></div>
@@ -439,13 +456,11 @@
             {#if nextDue(scope, library.now) && library.newWaiting === 0 && waiting === 0 && held === 0 && !comesBack}
                 <p class="muted">Next card is due {fromNow(nextDue(scope, library.now)?.toISOString(), library.now)}.</p>
             {/if}
-            {#if nextGroup && waiting === 0}
-                <p class="next-up">
-                    Next up: <strong class="content">{nextGroup.name}</strong>, with
-                    {plural(nextGroup.due, "card")} to review.
-                </p>
-            {/if}
             <div class="done-actions">
+                <!-- A label on the button it is about, so the two read together. -->
+                {#if nextGroup && waiting === 0}
+                    <p class="next-up">Next up</p>
+                {/if}
                 {#if waiting > 0}
                     <button class="btn primary" type="button" onclick={nextBatch} disabled={busy}>
                         Review {plural(Math.min(waiting, library.cardsPerReview ?? waiting), "more card")}
@@ -456,13 +471,11 @@
                         href={href.review(nextGroup.name, undefined, from)}
                         aria-label="Review {nextGroup.name}, {plural(nextGroup.due, 'card')}"
                     >
-                        Review {nextGroup.name}
+                        <span class="what">Review {nextGroup.name}</span>
+                        <span class="n">{plural(nextGroup.due, "card")}</span>
                     </a>
                 {/if}
                 <a class="btn" class:primary={waiting === 0 && !nextGroup} href={back}>Back to {backName}</a>
-                {#if reviewed > 0}
-                    <a class="btn ghost" href={href.stats()}>See your progress</a>
-                {/if}
             </div>
         </div>
     {/if}
@@ -491,14 +504,15 @@
         padding: 0;
     }
 
+    /* The group's name, set like group names everywhere else. */
     .session h1 {
         flex: 1;
         min-width: 0;
         overflow: hidden;
-        font-family: var(--font-ui);
-        font-size: 1rem;
-        font-weight: 650;
-        letter-spacing: 0;
+        font-size: 1.2rem;
+        font-weight: 560;
+        letter-spacing: -0.005em;
+        line-height: 1.3;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
@@ -812,12 +826,24 @@
         letter-spacing: -0.01em;
     }
 
+    .done-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin-bottom: 0.25rem;
+    }
+
+    .progress {
+        margin-right: -0.4rem;
+        font-weight: 550;
+    }
+
     .seal {
         display: grid;
         place-items: center;
         width: 3rem;
         height: 3rem;
-        margin-bottom: 0.25rem;
         border-radius: 50%;
         background: var(--accent-subtle);
         color: var(--accent-text);
@@ -926,14 +952,27 @@
     }
 
     .next-up {
-        width: 100%;
-        padding: 0.7rem 0.9rem;
-        border-radius: var(--radius);
-        background: var(--accent-subtle);
+        flex-basis: 100%;
+        margin-bottom: -0.1rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-weight: 600;
     }
 
-    .next-up strong {
-        font-weight: 600;
+    .what {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* The count rides on the button, as on the home page's. */
+    .done-actions .n {
+        flex: none;
+        padding: 0.1rem 0.6rem;
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--primary-ink) 18%, transparent);
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
     }
 
     .done-actions {
@@ -942,6 +981,7 @@
         gap: 0.5rem;
         margin-top: 0.5rem;
     }
+
 
     /*
      * --card is the card's height with a short answer: what is left of the window
