@@ -240,13 +240,13 @@ const LONG = 150;
  */
 export function guessMapping(type: AnkiNoteType): NoteTypeMapping {
     const sides = guessSides(type);
-    const sample = type.notes.slice(0, 200);
     const shown = new Set([...type.front, ...type.back]);
     const used = [sides.front, sides.back, sides.hint];
     const extra = type.fields
         .map((_, i) => i)
         .filter((i) => shown.has(type.fields[i]) && !used.includes(i))
-        .filter((i) => sample.some((n) => htmlToText(n.fields[i] ?? "")));
+        // Every note, not just the sample: an example only the last note has still counts.
+        .filter((i) => type.notes.some((n) => htmlToText(n.fields[i] ?? "")));
     return { ...sides, extra };
 }
 

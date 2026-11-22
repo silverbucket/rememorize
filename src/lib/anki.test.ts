@@ -311,6 +311,23 @@ describe("extraText", () => {
         expect(result.rows[1].card).not.toHaveProperty("extra");
     });
 
+    it("looks at every note for text in a field, not just the first ones", () => {
+        const type: AnkiNoteType = {
+            id: "t",
+            name: "Words",
+            fields: ["Word", "English", "Example"],
+            cloze: false,
+            front: ["Word"],
+            back: ["English", "Example"],
+            notes: Array.from({ length: 250 }, (_, order) => ({
+                fields: [`w${order}`, `e${order}`, order === 249 ? "An example." : ""],
+                deck: "Default",
+                order,
+            })),
+        };
+        expect(guessMapping(type).extra).toEqual([2]);
+    });
+
     it("leaves out a field that is already on the card", async () => {
         const collection = await czech();
         const mappings = guessed(collection);

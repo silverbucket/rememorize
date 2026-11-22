@@ -127,6 +127,17 @@ import {
         return names.length > 4 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ");
     }
 
+    /** A field can be in the extra unless it's already on the card. */
+    function canBeExtra(type: AnkiNoteType, mapping: NoteTypeMapping, field: number): boolean {
+        const gaps = type.cloze && mapping.gaps;
+        return field !== mapping.front && field !== mapping.hint && (gaps || field !== mapping.back);
+    }
+
+    /** The extra fields that will be imported. */
+    function extraFields(type: AnkiNoteType, mapping: NoteTypeMapping): number[] {
+        return mapping.extra.filter((i) => canBeExtra(type, mapping, i));
+    }
+
     function toggleExtra(typeId: string, field: number, on: boolean) {
         const mapping = mappings[typeId];
         mapping.extra = on ? [...mapping.extra, field] : mapping.extra.filter((i) => i !== field);
@@ -314,11 +325,13 @@ import {
                         <details class="extra-pick">
                             <summary>
                                 <Icon name="chevron" size={16} />
-                                <span>Extra, shown with the answer: <span class="muted">{fieldList(type, mapping.extra)}</span></span>
+                                <span
+                                    >Extra, shown with the answer: <span class="muted">{fieldList(type, extraFields(type, mapping))}</span></span
+                                >
                             </summary>
                             <div class="extra-fields">
                                 {#each type.fields as field, i (i)}
-                                    {#if i !== mapping.front && (gaps || i !== mapping.back) && i !== mapping.hint}
+                                    {#if canBeExtra(type, mapping, i)}
                                         <label class="check">
                                             <input
                                                 type="checkbox"

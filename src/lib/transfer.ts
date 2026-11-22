@@ -270,7 +270,9 @@ export function sameText(text: string): string {
     }
     while (end > start) {
         const low = normalized.charCodeAt(end - 1);
-        const size = low >= 0xdc00 && low <= 0xdfff && end - 2 >= start ? 2 : 1;
+        const high = normalized.charCodeAt(end - 2);
+        const pair = low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff && end - 2 >= start;
+        const size = pair ? 2 : 1;
         if (!trimmable(normalized.slice(end - size, end))) break;
         end -= size;
     }
