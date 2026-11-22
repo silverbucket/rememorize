@@ -219,10 +219,16 @@
 <div class="page-head">
     <h1>{group ?? "All cards"}</h1>
     {#if library.loaded && cards.length > 0}
+        <!-- Each count keeps to one line: where the line is short it breaks between them, not inside one. -->
+        {@const counts = [
+            plural(cards.length, "card"),
+            reviews > 0 ? `${reviews} due` : "",
+            starting > 0 ? `${starting} to start today` : "",
+            notStarted > 0 ? `${notStarted} not started` : "",
+        ].filter(Boolean)}
         <p class="sub">
             {#if show}{labelOf(show)}:{/if}
-            {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if starting > 0}, {starting} new
-                today{/if}{#if notStarted > 0}, {notStarted} not started{/if}
+            {#each counts as count, i (count)}<span class="count">{count}{i < counts.length - 1 ? "," : ""}</span>{" "}{/each}
         </p>
     {/if}
     <div class="actions">
@@ -254,11 +260,11 @@
         {#if starting < fresh}
             <p>
                 {#if starting === 0}
-                    No more new cards today:
+                    No more new cards today.
                 {:else}
-                    The rest wait for another day:
+                    More new cards wait for another day.
                 {/if}
-                <a href={href.account()}>the daily limit</a> is {plural(library.newPerDay, "new card")}.
+                <a href={href.account()}>The daily limit</a> is {library.newPerDay} across all groups.
             </p>
         {/if}
     </div>
@@ -439,6 +445,10 @@
     .page-head .sub {
         grid-column: 1 / -1;
         margin-top: 0;
+    }
+
+    .count {
+        white-space: nowrap;
     }
 
     h1 {

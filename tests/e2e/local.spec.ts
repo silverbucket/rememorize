@@ -344,7 +344,7 @@ test("a card answered Again comes back before the review ends, and one answered 
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Hard/ }).click();
     await expect(page.getByText("All caught up for now")).toBeVisible();
-    await expect(page.getByText(/The next review is in \d+ minutes?\./)).toBeVisible();
+    await expect(page.getByText(/The next review is in \d+\sminutes?\./)).toBeVisible();
 });
 
 test("undo the last rating", async ({ page, isMobile }) => {
@@ -446,8 +446,10 @@ test("daily limit on new cards", async ({ page }) => {
 
     // The group says why its review is shorter than its count of new cards.
     await page.goto("/#/group/Numbers");
-    await expect(page.getByText("3 cards, 2 new today, 3 not started")).toBeVisible();
-    await expect(page.getByText("The rest wait for another day: the daily limit is 2 new cards.")).toBeVisible();
+    await expect(page.getByText("3 cards, 2 to start today, 3 not started")).toBeVisible();
+    await expect(
+        page.getByText("More new cards wait for another day. The daily limit is 2 across all groups."),
+    ).toBeVisible();
 
     await page.goto("/");
     const start = page.locator(".today").getByRole("link", { name: /^Review Numbers/ });
@@ -466,7 +468,7 @@ test("daily limit on new cards", async ({ page }) => {
 
     await page.getByRole("link", { name: "Back to your cards" }).click();
     await page.getByRole("link", { name: /^Numbers/ }).click();
-    await expect(page.getByText("No more new cards today: the daily limit is 2 new cards.")).toBeVisible();
+    await expect(page.getByText("No more new cards today. The daily limit is 2 across all groups.")).toBeVisible();
 
     // The setting is remembered, and today's count shows.
     await page.reload();
@@ -563,7 +565,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByTitle("Studied both ways")).toBeVisible();
     await expect(page.locator(".when")).toHaveText("tomorrow");
-    await expect(page.getByRole("link", { name: /Review \d+ cards?/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Review \d+\scards?/ })).toHaveCount(0);
 
     // A new card studied both ways shows one direction today: front → back.
     await page.goto("/#/new?group=Drinks");
@@ -699,7 +701,7 @@ test("statistics follow reviews", async ({ page }) => {
     await expect(page.getByRole("row", { name: /Animals/ })).toContainText("50%");
     await expect(page.getByText("2 new cards started in the last 30 days")).toBeVisible();
     // The card rated Easy is scheduled for a later day.
-    await expect(page.getByText(/^\d+ cards? due by the end of today, 1 in the next 7 days$/)).toBeVisible();
+    await expect(page.getByText(/^\d+\scards? due by the end of today, 1 in the next 7 days$/)).toBeVisible();
 });
 
 test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {

@@ -475,11 +475,6 @@
                     Carry on now or come back later: they stay due, and a few hours makes little difference to how
                     well you remember them.
                 </p>
-            {:else if library.newWaiting > 0 && !nextGroup}
-                <p class="muted">
-                    You've started {library.startedToday} of {library.newPerDay} new cards for today, and the rest wait
-                    for another day. <a href={href.account()}>Change the daily limit</a>.
-                </p>
             {/if}
             {#if held > 0}
                 <p class="muted">
@@ -514,6 +509,13 @@
                         <span class="n">{plural(nextGroup.due, "card")}</span>
                     </a>
                 </div>
+            {/if}
+            <!-- The day's, not this review's: it stands with the way on, not in the summary. -->
+            {#if waiting === 0 && !nextGroup && library.newWaiting > 0}
+                <p class="muted left-today">
+                    You've started {library.startedToday} of {library.newPerDay} new cards for today, and the rest wait
+                    for another day. <a href={href.account()}>Change the daily limit</a>.
+                </p>
             {/if}
             <a class="btn" class:primary={waiting === 0 && !nextGroup} href={back}>Back to {backName}</a>
         </div>

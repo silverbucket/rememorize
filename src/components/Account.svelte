@@ -174,7 +174,8 @@
         <h2>Storage</h2>
         <p class="account">
             <span class="dot" class:warn={library.status === "unauthorized"} aria-hidden="true"></span>
-            <span>Connected as <strong>{library.userAddress}</strong>.</span>
+            <!-- No full stop: next to an address it would pass for part of it. -->
+            <span>Connected as <strong>{library.userAddress}</strong></span>
         </p>
         {#if library.offline}
             <p class="muted">You're offline; changes will sync when you're back.</p>
@@ -463,7 +464,9 @@
         <a href="https://silverbucket.net" target="_blank" rel="noreferrer">silverbucket.net</a><br />
         <a href="https://github.com/silverbucket/rememorize" target="_blank" rel="noreferrer">Source code</a>
         · Free software under the
-        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer">GPL-3.0 or later</a>
+        <a class="whole" href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer"
+            >GPL-3.0 or later</a
+        >
     </p>
 </section>
 
@@ -501,11 +504,16 @@
         max-width: 38rem;
     }
 
+    /* A name that isn't broken across lines. */
+    .whole {
+        white-space: nowrap;
+    }
+
     /* Why something can't be done here yet: set apart, and no louder than the words around it. */
     section p.notice {
-        padding: 0.7rem 0.9rem;
-        border-radius: var(--radius);
-        background: var(--surface-2);
+        padding: 0.1rem 0 0.1rem 0.8rem;
+        border-left: 2px solid var(--border-strong);
+        color: var(--text-muted);
         font-size: 0.925rem;
     }
 

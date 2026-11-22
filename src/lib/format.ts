@@ -9,12 +9,15 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
     ["minute", 60 * 1000],
 ];
 
+/** A space that a line can't break at: it keeps a count with its unit ("8 minutes", "6 cards"). */
+const NBSP = "\u00a0";
+
 /** "in 3 days", "2 hours ago", "now". */
 export function fromNow(iso: string | undefined, now = new Date()): string {
     if (!iso) return "never";
     const diff = new Date(iso).getTime() - now.getTime();
     for (const [unit, ms] of UNITS) {
-        if (Math.abs(diff) >= ms) return relative.format(Math.round(diff / ms), unit);
+        if (Math.abs(diff) >= ms) return relative.format(Math.round(diff / ms), unit).replace(/(\d) /, `$1${NBSP}`);
     }
     return "now";
 }
@@ -26,7 +29,7 @@ export function formatDateTime(iso: string | undefined): string {
 }
 
 export function plural(count: number, one: string, many = `${one}s`): string {
-    return `${count} ${count === 1 ? one : many}`;
+    return `${count}${NBSP}${count === 1 ? one : many}`;
 }
 
 /** A span of days in words: "9 days", "14 months", "2.5 years". */

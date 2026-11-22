@@ -45,6 +45,9 @@
         return names.length === 0 ? "" : names.length === 1 ? names[0] : "other groups";
     });
 
+    /** A group with nothing due could still be given today's new cards. */
+    const canStartElsewhere = $derived(library.newRemaining > 0 && rest.some((g) => notStartedIn(g.name) > 0));
+
     /** The group the next card to come due is in. */
     const soonestGroup = $derived(
         next && library.groups.find((g) => nextIn(g.name)?.getTime() === next.getTime())?.name,
@@ -105,8 +108,11 @@
                     <p class="muted">
                         <!-- What comes back later today is said first: caught up is then only for now. -->
                         {#if next && next.toDateString() === library.now.toDateString()}
-                            The next card is due {fromNow(next.toISOString(), library.now)}{#if soonestGroup && library.groups.length > 1},
-                                in <strong>{soonestGroup}</strong>{/if}.
+                            {#if soonestGroup && library.groups.length > 1}
+                                <strong>{soonestGroup}</strong> is due {fromNow(next.toISOString(), library.now)}.
+                            {:else}
+                                The next card is due {fromNow(next.toISOString(), library.now)}.
+                            {/if}
                         {:else if library.newWaiting > 0}
                             {plural(viewCounts(library.cards, library.now).new, "card")} not started yet: more start
                             tomorrow.
@@ -171,7 +177,8 @@
     {/if}
 
     {#if rest.length > 0}
-        <h2 class="section-label">{ready.length > 0 ? "Nothing due today" : "Groups"}</h2>
+        <!-- "Nothing due" would tell someone to skip a group that can still take today's new cards. -->
+        <h2 class="section-label">{ready.length === 0 ? "Groups" : canStartElsewhere ? "Other groups" : "Nothing due today"}</h2>
         <ul class="groups rows">
             {#each rest as group (group.name)}
                 {@const due = nextIn(group.name)}
@@ -185,12 +192,13 @@
                         </span>
                         <span class="meta">
                             {plural(group.total, "card")}{#if waiting === group.total}, none started yet{:else if waiting > 0},
-                                {waiting} not started{/if}{#if due}, next review {fromNow(due.toISOString(), library.now)}{/if}
+                                {waiting} not started{/if}{#if due}, <span class:soon={ready.length === 0 && group.name === soonestGroup}>next review {fromNow(due.toISOString(), library.now)}</span>{/if}
                         </span>
                         <!-- Today's new cards can go to this group instead: said on the row that does it. -->
                         {#if waiting > 0 && library.newRemaining > 0}
                             <span class="meta instead">
-                                You can start today's {plural(Math.min(waiting, library.newRemaining), "new card")} here{takers ? ` instead of in ${takers}` : ""}
+                                You can start today's {plural(Math.min(waiting, library.newRemaining), "new card")} here{#if takers}{" "}instead
+                                    of in <strong>{takers}</strong>{/if}
                             </span>
                         {/if}
                     </a>
@@ -486,9 +494,19 @@
         font-weight: 650;
     }
 
+    /* The group the card above names: its time stands out from the others'. */
+    .soon {
+        color: var(--text);
+        font-weight: 600;
+    }
+
     /* Said in the text's own ink: green in these rows is for what is due. */
     .instead {
         color: var(--text);
+    }
+
+    .instead strong {
+        font-weight: 600;
     }
 
     .due {
@@ -592,9 +610,15 @@
             padding: 1.35rem 1.25rem 1rem;
         }
 
-        /* The mark keeps its place beside the text. */
+        /* The mark keeps its place beside the text, smaller, so the line beside it isn't squeezed into two. */
         .today.caught {
             grid-template-columns: minmax(0, 1fr) auto;
+            column-gap: 0.75rem;
+        }
+
+        .seal {
+            width: 2.25rem;
+            height: 2.25rem;
         }
 
         .start {

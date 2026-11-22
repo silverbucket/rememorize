@@ -54,16 +54,18 @@
         /* Room for the scale's top value beside the bars. */
         padding-left: 1.75rem;
         border-bottom: 1px solid var(--border-strong);
-        /* A line at the top value and one halfway, to read the bars against. */
+        /* A line at the top value and one halfway, to read the bars against. They start where the bars do. */
         background:
             linear-gradient(var(--border), var(--border)) 0 0 / 100% 1px no-repeat,
             linear-gradient(var(--border), var(--border)) 0 50% / 100% 1px no-repeat;
+        background-origin: content-box;
         touch-action: pan-y;
     }
 
+    /* Set on its line, like the scale of the line charts. */
     .max {
         position: absolute;
-        top: 0.3rem;
+        top: -0.35rem;
         left: 0;
         font-size: 0.72rem;
         line-height: 1;

@@ -525,6 +525,7 @@ async function capture(page) {
             await pages.group();
             await page.getByRole("button", { name: "Select" }).click();
             for (const row of [0, 1, 3]) await page.locator(".cards li button").nth(row).click();
+            await page.evaluate(() => window.scrollTo(0, 0));
             return () => page.keyboard.press("Escape");
         },
         new: async () => {
