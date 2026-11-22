@@ -344,8 +344,7 @@ test("a card answered Again comes back before the review ends, and one answered 
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Hard/ }).click();
     await expect(page.getByText("All caught up for now")).toBeVisible();
-    await expect(page.getByText(/Next review in \d+ minutes?, in Animals\./)).toHaveCount(0);
-    await expect(page.getByText(/Next review in \d+ minutes?\./)).toBeVisible();
+    await expect(page.getByText(/The next review is in \d+ minutes?\./)).toBeVisible();
 });
 
 test("undo the last rating", async ({ page, isMobile }) => {

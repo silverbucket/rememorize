@@ -45,6 +45,11 @@
         return names.length === 0 ? "" : names.length === 1 ? names[0] : "other groups";
     });
 
+    /** The group the next card to come due is in. */
+    const soonestGroup = $derived(
+        next && library.groups.find((g) => nextIn(g.name)?.getTime() === next.getTime())?.name,
+    );
+
     /** When a group with nothing due comes up next. */
     const nextIn = (group: string) => nextDue(library.cardsIn(group), library.now);
     /** Its cards that are not started yet, counted as the group's own page counts them. */
@@ -100,7 +105,8 @@
                     <p class="muted">
                         <!-- What comes back later today is said first: caught up is then only for now. -->
                         {#if next && next.toDateString() === library.now.toDateString()}
-                            The next card is due {fromNow(next.toISOString(), library.now)}.
+                            The next card is due {fromNow(next.toISOString(), library.now)}{#if soonestGroup && library.groups.length > 1},
+                                in <strong>{soonestGroup}</strong>{/if}.
                         {:else if library.newWaiting > 0}
                             {plural(viewCounts(library.cards, library.now).new, "card")} not started yet: more start
                             tomorrow.
@@ -184,7 +190,7 @@
                         <!-- Today's new cards can go to this group instead: said on the row that does it. -->
                         {#if waiting > 0 && library.newRemaining > 0}
                             <span class="meta instead">
-                                Open to start today's {plural(Math.min(waiting, library.newRemaining), "new card")} here{takers ? ` instead of in ${takers}` : ""}
+                                You can start today's {plural(Math.min(waiting, library.newRemaining), "new card")} here{takers ? ` instead of in ${takers}` : ""}
                             </span>
                         {/if}
                     </a>
@@ -341,6 +347,12 @@
     .today-text .muted {
         margin-top: 0.35rem;
         overflow-wrap: anywhere;
+        text-wrap: balance;
+    }
+
+    .today-text strong {
+        color: var(--text);
+        font-weight: 600;
     }
 
     /* The group's name gives way before the button outgrows its place. */

@@ -108,6 +108,8 @@
     const caughtUp = $derived(moreToday ? "All caught up for now" : "All caught up for today");
     /** Nothing is left to review anywhere: the day's reviews are done, or done until more come due. */
     const dayDone = $derived(waiting === 0 && library.ready.length === 0);
+    /** Whether to say when the next review is: later today always, a later day only when nothing new starts before it. */
+    const comeBack = $derived(!!soonest && (moreToday || (library.newWaiting === 0 && held === 0)));
 
     /**
      * What the wrap-up is called. One group done is not the day done: it says which,
@@ -420,9 +422,21 @@
             {#if reviewed > 0}
                 <span class="seal"><Icon name="check" size={26} /></span>
                 <h2>{doneTitle}</h2>
-                <!-- The heading is the group's, and so are the numbers under it. This line is the day's. -->
-                {#if dayDone && doneTitle !== caughtUp}
-                    <p class="day">{caughtUp}.</p>
+                <!--
+                    The heading is the group's, and so are the numbers under it. This line is the day's: where it
+                    stands, and when to come back. A later day is only named when nothing new starts before it.
+                -->
+                {#if dayDone && (doneTitle !== caughtUp || comeBack)}
+                    <p class="day">
+                        {#if doneTitle !== caughtUp}{caughtUp}.{/if}
+                        {#if comeBack && soonest}
+                            {#if library.groups.length > 1}
+                                <strong>{soonest.group}</strong> is due {fromNow(soonest.at.toISOString(), library.now)}.
+                            {:else}
+                                The next review is {fromNow(soonest.at.toISOString(), library.now)}.
+                            {/if}
+                        {/if}
+                    </p>
                 {/if}
                 <dl class="summary">
                     <div><dt>Reviewed</dt><dd>{reviewed}</dd></div>
@@ -454,13 +468,6 @@
             {/if}
             {#if comesBack}
                 <p>{comingBack}</p>
-            {/if}
-            <!-- When to come back. Later today always; a later day only when nothing new is waiting to start before it. -->
-            {#if dayDone && soonest && !comesBack && (moreToday || (library.newWaiting === 0 && held === 0))}
-                <p class="muted">
-                    Next review {fromNow(soonest.at.toISOString(), library.now)}{#if library.groups.length > 1}, in
-                        <span class="content">{soonest.group}</span>{/if}.
-                </p>
             {/if}
             {#if waiting > 0}
                 <p>{plural(waiting, "more card")} {waiting === 1 ? "is" : "are"} due.</p>
@@ -848,7 +855,7 @@
         gap: 0.75rem;
         justify-items: start;
         margin-top: 0.5rem;
-        padding: 2rem 1.5rem;
+        padding: 1.6rem 1.5rem 1.4rem;
     }
 
     .done h2 {
@@ -1005,6 +1012,12 @@
     .done .day {
         margin-top: -0.35rem;
         color: var(--text-muted);
+        text-wrap: pretty;
+    }
+
+    .day strong {
+        color: var(--text);
+        font-weight: 600;
     }
 
     .left-today {
@@ -1071,10 +1084,11 @@
             padding: 1.5rem 1.25rem;
         }
 
-        /* Like the answer buttons, where to go next sits at the bottom of the screen. */
+        /* Like the answer buttons, where to go next sits at the bottom of the screen, ruled off as its foot. */
         .done-actions {
             margin-top: auto;
-            padding: 1.5rem 0 0;
+            padding: 1rem 0 0;
+            border-top: 1px solid var(--border);
         }
 
         .done-actions > *,

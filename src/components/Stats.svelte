@@ -92,7 +92,13 @@
         upcoming.map((d, i) => ({
             key: dayKey(d.date),
             value: d.due,
-            tick: i === 0 ? "Today" : i % 7 === 0 ? shortDay.format(d.date) : undefined,
+            // Weekly, and the last day in place of a label that would run off the end.
+            tick:
+                i === 0
+                    ? "Today"
+                    : i === upcoming.length - 1 || (i % 7 === 0 && i < upcoming.length - 4)
+                      ? shortDay.format(d.date)
+                      : undefined,
             text: `${i === 0 ? "By the end of today (with overdue)" : dayName.format(d.date)}: ${plural(d.due, "card")} due`,
         })),
     );
@@ -250,7 +256,7 @@
             <dd>{reviewsWeek}</dd>
         </div>
         <div class="tile">
-            <dt>Retention</dt>
+            <dt>Retention overall</dt>
             <dd>{percent(overall)}</dd>
         </div>
     </dl>
@@ -849,7 +855,7 @@
         padding-left: 0.75rem;
         text-align: right;
         white-space: nowrap;
-        font-variant-numeric: tabular-nums;
+        /* Not tabular figures: in this face they set the comma of "4,223" as wide as a digit. */
     }
 
     h3 {

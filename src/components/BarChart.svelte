@@ -118,11 +118,7 @@
         white-space: nowrap;
     }
 
-    /* The first and last labels stay inside the chart instead of centring on their bars. */
-    .tick:first-child {
-        justify-content: flex-start;
-    }
-
+    /* The last label stays inside the chart instead of centring on its bar; the first has the scale's margin to centre in. */
     .tick:last-child {
         justify-content: flex-end;
     }

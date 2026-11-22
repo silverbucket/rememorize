@@ -238,8 +238,8 @@
                 onchange={setNewPerDay}
             />
             <p class="muted">
-                How many cards that aren't started yet to begin each day, across all groups. Reviews of cards you've
-                already started don't count toward this.
+                How many cards to start each day, across all groups. A card studied both ways counts once for each
+                direction. Reviews of cards you've already started don't count toward this.
             </p>
         </div>
 
@@ -286,14 +286,14 @@
         A notification on this device when cards are due. It arrives even while Rememorize is closed.
     </p>
     {#if reminders.state === "install"}
-        <p>
+        <p class="notice">
             On an iPhone or iPad, Rememorize has to be on your Home Screen first. Tap Share, then “Add to Home
             Screen”, open Rememorize from there and come back to this page.
         </p>
     {:else if reminders.state === "unsupported"}
-        <p>This browser can't show notifications.</p>
+        <p class="notice">This browser can't show notifications.</p>
     {:else if reminders.state === "blocked"}
-        <p>
+        <p class="notice">
             Notifications are blocked for Rememorize. Allow them in your browser's or your phone's settings, then
             come back to this page.
         </p>
@@ -352,7 +352,7 @@
         </div>
     {:else}
         {#if reminders.state === "stopped"}
-            <p>Reminders have stopped on this device. Turn them on again to keep getting them.</p>
+            <p class="notice">Reminders have stopped on this device. Turn them on again to keep getting them.</p>
         {/if}
         <div class="buttons">
             <button class="btn primary" type="button" disabled={reminders.busy} onclick={() => reminders.enable()}
@@ -499,6 +499,14 @@
 
     section p {
         max-width: 38rem;
+    }
+
+    /* Why something can't be done here yet: set apart, and no louder than the words around it. */
+    section p.notice {
+        padding: 0.7rem 0.9rem;
+        border-radius: var(--radius);
+        background: var(--surface-2);
+        font-size: 0.925rem;
     }
 
     /* What a setting does is read once; it sits back from the setting itself. */
