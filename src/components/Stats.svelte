@@ -40,7 +40,9 @@
     const dayName = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" });
     const shortDay = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
     const monthName = new Intl.DateTimeFormat(undefined, { month: "short" });
+    const monthYear = new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" });
     const longDay = new Intl.DateTimeFormat(undefined, { dateStyle: "long" });
+    const count = new Intl.NumberFormat();
 
     const log = $derived(library.log);
     const now = $derived(library.now);
@@ -61,11 +63,14 @@
     const dayText = (day: DayStats) =>
         `${dayName.format(day.date)}: ${plural(day.reviews, "review")}${day.started ? `, ${plural(day.started, "new card")} started` : ""}`;
 
+    const yearTotal = $derived(weeks.flat().reduce((sum, d) => sum + d.reviews, 0));
+    const reviewsInYear = $derived(`${count.format(yearTotal)} ${yearTotal === 1 ? "review" : "reviews"}`);
+
     // Kept as a key, so the reading follows the day's numbers when sync changes them.
     let pickedKey: string | undefined = $state();
     const picked = $derived(weeks.flat().find((d) => d.key === pickedKey));
     const reading = $derived(
-        picked ? dayText(picked) : `${plural(weeks.flat().reduce((sum, d) => sum + d.reviews, 0), "review")} in the last year`,
+        picked ? dayText(picked) : `${reviewsInYear} in the last year`,
     );
 
     /** Label today and every 7th day before it, so the axis stays readable. */
@@ -87,14 +92,19 @@
         upcoming.map((d, i) => ({
             key: dayKey(d.date),
             value: d.due,
-            tick: i === 0 ? "Today" : i % 7 === 0 ? shortDay.format(d.date) : undefined,
+            // Weekly, and the last day in place of a label that would run off the end.
+            tick:
+                i === 0
+                    ? "Today"
+                    : i === upcoming.length - 1 || (i % 7 === 0 && i < upcoming.length - 4)
+                      ? shortDay.format(d.date)
+                      : undefined,
             text: `${i === 0 ? "By the end of today (with overdue)" : dayName.format(d.date)}: ${plural(d.due, "card")} due`,
         })),
     );
     const upcomingWeek = $derived(upcoming.slice(0, 7).reduce((sum, d) => sum + d.due, 0));
 
     const percent = (r: Retention) => (r.rate === undefined ? "—" : `${Math.round(r.rate * 100)}%`);
-    const count = new Intl.NumberFormat();
     const fromKey = (key: string) => {
         const [y, m, d] = key.split("-").map(Number);
         return new Date(y, m - 1, d);
@@ -104,8 +114,9 @@
     const groupProgress = $derived(progress(library.cards, now));
     const allProgress = $derived(groupProgress[0]);
     const STAGES: { stage: Stage; label: string }[] = [
-        { stage: "new", label: "New" },
-        { stage: "learning", label: "Learning" },
+        { stage: "new", label: "Not started" },
+        // Not "Learning": that is a card's stage in the card lists, counted by card. These count each direction.
+        { stage: "learning", label: "First steps" },
         { stage: "short", label: "Short-term" },
         { stage: "long", label: "Long-term" },
     ];
@@ -120,6 +131,15 @@
     const streakNext = $derived(milestone(currentStreak, STREAK_MILESTONES).next);
     const longTermNext = $derived(milestone(longTerm, LONG_TERM_MILESTONES).next);
 
+    /** The next milestone of each kind, and how far along it is. */
+    const goals = $derived(
+        [
+            streakNext && { name: `${streakNext}-day streak`, now: currentStreak, next: streakNext },
+            reviewsNext && { name: `${count.format(reviewsNext)} reviews`, now: log.length, next: reviewsNext },
+            longTermNext && { name: `${count.format(longTermNext)} long-term cards`, now: longTerm, next: longTermNext },
+        ].filter((goal) => !!goal),
+    );
+
     // This week against the one before.
     const weeks2 = $derived(weekOverWeek(log, now));
     const change = (current: number, before: number) =>
@@ -133,7 +153,13 @@
         weekly.map((w, i) => ({
             key: dayKey(w.start),
             value: w.retention.rate === undefined ? undefined : w.retention.rate * 100,
-            tick: i === weekly.length - 1 ? "This week" : i % 4 === 0 ? shortDay.format(w.start) : undefined,
+            // Counted back from this week, so the last date never runs into it.
+            tick:
+                i === weekly.length - 1
+                    ? "This week"
+                    : (weekly.length - 1 - i) % 4 === 0
+                      ? shortDay.format(w.start)
+                      : undefined,
             text: `${i === weekly.length - 1 ? "This week" : `Week of ${shortDay.format(w.start)}`}: ${
                 w.retention.rate === undefined
                     ? "no reviews"
@@ -162,8 +188,9 @@
             return {
                 key,
                 value: total,
-                tick: i === 0 ? shortDay.format(date) : i === length - 1 ? "Today" : undefined,
-                text: `${dayName.format(date)}: ${plural(total, "card")} learned`,
+                // Over months, the first label gives its year: "Nov 15" beside "Today" would pass for last week.
+                tick: i === 0 ? (length > 180 ? monthYear.format(date) : shortDay.format(date)) : i === length - 1 ? "Today" : undefined,
+                text: `${dayName.format(date)}: ${total} started`,
             };
         });
     });
@@ -229,13 +256,13 @@
             <dd>{reviewsWeek}</dd>
         </div>
         <div class="tile">
-            <dt>Retention</dt>
+            <dt>Retention overall</dt>
             <dd>{percent(overall)}</dd>
         </div>
     </dl>
 
     <section class="panel">
-        <h2>What you'd remember right now</h2>
+        <h2>What you'd likely remember right now</h2>
         <p class="muted sub">
             For each card you've started, the chance you'd recall it today, added up. A card studied both ways
             counts twice.
@@ -269,6 +296,7 @@
         <h2>How far along your cards are</h2>
         <p class="muted sub">
             Long-term cards are ones you're expected to remember for {LONG_TERM_DAYS} days or more without a review.
+            Counted by direction: a card studied both ways counts twice.
         </p>
         {#if allProgress.total === 0}
             <p class="muted">Nothing to show yet.</p>
@@ -312,15 +340,20 @@
         {:else}
             <ul class="badges">
                 <li class:new={longest.endedOn === today && longest.days > 1}>
-                    {#if longest.endedOn === today && longest.days > 1}<span class="pill">Today</span>{/if}
-                    <strong>{plural(longest.days, "day")}</strong>
+                    <!-- Side by side, so a long streak pushes the mark along instead of running under it. -->
+                    <span class="figure">
+                        <strong>{plural(longest.days, "day")}</strong>
+                        {#if longest.endedOn === today && longest.days > 1}<span class="pill">Today</span>{/if}
+                    </span>
                     <span>Longest streak</span>
                 </li>
                 {#if busiestDay}
                     <li class:new={busiestDay.key === today}>
-                        {#if busiestDay.key === today}<span class="pill">Today</span>{/if}
-                        <strong>{count.format(busiestDay.reviews)}</strong>
-                        <span>Most reviews in a day · {shortDay.format(fromKey(busiestDay.key))}</span>
+                        <span class="figure">
+                            <strong>{count.format(busiestDay.reviews)}</strong>
+                            {#if busiestDay.key === today}<span class="pill">Today</span>{/if}
+                        </span>
+                        <span>Most reviews in a day, on {shortDay.format(fromKey(busiestDay.key))}</span>
                     </li>
                 {/if}
                 <li>
@@ -331,25 +364,23 @@
                     <strong>{count.format(longTerm)}</strong>
                     <span>Long-term {longTerm === 1 ? "card" : "cards"}</span>
                 </li>
-                {#if streakNext}
-                    <li class="goal">
-                        <strong>{plural(streakNext, "day")}</strong>
-                        <span>Streak · {streakNext - currentStreak} to go</span>
-                    </li>
-                {/if}
-                {#if reviewsNext}
-                    <li class="goal">
-                        <strong>{count.format(reviewsNext)}</strong>
-                        <span>Reviews · {count.format(reviewsNext - log.length)} to go</span>
-                    </li>
-                {/if}
-                {#if longTermNext}
-                    <li class="goal">
-                        <strong>{count.format(longTermNext)}</strong>
-                        <span>Long-term cards · {longTermNext - longTerm} to go</span>
-                    </li>
-                {/if}
             </ul>
+            {#if goals.length > 0}
+                <h3>Next goals</h3>
+                <table class="goals">
+                    <tbody>
+                        {#each goals as goal (goal.name)}
+                            <tr>
+                                <th scope="row">{goal.name}</th>
+                                <td class="meter-cell">
+                                    <div class="meter"><div style:width="{(goal.now / goal.next) * 100}%"></div></div>
+                                </td>
+                                <td class="num">{count.format(goal.next - goal.now)} to go</td>
+                            </tr>
+                        {/each}
+                    </tbody>
+                </table>
+            {/if}
         {/if}
     </section>
 
@@ -358,7 +389,8 @@
         <p class="muted sub">The last 7 days, compared with the 7 before.</p>
         <dl class="compare">
             {#each [
-                { label: "Reviews", now: weeks2.current.reviews, before: weeks2.previous.reviews, show: (v: number) => count.format(v), unit: "" },
+                // Only retention is better or worse. How many reviews came due, and how many cards started, is the schedule's doing.
+                { label: "Reviews", now: weeks2.current.reviews, before: weeks2.previous.reviews, show: (v: number) => count.format(v), unit: "", plain: true },
                 {
                     label: "Retention",
                     now: retentionPoints(weeks2.current.retention),
@@ -366,17 +398,26 @@
                     show: (v: number) => `${v}%`,
                     unit: " pts",
                 },
-                { label: "New cards", now: weeks2.current.started, before: weeks2.previous.started, show: (v: number) => count.format(v), unit: "" },
+                { label: "New cards", now: weeks2.current.started, before: weeks2.previous.started, show: (v: number) => count.format(v), unit: "", plain: true },
             ] as row (row.label)}
                 <div>
                     <dt>{row.label}</dt>
                     <dd>
                         {row.now === undefined ? "—" : row.show(row.now)}
-                        {#if row.now !== undefined && row.before !== undefined && change(row.now, row.before)}
-                            <span class="delta {change(row.now, row.before)}">
-                                {change(row.now, row.before) === "up" ? "▲" : "▼"}
-                                {Math.abs(row.now - row.before)}{row.unit}
-                            </span>
+                    </dd>
+                    <!-- A line of its own in every column, so the three stay level whichever way each went. -->
+                    <dd
+                        class="delta {!row.plain && row.now !== undefined && row.before !== undefined
+                            ? (change(row.now, row.before) ?? '')
+                            : ''}"
+                    >
+                        {#if row.now === undefined || row.before === undefined}
+                            &nbsp;
+                        {:else if change(row.now, row.before)}
+                            {change(row.now, row.before) === "up" ? "▲" : "▼"}
+                            {Math.abs(row.now - row.before)}{row.unit}
+                        {:else}
+                            No change
                         {/if}
                     </dd>
                     <dd class="was">was {row.before === undefined ? "—" : row.show(row.before)}</dd>
@@ -455,7 +496,7 @@
         {#if groups.length === 0}
             <p class="muted">Nothing to show yet.</p>
         {:else}
-            <table>
+            <table class="by-group">
                 <thead>
                     <tr><th scope="col">Group</th><td></td><th scope="col" class="num">Retention</th><th scope="col" class="num">Reviews</th></tr>
                 </thead>
@@ -467,7 +508,7 @@
                                 <div class="meter"><div style:width={percent(row.retention)}></div></div>
                             </td>
                             <td class="num">{percent(row.retention)}</td>
-                            <td class="num muted">{row.retention.reviews}</td>
+                            <td class="num muted">{count.format(row.retention.reviews)}</td>
                         </tr>
                     {/each}
                 </tbody>
@@ -476,12 +517,15 @@
     </section>
 
     <section class="panel">
-        <h2>Cards learned</h2>
-        <p class="muted sub">Running total of cards you've started, by the day you first reviewed them.</p>
+        <h2>Cards started</h2>
+        <p class="muted sub">
+            Running total of cards you've started, by the day you first reviewed them. A card studied both ways counts
+            twice.
+        </p>
         {#if learnedPoints.length === 0}
             <p class="muted">Nothing to show yet.</p>
         {:else}
-            <LineChart points={learnedPoints} area summary="{plural(learnedTotal, 'card')} learned so far" />
+            <LineChart points={learnedPoints} area summary="{learnedTotal} started so far, counting each direction of a card" />
         {/if}
     </section>
 
@@ -811,7 +855,7 @@
         padding-left: 0.75rem;
         text-align: right;
         white-space: nowrap;
-        font-variant-numeric: tabular-nums;
+        /* Not tabular figures: in this face they set the comma of "4,223" as wide as a digit. */
     }
 
     h3 {
@@ -852,8 +896,9 @@
     }
 
     /* Card stages: one hue for how well a card is known, amber while it is still being learned. */
+    /* A step darker than the empty track behind it, so cards not started show as a share of the bar. */
     .stage-new {
-        background: var(--surface-3);
+        background: color-mix(in oklab, var(--text-faint) 30%, var(--surface-3));
     }
 
     .stage-learning {
@@ -888,18 +933,19 @@
         display: flex;
         gap: 2px;
         height: 10px;
-        border-radius: 5px;
+        border-radius: 3px;
         overflow: hidden;
     }
 
+    /* Wide enough that a sliver at the end isn't shaved to a crescent by the bar's corner. */
     .stack i {
         flex-basis: 0;
-        min-width: 3px;
+        min-width: 5px;
     }
 
     .badges {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
         gap: 0.6rem;
         margin: 1rem 0 0;
         padding: 0;
@@ -930,29 +976,27 @@
         color: var(--text-muted);
     }
 
+    .badges .figure {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0 0.4rem;
+        white-space: nowrap;
+    }
+
     .badges li.new {
         border-color: var(--accent);
         background: var(--accent-subtle);
     }
 
     .badges .pill {
-        position: absolute;
-        top: 0.6rem;
-        right: 0.7rem;
-        font-size: 0.68rem;
+        font-size: 0.75rem;
         font-weight: 650;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
         color: var(--accent-text);
     }
 
-    .badges li.goal {
-        border-style: dashed;
-        background: transparent;
-    }
-
-    .badges li.goal strong {
-        color: var(--text-muted);
+    .goals .meter-cell {
+        width: 38%;
     }
 
     .compare {
@@ -978,7 +1022,7 @@
         color: var(--text-muted);
     }
 
-    .compare dd {
+    .compare dd:first-of-type {
         margin: 0.15rem 0 0;
         font-family: var(--font-content);
         font-size: 2rem;
@@ -987,8 +1031,13 @@
         font-variant-numeric: lining-nums tabular-nums;
     }
 
+    .compare dd {
+        margin: 0;
+    }
+
     .compare .delta {
-        font-family: var(--font-ui);
+        margin-top: 0.2rem;
+        color: var(--text-muted);
         font-size: 0.85rem;
         font-weight: 650;
         white-space: nowrap;
@@ -1003,7 +1052,6 @@
     }
 
     .compare .was {
-        font-family: var(--font-ui);
         font-size: 0.8rem;
         color: var(--text-faint);
     }
@@ -1070,6 +1118,11 @@
         font-variant-numeric: tabular-nums;
     }
 
+    .cell.l0 {
+        background: none;
+        border: 1px solid var(--border);
+    }
+
     .cell.l1 {
         background: color-mix(in oklab, var(--accent) 22%, var(--surface-3));
     }
@@ -1078,9 +1131,10 @@
         background: color-mix(in oklab, var(--accent) 42%, var(--surface-3));
     }
 
+    /* Mid green: dark figures read on it in light, as the chalkboard's do in dark. */
     .cell.l3 {
         background: color-mix(in oklab, var(--accent) 62%, var(--surface-3));
-        color: var(--surface);
+        color: light-dark(var(--text), var(--surface));
     }
 
     .cell.l4 {
@@ -1103,10 +1157,14 @@
         font-size: 0.8rem;
     }
 
-    /* Where the year doesn't fit, say that it scrolls. */
+    /* Where the year doesn't fit, say that it scrolls, and let the earliest weeks showing fade out past the day names. */
     @media (max-width: 760px) {
         .swipe {
             display: block;
+        }
+
+        .scroller {
+            mask-image: linear-gradient(to right, #000 0 1.75rem, transparent 1.75rem 3rem, #000 5rem);
         }
     }
 
@@ -1117,6 +1175,22 @@
 
         .tiles {
             grid-template-columns: repeat(2, 1fr);
+        }
+
+        /* Room for a best set today to say so beside its figure. */
+        .badges li {
+            padding: 0.75rem;
+        }
+
+        .badges strong {
+            font-size: 1.35rem;
+        }
+
+        /* Two by two, rather than three and a straggler. */
+        .key {
+            display: grid;
+            grid-template-columns: repeat(2, max-content);
+            gap: 0.3rem 1.5rem;
         }
 
         .tile {
@@ -1143,8 +1217,17 @@
             padding: 0 0.6rem;
         }
 
-        .compare dd {
+        .compare dd:first-of-type {
             font-size: 1.5rem;
+        }
+
+        .goals .meter-cell {
+            width: 22%;
+        }
+
+        /* Four columns here: the bar gives way so a group's name stays on one line. */
+        .by-group .meter-cell {
+            width: 16%;
         }
 
         .big {

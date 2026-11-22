@@ -17,10 +17,11 @@
     import { fromNow, plural } from "../lib/format";
     import { href, router } from "../lib/router.svelte";
     import { isBuried, isDue, isNew, itemsOf, nextDue, stateOf } from "../lib/scheduler";
-    import { DIRECTION_LABELS, isDirection } from "../lib/settings";
+    import { DIRECTION_LABELS } from "../lib/settings";
     import { library } from "../lib/state";
-    import { inView, labelOf, type ViewId } from "../lib/views";
+    import { inView, labelOf, type ViewId, viewCounts } from "../lib/views";
     import DirectionDialog from "./DirectionDialog.svelte";
+    import GroupSettings from "./GroupSettings.svelte";
     import Icon from "./Icon.svelte";
     import MoveDialog from "./MoveDialog.svelte";
     import ViewChips from "./ViewChips.svelte";
@@ -43,6 +44,8 @@
     /** Reviews that are due, and new cards that could be started: counted apart, as on the home page. */
     const reviews = $derived(library.reviewsIn(cards));
     const fresh = $derived(library.freshIn(cards));
+    /** Cards with nothing started yet: the number the "Not started" view shows, so the two agree. */
+    const notStarted = $derived(viewCounts(cards, library.now).new);
     /** Everything due here today, however many reviews it takes. */
     const today = $derived(library.todayIn(cards));
     /** New cards that can be started today. Fewer than `fresh` only when the daily new-card limit is in the way. */
@@ -59,20 +62,21 @@
     );
 
     /**
-     * When a card comes up next. One studied both ways is "new" or "due" if
+     * When a card comes up next. One studied both ways is "not started" or "due" if
      * either direction is, unless that direction waits for tomorrow because
      * the other one was studied today.
      */
     function when(card: Flashcard): { text: string; due: boolean } {
         const due = itemsOf(card).filter((i) => isDue(card, library.now, i.reverse));
         const open = due.filter((i) => !isBuried(i, library.now));
-        if (open.some((i) => !stateOf(card, i.reverse))) return { text: "new", due: true };
+        if (open.some((i) => !stateOf(card, i.reverse))) return { text: "not started", due: true };
         if (open.length > 0) return { text: "due", due: true };
         if (due.length > 0) return { text: "tomorrow", due: false };
         return { text: fromNow(nextDue([card], library.now)?.toISOString(), library.now), due: false };
     }
-    let deleting = $state(false);
     let error = $state("");
+    /** The group's own settings (its name, its direction, deleting it) are open. */
+    let settings = $state(false);
 
     /** Picking cards to move. A card is known by its group and id, as it is stored. */
     const keyOf = (card: Flashcard) => `${card.group}/${card["@id"]}`;
@@ -151,7 +155,8 @@
 
     async function turned(change: Redirected) {
         if (gone) return;
-        stopSelecting();
+        // From Group settings with nothing being picked, focus stays where its dialog put it back.
+        if (selecting) stopSelecting();
         redirected = change;
     }
 
@@ -172,49 +177,6 @@
             error = e instanceof Error ? e.message : String(e);
         } finally {
             undoing = false;
-        }
-    }
-
-    /**
-     * The group's own direction for new cards. Once it changes, the cards
-     * already here that are studied another way can be brought in line.
-     */
-    const ownDirection = $derived(
-        group !== undefined && Object.hasOwn(library.groupDirections, group) ? library.groupDirections[group] : undefined,
-    );
-    const groupDirection = $derived(group === undefined ? library.direction : library.directionFor(group));
-    /** Cards here studied another way than the group's new cards, offered a change after the group's changes. */
-    let offeredFor: string | undefined = $state();
-    const offerAll = $derived(group !== undefined && offeredFor === group);
-    const others = $derived(all.filter((c) => (c.direction ?? "forward") !== groupDirection));
-    let applying = $state(false);
-
-    async function setGroupDirection(event: Event) {
-        const value = (event.currentTarget as HTMLSelectElement).value;
-        if (group === undefined) return;
-        error = "";
-        try {
-            await library.setGroupDirection(group, isDirection(value) ? value : undefined);
-            offeredFor = group;
-        } catch (e) {
-            error = `Could not save the direction: ${e instanceof Error ? e.message : String(e)}`;
-        }
-    }
-
-    async function applyToAll() {
-        if (applying) return;
-        const to = groupDirection;
-        applying = true;
-        error = "";
-        try {
-            const from = await library.setCardDirection(others, to);
-            offeredFor = undefined;
-            moved = undefined;
-            redirected = { to, from };
-        } catch (e) {
-            error = e instanceof Error ? e.message : String(e);
-        } finally {
-            applying = false;
         }
     }
 
@@ -251,169 +213,63 @@
         });
     });
 
-    let renaming = $state(false);
-    let moving = $state(false);
-    let name = $state("");
-    let nameInput: HTMLInputElement | undefined = $state();
-    const newName = $derived(name.trim());
-    const nameError = $derived(newName.includes("/") ? 'Group names can\'t contain "/".' : "");
-    /** The group that already has the new name, if there is one: renaming onto it merges the two. */
-    const target = $derived(library.groups.find((g) => g.name === newName && g.name !== group));
-    const canRename = $derived(newName !== "" && newName !== group && !nameError && !moving && !deleting);
-
-    async function startRenaming() {
-        name = group ?? "";
-        renaming = true;
-        await tick();
-        nameInput?.select();
-    }
-
-    async function rename(event: SubmitEvent) {
-        event.preventDefault();
-        if (group === undefined || !canRename) return;
-        const to = newName;
-        moving = true;
-        error = "";
-        try {
-            await library.renameGroup(group, to);
-            // A long move may have been left for another page; only follow the group from its own.
-            const route = router.route;
-            if (route.name === "group" && route.group === group) router.go(href.group(to));
-        } catch (e) {
-            error = e instanceof Error ? e.message : String(e);
-            moving = false;
-        }
-    }
-
-    async function deleteGroup() {
-        if (group === undefined || moving) return;
-        if (!confirm(`Delete the group "${group}" and all ${plural(all.length, "card")} in it?`)) return;
-        deleting = true;
-        error = "";
-        try {
-            await library.removeGroup(group);
-            router.go(href.home());
-        } catch (e) {
-            error = e instanceof Error ? e.message : String(e);
-            deleting = false;
-        }
-    }
 </script>
 
-<a class="crumb" href={href.home()}><Icon name="back" size={16} />All groups</a>
+<a class="crumb" href={href.home()}><Icon name="back" size={16} />Your cards</a>
+<!-- On a wide screen the buttons sit beside the title and the counts run the full width under both. -->
 <div class="page-head">
-    <div class="about">
-        {#if renaming}
-            <form class="rename" onsubmit={rename}>
-                <label class="visually-hidden" for="group-name">Group name</label>
-                <input
-                    id="group-name"
-                    class="field content"
-                    bind:this={nameInput}
-                    bind:value={name}
-                    list="other-groups"
-                    autocomplete="off"
-                    disabled={moving}
-                    onkeydown={(e) => e.key === "Escape" && !moving && (renaming = false)}
-                />
-                <datalist id="other-groups">
-                    {#each library.groupNames().filter((n) => n !== group) as other (other)}
-                        <option value={other}></option>
-                    {/each}
-                </datalist>
-                <button class="btn primary" type="submit" disabled={!canRename}>
-                    {moving ? "Moving…" : target ? "Merge" : "Rename"}
-                </button>
-                <button class="btn ghost" type="button" disabled={moving} onclick={() => (renaming = false)}>
-                    Cancel
-                </button>
-                {#if nameError}
-                    <small class="error">{nameError}</small>
-                {:else if target}
-                    <small class="muted">
-                        “{newName}” already has {plural(target.total, "card")}. The {plural(all.length, "card")} here will
-                        join {target.total === 1 ? "it" : "them"}.
-                    </small>
-                {/if}
-            </form>
-        {:else}
-            <div class="title">
-                <h1>{group ?? "All cards"}</h1>
-                {#if group !== undefined && all.length > 0}
-                    <button
-                        class="btn ghost rename-btn"
-                        type="button"
-                        aria-label="Rename group"
-                        title="Rename group"
-                        onclick={startRenaming}><Icon name="edit" size={18} /></button
-                    >
-                {/if}
-            </div>
-        {/if}
-        {#if library.loaded && cards.length > 0}
-            <p class="sub">
-                {#if show}{labelOf(show)}:{/if}
-                {plural(cards.length, "card")}{#if reviews > 0}, {reviews} due{/if}{#if fresh > 0}, {fresh} new{/if}
-            </p>
-            <!-- Says why the button's count is smaller than due plus new. -->
-            {#if capped}
-                <p class="sub limit">
-                    {today.length} to study today, {due} at a time:
-                    <a href={href.account()}>the review size</a> is {library.cardsPerReview}.
-                </p>
-            {/if}
-            {#if starting < fresh}
-                <p class="sub limit">
-                    {#if starting === 0}
-                        No more new cards today:
-                    {:else}
-                        You can start {starting} of the {fresh} new cards today:
-                    {/if}
-                    <a href={href.account()}>the daily limit</a> is {library.newPerDay}.
-                </p>
-            {/if}
-        {/if}
-        {#if group !== undefined && all.length > 0}
-            <div class="new-direction">
-                <label for="group-direction">New cards here</label>
-                <select
-                    id="group-direction"
-                    class="field"
-                    value={ownDirection ?? ""}
-                    onchange={setGroupDirection}
-                    disabled={applying}
-                >
-                    <option value="">{DIRECTION_LABELS[library.direction]} (the default)</option>
-                    {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
-                        <option {value}>{label}</option>
-                    {/each}
-                </select>
-            </div>
-        {/if}
-    </div>
+    <h1>{group ?? "All cards"}</h1>
+    {#if library.loaded && cards.length > 0}
+        <!-- Each count keeps to one line: where the line is short it breaks between them, not inside one. -->
+        {@const counts = [
+            plural(cards.length, "card"),
+            reviews > 0 ? `${reviews} due` : "",
+            starting > 0 ? `${starting} to start today` : "",
+            notStarted > 0 ? `${notStarted} not started` : "",
+        ].filter(Boolean)}
+        <p class="sub">
+            {#if show}{labelOf(show)}:{/if}
+            {#each counts as count, i (count)}<span class="count">{count}{i < counts.length - 1 ? "," : ""}</span>{" "}{/each}
+        </p>
+    {/if}
     <div class="actions">
+        <!-- First and quietest: what belongs to the group as a whole is rarely needed. The review ends the row. -->
+        {#if group !== undefined && all.length > 0}
+            <button class="btn settings" type="button" aria-label="Group settings" onclick={() => (settings = true)}>
+                <Icon name="settings" /><span class="label">Group settings</span>
+            </button>
+        {/if}
         <a class="btn" href={href.newCard(group)}><Icon name="plus" />Add card</a>
         {#if due > 0}
-            <a class="btn primary" href={href.review(group, show)}>Review {plural(due, "card")}</a>
+            <!-- Across groups it says so: a review of all of them together is a choice, not the usual way. -->
+            <a class="btn primary" href={href.review(group, show)}>
+                {group === undefined ? `Review ${due} together` : `Review ${plural(due, "card")}`}
+            </a>
         {/if}
     </div>
 </div>
 
-    {#if offerAll && others.length > 0}
-        <div class="offer" role="status">
-            <span>
-                {others.length === all.length
-                    ? `Study the ${plural(all.length, "card")} already here ${DIRECTION_LABELS[groupDirection].toLocaleLowerCase()} too?`
-                    : `${plural(others.length, "card")} of ${all.length} here ${others.length === 1 ? "is" : "are"} studied another way. Change ${others.length === 1 ? "it" : "them"} to ${DIRECTION_LABELS[groupDirection].toLocaleLowerCase()} too?`}
-            </span>
-            <button class="btn primary" type="button" onclick={applyToAll} disabled={applying}>
-                {applying ? "Changing…" : `Change ${others.length === 1 ? "it" : others.length === 2 ? "both" : `all ${others.length}`}`}
-            </button>
-            <button class="btn ghost" type="button" onclick={() => (offeredFor = undefined)} disabled={applying}>
-                Keep as they are
-            </button>
-        </div>
-    {/if}
+<!-- Says why the button's count is smaller than due plus new. -->
+{#if library.loaded && cards.length > 0 && (capped || starting < fresh)}
+    <div class="limits">
+        {#if capped}
+            <p>
+                {today.length} ready to review, {due} at a time:
+                <a href={href.account()}>the review size</a> is {library.cardsPerReview}.
+            </p>
+        {/if}
+        {#if starting < fresh}
+            <p>
+                {#if starting === 0}
+                    No more new cards today.
+                {:else}
+                    More new cards wait for another day.
+                {/if}
+                <a href={href.account()}>The daily limit</a> is {plural(library.newPerDay, "new card")} across all groups.
+            </p>
+        {/if}
+    </div>
+{/if}
 
 {#if error}
     <p class="error" role="alert">{error}</p>
@@ -427,13 +283,21 @@
         <a class="btn primary" href={href.newCard(group)}>Add a card</a>
     </div>
 {:else}
-    <!-- Select sits with the views: both decide what the list below is for. -->
-    <div class="list-head">
-        <ViewChips
-            cards={all}
-            active={show ?? "all"}
-            link={(view) => (group === undefined ? href.cards(view) : href.group(group, view))}
-        />
+    <ViewChips
+        cards={all}
+        active={show ?? "all"}
+        link={(view) => (group === undefined ? href.cards(view) : href.group(group, view))}
+    />
+
+    <!-- Finding cards and picking them share a line: both work on the list below. -->
+    <div class="tools">
+        {#if all.length >= SEARCH_FROM}
+            <label class="search">
+                <span class="visually-hidden">Find a card</span>
+                <Icon name="search" size={18} />
+                <input class="field" type="search" placeholder="Find a card" autocomplete="off" bind:value={query} />
+            </label>
+        {/if}
         <!-- One button that stays put, so focus stays on it. -->
         <button
             class="select"
@@ -441,19 +305,10 @@
             type="button"
             bind:this={selectButton}
             onclick={selecting ? stopSelecting : startSelecting}
-            disabled={!selecting && (moving || deleting)}
         >
-            <Icon name={selecting ? "check" : "select"} size={17} /><span class="label">{selecting ? "Done" : "Select"}</span>
+            <Icon name={selecting ? "check" : "select"} size={18} /><span class="label">{selecting ? "Done" : "Select"}</span>
         </button>
     </div>
-
-    {#if all.length >= SEARCH_FROM}
-        <label class="search">
-            <span class="visually-hidden">Find a card</span>
-            <Icon name="search" size={18} />
-            <input class="field" type="search" placeholder="Find a card" autocomplete="off" bind:value={query} />
-        </label>
-    {/if}
 
     {#if cards.length === 0}
         <p class="muted nothing">No cards in this view.</p>
@@ -466,10 +321,7 @@
                 {@const on = picked.has(keyOf(card))}
                 <li class:on>
                     {#snippet body()}
-                        <span class="front">
-                            {card.frontText}
-                            {#if group === undefined}<small class="in">{card.group}</small>{/if}
-                        </span>
+                        <span class="front">{card.frontText}</span>
                         <!-- The direction mark trails the text, so every back starts on the same line. -->
                         <span class="back muted">
                             {card.backText}
@@ -479,7 +331,9 @@
                                 <span class="direction" title="Studied back → front"><Icon name="reverse" size={15} /></span>
                             {/if}
                         </span>
-                        <span class="when" class:due={next.due} class:fresh={next.text === "new"}>{next.text}</span>
+                        <span class="when" class:due={next.due} class:fresh={next.text === "not started"}>{next.text}</span>
+                        <!-- Under the front on a wide screen; after the back on a phone, so the two sides stay together. -->
+                        {#if group === undefined}<small class="in">{card.group}</small>{/if}
                     {/snippet}
                     {#if selecting}
                         <button
@@ -499,17 +353,14 @@
         </ul>
     {/if}
 
-    {#if group !== undefined && !selecting}
-        <div class="danger-zone">
-            <button class="btn danger" type="button" onclick={deleteGroup} disabled={deleting || moving}>
-                <Icon name="trash" size={18} />{deleting ? "Deleting…" : "Delete group"}
-            </button>
-        </div>
-    {/if}
 {/if}
 
 {#if selecting}
     <div class="bar" role="toolbar" aria-label="Selected cards">
+        <!-- The way out stays with the bar: the button that started picking may have scrolled away. -->
+        <button class="btn ghost close" type="button" aria-label="Done selecting" title="Done" onclick={stopSelecting}>
+            <Icon name="close" size={18} />
+        </button>
         <span class="picked" aria-live="polite">
             {pickedCards.length === 0 ? "Pick cards to move" : `${pickedCards.length} selected`}
         </span>
@@ -564,6 +415,10 @@
     <DirectionDialog cards={pickedCards} onchanged={turned} onclose={() => (turning = false)} />
 {/if}
 
+{#if settings && group !== undefined}
+    <GroupSettings {group} cards={all} onredirected={turned} onclose={() => (settings = false)} />
+{/if}
+
 {#if choosing && pickedCards.length > 0}
     <MoveDialog cards={pickedCards} onmoved={done} onclose={() => (choosing = false)} />
 {/if}
@@ -574,82 +429,47 @@
 />
 
 <style>
-    /* Takes the width the buttons leave, so a long name wraps instead of pushing them down. */
-    .about {
-        flex: 1 1 16rem;
-        min-width: 0;
-    }
-
-    .title {
-        display: flex;
+    /* The title takes the width the buttons leave, so a long name wraps instead of pushing them down. */
+    .page-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
-        gap: 0.25rem;
+        gap: 0.4rem 1rem;
     }
 
-    .title h1 {
+    .page-head .actions {
+        grid-column: 2;
+        grid-row: 1;
+        flex-wrap: nowrap;
+    }
+
+    .page-head .sub {
+        grid-column: 1 / -1;
+        margin-top: 0;
+    }
+
+    .count {
+        white-space: nowrap;
+    }
+
+    h1 {
         min-width: 0;
         overflow-wrap: anywhere;
     }
 
-    .rename-btn {
-        flex: none;
-        padding-inline: 0.6rem;
-        color: var(--text-faint);
+    /* A line under the heading, as wide as the page: it reads in one go instead of wrapping beside the buttons. */
+    /* A link this short isn't broken across lines. */
+    .limits a {
+        white-space: nowrap;
     }
 
-    .rename {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .rename .field {
-        flex: 1 1 8rem;
-        width: auto;
-        min-width: 0;
-        font-size: 1.15rem;
-    }
-
-    .rename small {
-        flex-basis: 100%;
-    }
-
-    .limit {
-        font-size: 0.9rem;
-    }
-
-    .new-direction {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.35rem 0.6rem;
-        margin-top: 0.6rem;
-        font-size: 0.9rem;
+    .limits {
+        display: grid;
+        gap: 0.2rem;
+        text-wrap: pretty;
+        margin: -0.75rem 0 1.25rem;
         color: var(--text-muted);
-    }
-
-    .new-direction .field {
-        width: auto;
-        min-height: 0;
-        padding-block: 0.35rem;
         font-size: 0.9rem;
-    }
-
-    .offer {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem 0.6rem;
-        margin: -0.5rem 0 1.25rem;
-        padding: 0.75rem 0.9rem;
-        border-radius: var(--radius);
-        background: var(--accent-subtle);
-        font-size: 0.925rem;
-    }
-
-    .offer span {
-        flex: 1 1 14rem;
     }
 
     .none {
@@ -658,47 +478,39 @@
         justify-items: start;
     }
 
-    .list-head {
+    .tools {
         display: flex;
-        align-items: flex-start;
-        gap: 0.4rem;
-        margin-bottom: 0.9rem;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
     }
 
-    .list-head > :global(.views) {
-        flex: 1;
-        min-width: 0;
-        margin-bottom: 0;
-    }
-
-    /* Shaped like the view chips beside it. */
+    /* Shaped like the search field beside it. */
     .select {
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
+        justify-content: center;
+        gap: 0.45rem;
         flex: none;
-        margin-left: auto;
-        min-height: 2.25rem;
-        padding: 0.25rem 0.85rem 0.25rem 0.7rem;
+        min-height: 2.75rem;
+        padding: 0.25rem 0.95rem 0.25rem 0.8rem;
         border: 1px solid var(--border-strong);
-        border-radius: 999px;
+        border-radius: var(--radius);
         background: var(--surface);
         color: var(--text);
-        font-size: 0.875rem;
+        font-size: 0.925rem;
         font-weight: 600;
         cursor: pointer;
-        transition: background-color 120ms;
+        transition:
+            background-color 120ms,
+            border-color 120ms;
     }
 
     @media (hover: hover) {
-        .select:hover:not(:disabled) {
+        .select:hover {
             background: var(--surface-2);
+            border-color: var(--text-faint);
         }
-    }
-
-    .select:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
     }
 
     /* Marked like the view that is showing. */
@@ -711,13 +523,15 @@
     @media (hover: hover) {
         .select.on:hover {
             background: color-mix(in oklab, var(--accent) 20%, transparent);
+            border-color: transparent;
         }
     }
 
     .search {
         position: relative;
         display: block;
-        margin-bottom: 0.75rem;
+        flex: 1;
+        min-width: 0;
         color: var(--text-faint);
     }
 
@@ -761,6 +575,10 @@
         cursor: pointer;
         user-select: none;
         transition: background-color 120ms;
+    }
+
+    .pick .in {
+        grid-column: 2;
     }
 
     @media (hover: hover) {
@@ -814,11 +632,11 @@
         gap: 0.35rem;
         width: max-content;
         max-width: calc(100vw - 1.5rem);
-        padding: 0.4rem 0.4rem 0.4rem 1rem;
+        padding: 0.4rem;
         background: var(--surface);
         border: 1px solid var(--border-strong);
         border-radius: var(--radius-lg);
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-lg);
         animation: rise 160ms ease-out;
     }
 
@@ -831,6 +649,7 @@
     }
 
     .note .picked {
+        margin-left: 0.6rem;
         font-weight: 500;
     }
 
@@ -856,6 +675,15 @@
             left: calc(50% + var(--sidebar) / 2);
             bottom: 1.5rem;
         }
+
+        /* As wide as the list it works on, so no row shows past either end of it. */
+        .bar:not(.note) {
+            width: min(46rem, calc(100vw - var(--sidebar) - 4rem));
+        }
+
+        .bar:not(.note) .picked {
+            flex: 1;
+        }
     }
 
     .front,
@@ -865,6 +693,8 @@
 
     /* The card's group, where the list runs across groups. */
     .in {
+        grid-column: 1;
+        grid-row: 2;
         display: block;
         font-family: var(--font-ui);
         font-size: 0.78rem;
@@ -887,6 +717,11 @@
         white-space: nowrap;
     }
 
+    /* On a picked row the tint is the row's own: the mark takes the surface to stay a mark. */
+    .on .when.due:not(.fresh) {
+        background: var(--surface);
+    }
+
     .when.due {
         padding: 0.1rem 0.55rem;
         border-radius: 999px;
@@ -895,10 +730,12 @@
         font-weight: 650;
     }
 
-    /* Green is for what is due; a card not started yet is marked more quietly, as on the home page. */
+    /* The mark is for what is due. A card not started yet is said plainly, like one that is scheduled. */
     .when.fresh {
-        background: var(--surface-2);
+        padding: 0;
+        background: none;
         color: var(--text-muted);
+        font-weight: 400;
     }
 
     @media (max-width: 560px) {
@@ -912,20 +749,12 @@
             grid-row: 2;
         }
 
-        /* Just the box, so the views keep their row. */
-        .select {
-            justify-content: center;
-            width: 2.25rem;
-            padding: 0;
+        .in {
+            grid-row: 3;
         }
 
-        .select .label {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            overflow: hidden;
-            clip-path: inset(50%);
-            white-space: nowrap;
+        .pick .in {
+            grid-column: 2;
         }
 
         .pick {
@@ -940,35 +769,56 @@
             grid-column: 2;
         }
 
-        /* Across the screen, with the count above the buttons when they don't fit beside it. */
+        /* Across the screen: the count and its controls on one line, the two actions sharing the next. */
         .bar {
             width: calc(100vw - 1.5rem);
             flex-wrap: wrap;
-            justify-content: flex-end;
+        }
+
+        /* Nothing of the list shows in the gap between the bar and the tab bar under it. */
+        .bar:not(.note) {
+            box-shadow:
+                0 0.75rem 0 var(--bg),
+                var(--shadow-lg);
         }
 
         .bar .picked {
             flex: 1 1 auto;
         }
 
-        /* The name gets a row to itself, with Rename and Cancel under it. */
-        .rename .field {
-            flex-basis: 100%;
+        .bar:not(.note) .btn:not(.ghost) {
+            flex: 1 1 0;
         }
 
-        /* The two buttons share the width. */
+        /* The count and Select all take the first line whole, so the actions start the second. */
+        .bar:not(.note) .picked {
+            flex-basis: 40%;
+        }
+
+        /* One under the other: the title, the counts, then the buttons sharing the width. */
+        .page-head {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
         .page-head .actions {
-            width: 100%;
+            grid-column: 1;
+            grid-row: auto;
+            margin-top: 0.35rem;
         }
 
         .page-head .actions .btn {
             flex: 1 1 0;
         }
-    }
 
-    .danger-zone {
-        margin-top: 2.5rem;
-        display: flex;
-        justify-content: flex-end;
+        /* On a phone, just its icon. */
+        .page-head .actions .settings {
+            flex: none;
+            width: 2.75rem;
+            padding: 0;
+        }
+
+        .settings .label {
+            display: none;
+        }
     }
 </style>

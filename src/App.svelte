@@ -69,7 +69,7 @@
         <nav aria-label="Main">
             {#each NAV as item (item.section)}
                 <a href={item.href} aria-current={section === item.section ? "page" : undefined}>
-                    <Icon name={item.icon} size={22} />
+                    <span class="mark"><Icon name={item.icon} size={22} /></span>
                     <span>{item.label}</span>
                 </a>
             {/each}
@@ -98,8 +98,8 @@
                 <CardEditor group={route.group} />
             {/key}
         {:else if route.name === "review"}
-            {#key href.review(route.group, route.show)}
-                <Review group={route.group} show={route.show} />
+            {#key href.review(route.group, route.show, route.from)}
+                <Review group={route.group} show={route.show} from={route.from} />
             {/key}
         {:else if route.name === "account"}
             <Account />
@@ -185,6 +185,20 @@
         transition: color 120ms;
     }
 
+    /* The icon sits on a pill that fills in for the page you are on. */
+    .mark {
+        display: grid;
+        place-items: center;
+        width: 3.5rem;
+        height: 1.875rem;
+        border-radius: 999px;
+        transition: background-color 160ms;
+    }
+
+    nav a[aria-current="page"] .mark {
+        background: var(--accent-subtle);
+    }
+
     nav a:focus-visible {
         outline-offset: -4px;
         border-radius: 12px;
@@ -266,6 +280,15 @@
             border-top: none;
         }
 
+        .mark {
+            width: auto;
+            height: auto;
+        }
+
+        nav a[aria-current="page"] .mark {
+            background: none;
+        }
+
         nav a {
             flex-direction: row;
             justify-content: flex-start;
@@ -306,7 +329,7 @@
 
         /* One column, centred in the space beside the sidebar. */
         .page {
-            max-width: 44rem;
+            max-width: 46rem;
             margin-inline: auto;
         }
 

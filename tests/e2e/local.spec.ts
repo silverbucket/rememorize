@@ -48,6 +48,7 @@ test("add cards, edit, move between groups, delete", async ({ page }) => {
     await page.getByRole("button", { name: "Delete" }).click();
     await expect(page.getByText("No cards in this group.")).toBeVisible();
     await page.goto("/#/group/Bakery");
+    await page.getByRole("button", { name: "Group settings" }).click();
     await page.getByRole("button", { name: "Delete group" }).click();
     await expect(page.getByText("No cards yet")).toBeVisible();
     await page.reload();
@@ -61,22 +62,26 @@ test("a group can be renamed, and renamed onto another group to merge them", asy
     await page.goto("/#/review/Verbs");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("Verbs done")).toBeVisible();
 
     await page.goto("/#/group/Nouns");
-    await page.getByRole("button", { name: "Rename group" }).click();
-    await expect(page.getByLabel("Group name")).toHaveValue("Nouns");
-    await page.getByLabel("Group name").fill("Czech");
-    await page.getByRole("button", { name: "Rename", exact: true }).click();
+    // A group's name is in its settings, with the rest of what belongs to the group as a whole.
+    await page.getByRole("button", { name: "Group settings" }).click();
+    const settings = page.getByRole("dialog", { name: "Group settings" });
+    await expect(settings.getByLabel("Name")).toHaveValue("Nouns");
+    // Nothing to rename to yet.
+    await expect(settings.getByRole("button", { name: "Rename", exact: true })).toBeDisabled();
+    await settings.getByLabel("Name").fill("Czech");
+    await settings.getByRole("button", { name: "Rename", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
     await expect(page.locator(".cards li")).toHaveCount(1);
 
     // Onto a name that is taken, the cards join the ones already there.
     await page.goto("/#/group/Verbs");
-    await page.getByRole("button", { name: "Rename group" }).click();
-    await page.getByLabel("Group name").fill("Czech");
+    await page.getByRole("button", { name: "Group settings" }).click();
+    await settings.getByLabel("Name").fill("Czech");
     await expect(page.getByText("“Czech” already has 1 card. The 1 card here will join it.")).toBeVisible();
-    await page.getByRole("button", { name: "Merge" }).click();
+    await settings.getByRole("button", { name: "Merge" }).click();
     await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
     await expect(page.locator(".cards li")).toHaveCount(2);
     await expect(page.locator(".cards li").filter({ hasText: "pít" }).locator(".when")).toHaveText(/^in /);
@@ -247,7 +252,7 @@ test("views narrow the cards, in a group and across all of them, and can be revi
     await expect(page.getByRole("link", { name: "Review 3 cards" })).toBeVisible();
     const views = page.getByRole("navigation", { name: "Views" });
     // Views with no cards in them aren't offered.
-    await expect(views.getByRole("link")).toHaveText(["All 3", "Learning 1", "Not started 2"]);
+    await expect(views.getByRole("link")).toHaveText(["All 3", "Not started 2", "Learning 1"]);
     await views.getByRole("link", { name: "Learning" }).click();
     await expect(page.locator(".cards li")).toHaveCount(1);
     await expect(page.locator(".cards li")).toContainText("pes");
@@ -265,22 +270,29 @@ test("views narrow the cards, in a group and across all of them, and can be revi
     await page.getByRole("link", { name: "End review" }).click();
     await expect(views.getByRole("link", { name: "Not started" })).toHaveAttribute("aria-current", "page");
 
-    // From the home page, the same views run across every group.
+    // The home page leads to every card in one list, where the same views run across the groups.
     await page.goto("/");
-    await expect(views.getByRole("link")).toHaveText(["All 4", "Learning 1", "Not started 3"]);
+    await page.getByRole("link", { name: /All cards/ }).click();
+    await expect(page.getByRole("heading", { name: "All cards" })).toBeVisible();
+    await expect(views.getByRole("link")).toHaveText(["All 4", "Not started 3", "Learning 1"]);
     await views.getByRole("link", { name: "Not started" }).click();
     await expect(page.getByRole("heading", { name: "All cards" })).toBeVisible();
     await expect(page.locator(".cards li")).toHaveCount(3);
     await expect(page.locator(".cards li").filter({ hasText: "voda" })).toContainText("Drinks");
     await views.getByRole("link", { name: "All" }).click();
     await expect(page.locator(".cards li")).toHaveCount(4);
+    // Reviewing them together is offered here, and each card then says which group it is from.
+    await page.getByRole("link", { name: "Review 4 together" }).click();
+    await expect(page.locator(".card .tag")).toHaveText("Animals");
+    await page.getByRole("link", { name: "End review" }).click();
+    await expect(page.getByRole("heading", { name: "All cards" })).toBeVisible();
 });
 
 test("review session schedules cards", async ({ page }) => {
     await addCard(page, { front: "pes", back: "dog", group: "Animals", hint: "barks" });
     await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
     await page.goto("/");
-    await page.getByRole("link", { name: "Review 2 cards" }).click();
+    await page.locator(".today").getByRole("link", { name: "Review Animals, 2 cards" }).click();
     await expect(page.getByText("2 cards left")).toBeVisible();
 
     // Cards come in creation order; the first one has a hint.
@@ -298,10 +310,11 @@ test("review session schedules cards", async ({ page }) => {
     await expect(page.getByText("1 card left")).toBeVisible();
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Good/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 
     await page.goto("/");
-    await expect(page.getByRole("link", { name: /Review \d+ cards?/ })).toHaveCount(0);
+    await expect(page.getByText("You're all caught up")).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Review / })).toHaveCount(0);
     await page.goto("/#/group/Animals");
     await expect(page.locator(".when").first()).toHaveText(/^in /);
 });
@@ -326,10 +339,12 @@ test("a card answered Again comes back before the review ends, and one answered 
     await expect(page.getByRole("button", { name: /Show answer/ })).toBeVisible();
     await expect(page.locator(".side.front")).toHaveText("pes");
 
-    // Hard: remembered, so it keeps its schedule and the review is done.
+    // Hard: remembered, so it keeps its schedule and the review is done. Its next step is minutes away,
+    // so the day isn't over: caught up for now, and it says when to come back.
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Hard/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for now")).toBeVisible();
+    await expect(page.getByText(/The next review is in \d+\sminutes?\./)).toBeVisible();
 });
 
 test("undo the last rating", async ({ page, isMobile }) => {
@@ -351,7 +366,7 @@ test("undo the last rating", async ({ page, isMobile }) => {
 
     // The undone rating isn't stored: both cards are still due.
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "Review 2 cards" })).toBeVisible();
+    await expect(page.locator(".today").getByRole("link", { name: "Review Animals, 2 cards" })).toBeVisible();
 
     if (!isMobile) {
         await page.goto("/#/review");
@@ -369,7 +384,7 @@ test("undo the last rating", async ({ page, isMobile }) => {
         await expect(page.getByText("1 card left")).toBeVisible();
         await page.keyboard.press("Space");
         await page.keyboard.press("3");
-        await expect(page.getByText("Done for now")).toBeVisible();
+        await expect(page.getByText("All caught up for today")).toBeVisible();
         await page.keyboard.press("u");
         await expect(page.getByText("1 card left")).toBeVisible();
         await expect(page.locator(".side.front")).toHaveText("kočka");
@@ -383,7 +398,7 @@ test("keyboard review", async ({ page, isMobile }) => {
     await page.keyboard.press("Space");
     await expect(page.locator(".side.back")).toHaveText("water");
     await page.keyboard.press("4");
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 });
 
 test("works offline once loaded", async ({ page, context }) => {
@@ -431,36 +446,41 @@ test("daily limit on new cards", async ({ page }) => {
 
     // The group says why its review is shorter than its count of new cards.
     await page.goto("/#/group/Numbers");
-    await expect(page.getByText("3 cards, 3 new")).toBeVisible();
-    await expect(page.getByText("You can start 2 of the 3 new cards today: the daily limit is 2.")).toBeVisible();
+    await expect(page.getByText("3 cards, 2 to start today, 3 not started")).toBeVisible();
+    await expect(
+        page.getByText("More new cards wait for another day. The daily limit is 2 new cards across all groups."),
+    ).toBeVisible();
 
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "Review 2 cards" })).toBeVisible();
-    await page.getByRole("link", { name: "Review 2 cards" }).click();
+    const start = page.locator(".today").getByRole("link", { name: /^Review Numbers/ });
+    await expect(start).toHaveAccessibleName("Review Numbers, 2 cards");
+    await start.click();
     for (let i = 0; i < 2; i++) {
         await page.getByRole("button", { name: /Show answer/ }).click();
         await page.getByRole("button", { name: /Easy/ }).click();
     }
-    await expect(page.getByText("Done for now")).toBeVisible();
-    await expect(page.getByText("1 more new card waiting: you've started 2 of 2 new cards for today.")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
+    await expect(page.getByText("You've reached today's limit of 2 new cards.")).toBeVisible();
     // Don't claim the next card is months away while a new one is waiting.
     await expect(page.getByText(/Next card is due/)).toHaveCount(0);
 
     await page.getByRole("link", { name: "Back to your cards" }).click();
-    await page.getByText("Numbers").click();
-    await expect(page.getByText("No more new cards today: the daily limit is 2.")).toBeVisible();
+    await page.getByRole("link", { name: /^Numbers/ }).click();
+    await expect(
+        page.getByText("No more new cards today. The daily limit is 2 new cards across all groups."),
+    ).toBeVisible();
 
     // The setting is remembered, and today's count shows.
     await page.reload();
     await page.goto("/#/account");
     await expect(page.getByLabel("New cards per day")).toHaveValue("2");
-    await expect(page.getByText("Started today: 2")).toBeVisible();
+    await expect(page.getByText("2 started today")).toBeVisible();
 
     // Raising the limit makes the waiting card available straight away.
     await page.getByLabel("New cards per day").fill("5");
     await page.getByLabel("New cards per day").blur();
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "Review 1 card" })).toBeVisible();
+    await expect(start).toHaveAccessibleName("Review Numbers, 1 card");
 });
 
 test("reviews of a few cards at a time, and the home page counts new cards apart", async ({ page }) => {
@@ -472,8 +492,8 @@ test("reviews of a few cards at a time, and the home page counts new cards apart
         await addCard(page, { front, back, group: "Numbers" });
     }
     await page.goto("/");
-    await expect(page.locator(".today .headline")).toHaveText("3 new");
-    await expect(page.getByText("3 cards to study today")).toBeVisible();
+    await expect(page.locator(".today .headline")).toHaveText("3 cards ready to review");
+    await expect(page.getByText("3 new cards in Numbers")).toBeVisible();
 
     await page.goto("/#/account");
     await expect(page.getByLabel("Most cards per review")).toHaveValue("");
@@ -481,12 +501,12 @@ test("reviews of a few cards at a time, and the home page counts new cards apart
     await page.getByLabel("Most cards per review").blur();
 
     await page.goto("/#/group/Numbers");
-    await expect(page.getByText("3 to study today, 2 at a time: the review size is 2.")).toBeVisible();
+    await expect(page.getByText("3 ready to review, 2 at a time: the review size is 2.")).toBeVisible();
     await page.goto("/");
     // Everything due is still counted; only the review is smaller.
-    await expect(page.locator(".today .headline")).toHaveText("3 new");
-    await expect(page.getByText("3 cards to study today, 2 at a time")).toBeVisible();
-    await page.getByRole("link", { name: "Review 2 cards" }).click();
+    await expect(page.locator(".today .headline")).toHaveText("3 cards ready to review");
+    await expect(page.getByText("3 new cards in Numbers, 2 at a time")).toBeVisible();
+    await page.locator(".today").getByRole("link", { name: "Review Numbers, 2 cards" }).click();
     for (let i = 0; i < 2; i++) {
         await page.getByRole("button", { name: /Show answer/ }).click();
         await page.getByRole("button", { name: /Easy/ }).click();
@@ -526,7 +546,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByRole("button", { name: /Show answer/ }).click();
     await expect(page.locator(".side.back")).toHaveText("pivo");
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 
     // Undo works on the reversed schedule.
     await page.getByRole("button", { name: /Undo/ }).click();
@@ -545,7 +565,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByTitle("Studied both ways")).toBeVisible();
     await expect(page.locator(".when")).toHaveText("tomorrow");
-    await expect(page.getByRole("link", { name: /Review \d+ cards?/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Review \d+\scards?/ })).toHaveCount(0);
 
     // A new card studied both ways shows one direction today: front → back.
     await page.goto("/#/new?group=Drinks");
@@ -558,7 +578,7 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await expect(page.getByText("Back → front")).toHaveCount(0);
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
     // The other direction of both cards is next, not the months-away reviews.
     await expect(page.getByText("2 cards held until tomorrow")).toBeVisible();
     await expect(page.getByText(/Next card is due/)).toHaveCount(0);
@@ -569,13 +589,13 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByText("voda").click();
     // Its schedule has a row for each direction: one studied today, one not yet.
     await expect(page.getByRole("row", { name: /Front → back/ })).toContainText(/in \d+/);
-    await expect(page.getByRole("row", { name: /Back → front/ })).toContainText("not reviewed yet");
+    await expect(page.getByRole("row", { name: /Back → front/ })).toContainText("not started");
 });
 
 test("new cards take a direction from the settings or their group, and many cards change at once", async ({ page }) => {
     // The settings' direction is what a new card starts with.
     await page.goto("/#/account");
-    await page.getByLabel("Study new cards").selectOption("Both ways");
+    await page.getByLabel("Cards you add", { exact: true }).selectOption("Both ways");
     await page.goto("/#/new?group=Czech");
     await expect(page.getByLabel("Study direction")).toHaveValue("both");
     await page.getByLabel("Front").fill("pivo");
@@ -591,7 +611,8 @@ test("new cards take a direction from the settings or their group, and many card
     await expect(page.getByTitle("Studied both ways")).toHaveCount(1);
 
     // A group's own direction, offered to the cards already in it.
-    const own = page.getByLabel("New cards here");
+    await page.getByRole("button", { name: "Group settings" }).click();
+    const own = page.getByLabel("Cards you add here");
     await expect(own).toHaveValue("");
     await own.selectOption("Back → front");
     const offer = page.getByRole("status").filter({ hasText: "Study the 2 cards already here back → front too?" });
@@ -605,7 +626,9 @@ test("new cards take a direction from the settings or their group, and many card
 
     // New cards in the group take its direction, from the group page and after a reload.
     await page.reload();
+    await page.getByRole("button", { name: "Group settings" }).click();
     await expect(own).toHaveValue("reverse");
+    await page.keyboard.press("Escape");
     await page.getByRole("link", { name: "Add card" }).click();
     await expect(page.getByLabel("Study direction")).toHaveValue("reverse");
     // Typed into another group, it's that group's (here the settings') direction.
@@ -617,7 +640,11 @@ test("new cards take a direction from the settings or their group, and many card
     await page.getByLabel("Back").fill("hi");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: "default" })).toBeVisible();
+    await page.getByRole("button", { name: "Group settings" }).click();
     await own.selectOption("Back → front");
+    // The one card here is offered the change; left as it is.
+    await page.getByRole("button", { name: "Keep as they are" }).click();
+    await page.getByRole("button", { name: "Close" }).click();
     await page.getByRole("link", { name: "Add card" }).click();
     await page.getByLabel("Group", { exact: true }).fill("");
     await expect(page.getByLabel("Study direction")).toHaveValue("reverse");
@@ -649,7 +676,7 @@ test("statistics follow reviews", async ({ page }) => {
     await page.getByRole("button", { name: /Easy/ }).click();
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Good/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 
     // An undone rating isn't counted.
     await page.getByRole("button", { name: /Undo/ }).click();
@@ -674,7 +701,7 @@ test("statistics follow reviews", async ({ page }) => {
     await expect(page.getByRole("row", { name: /Animals/ })).toContainText("50%");
     await expect(page.getByText("2 new cards started in the last 30 days")).toBeVisible();
     // The card rated Easy is scheduled for a later day.
-    await expect(page.getByText(/^\d+ cards? due by the end of today, 1 in the next 7 days$/)).toBeVisible();
+    await expect(page.getByText(/^\d+\scards? due by the end of today, 1 in the next 7 days$/)).toBeVisible();
 });
 
 test("import a CSV, skip duplicates on re-import, export", async ({ page }) => {
@@ -717,7 +744,7 @@ test("a JSON backup restores cards with their review progress", async ({ page, b
     await page.goto("/#/review");
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
 
     await page.goto("/#/account");
     const download = page.waitForEvent("download");
@@ -735,7 +762,8 @@ test("a JSON backup restores cards with their review progress", async ({ page, b
     // Still scheduled for later, not due again.
     await expect(fresh.locator(".when")).toHaveText(/^in /);
     await fresh.goto("/");
-    await expect(fresh.getByRole("link", { name: /Review \d+ cards?/ })).toHaveCount(0);
+    await expect(fresh.getByText("You're all caught up")).toBeVisible();
+    await expect(fresh.getByRole("link", { name: /^Review / })).toHaveCount(0);
 
     // Restoring it again changes nothing.
     await fresh.goto("/#/import");
@@ -775,34 +803,94 @@ test("the navigation reaches each part of the app and marks where you are", asyn
     await nav.getByRole("link", { name: "Cards" }).click();
     await page.getByRole("link", { name: "Import" }).click();
     await expect(nav.getByRole("link", { name: "Cards" })).toHaveAttribute("aria-current", "page");
-    await expect(page.locator(".crumb")).toHaveText("All groups");
+    await expect(page.locator(".crumb")).toHaveText("Your cards");
 });
 
 test("the home page says what is due and what was done today", async ({ page }) => {
     await addCard(page, { front: "pes", back: "dog", group: "Animals" });
     await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
     await page.goto("/");
-    await expect(page.locator(".today .headline")).toHaveText("2 new");
-    await expect(page.getByText("2 cards to study today")).toBeVisible();
+    await expect(page.locator(".today .headline")).toHaveText("2 cards ready to review");
+    await expect(page.getByText("2 new cards in Animals")).toBeVisible();
     await expect(page.getByText("0 days in a row")).toBeVisible();
-    await expect(page.locator(".groups li")).toContainText("2 new");
+    await expect(page.locator(".groups li")).toContainText("2 to start");
 
-    await page.getByRole("link", { name: "Review 2 cards" }).click();
+    // The group's own row starts its review too.
+    await page.locator(".groups li").getByRole("link", { name: "Review Animals, 2 cards" }).click();
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
+    // A review started on the home page ends back there.
     await page.getByRole("link", { name: "End review" }).click();
 
-    await expect(page.getByText("1 card to study today")).toBeVisible();
+    await expect(page.getByText("1 card ready to review")).toBeVisible();
     await expect(page.getByText("1 day in a row")).toBeVisible();
     await expect(page.getByText("1 reviewed today")).toBeVisible();
-    await expect(page.locator(".groups li")).toContainText("1 new");
+    await expect(page.locator(".groups li")).toContainText("1 to start");
 
-    await page.getByRole("link", { name: "Review 1 card" }).click();
+    await page.locator(".today").getByRole("link", { name: "Review Animals, 1 card" }).click();
     await page.getByRole("button", { name: /Show answer/ }).click();
     await page.getByRole("button", { name: /Easy/ }).click();
     await page.getByRole("link", { name: "Back to your cards" }).click();
     await expect(page.getByText("You're all caught up")).toBeVisible();
     await expect(page.getByText(/The next card is due in /)).toBeVisible();
+});
+
+test("a review keeps to one group, and offers the next group when it ends", async ({ page }) => {
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await addCard(page, { front: "voda", back: "water", group: "Drinks" });
+    await page.goto("/");
+    await expect(page.locator(".today .headline")).toHaveText("2 cards ready to review");
+    await expect(page.getByText("2 new cards across 2 groups")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ready to review" })).toBeVisible();
+
+    // The button starts with the first group, and only that group's card comes up.
+    await page.locator(".today").getByRole("link", { name: "Start with Animals, 1 card" }).click();
+    await expect(page.getByRole("heading", { name: "Review: Animals" })).toBeVisible();
+    await expect(page.getByText("1 card left")).toBeVisible();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByText("Animals done")).toBeVisible();
+
+    // The next group is one tap away.
+    await expect(page.getByText("Next up")).toBeVisible();
+    await page.getByRole("link", { name: "Review Drinks, 1 card" }).click();
+    await expect(page.locator(".side.front")).toHaveText("voda");
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    // The heading is still the group's; a line under it says the day is done.
+    await expect(page.getByRole("heading", { name: "Drinks done" })).toBeVisible();
+    await expect(page.getByText("All caught up for today.")).toBeVisible();
+    await expect(page.getByText(/Next up/)).toHaveCount(0);
+
+    // It all started on the home page, so that is where it ends.
+    await page.getByRole("link", { name: "Back to your cards" }).click();
+    await expect(page.getByText("You're all caught up")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Groups" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ready to review" })).toHaveCount(0);
+});
+
+test("a review from the home page starts its group's share of today's new cards", async ({ page }) => {
+    await addCard(page, { front: "pes", back: "dog", group: "Animals" });
+    await addCard(page, { front: "voda", back: "water", group: "Drinks" });
+    await addCard(page, { front: "pivo", back: "beer", group: "Drinks" });
+    await page.goto("/#/account");
+    await page.getByLabel("New cards per day").fill("2");
+    await page.getByLabel("New cards per day").press("Enter");
+    await page.getByLabel("New cards per day").blur();
+
+    // Two new cards today: one for each group, though Drinks has two it could start.
+    await page.goto("/");
+    await expect(page.locator(".today .headline")).toHaveText("2 cards ready to review");
+    await page.getByRole("link", { name: "Review Drinks, 1 card" }).click();
+    await expect(page.getByText("1 card left")).toBeVisible();
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await page.getByRole("button", { name: /Easy/ }).click();
+    await expect(page.getByRole("heading", { name: "Drinks done" })).toBeVisible();
+
+    // The other group still has the card it was promised.
+    await expect(page.getByText("1 card ready in 1 other group")).toBeVisible();
+    await page.getByRole("link", { name: "Review Animals, 1 card" }).click();
+    await expect(page.locator(".side.front")).toHaveText("pes");
 });
 
 test("tapping the card shows the answer, but its hint button only shows the hint", async ({ page }) => {

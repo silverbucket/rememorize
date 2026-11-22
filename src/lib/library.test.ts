@@ -111,6 +111,66 @@ describe("Library", () => {
         expect(library.groups).toEqual([{ name: "one", total: 2, due: 2, reviews: 1, fresh: 1 }]);
     });
 
+    it("offers the groups with something to review, the ones with reviews due first", async () => {
+        const old = await library.save({ frontText: "a", backText: "a", group: "zebra" });
+        await library.save({ frontText: "b", backText: "b", group: "apple" });
+        const done = await library.save({ frontText: "c", backText: "c", group: "mango" });
+        await library.review(old, 3, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+        await library.review(done, 4);
+        // "mango" was studied just now and has nothing left; "zebra" has a review due, "apple" only a new card.
+        expect(library.ready.map((g) => g.name)).toEqual(["zebra", "apple"]);
+    });
+
+    it("shares today's new cards between the groups, so their reviews add up to what is due today", async () => {
+        library.newPerDay = 3;
+        const old = await library.save({ frontText: "a", backText: "a", group: "zebra" });
+        for (const front of ["b", "c"]) await library.save({ frontText: front, backText: front, group: "zebra" });
+        for (const front of ["d", "e"]) await library.save({ frontText: front, backText: front, group: "apple" });
+        await library.save({ frontText: "f", backText: "f", group: "mango" });
+        await library.review(old, 3, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000));
+        // Studied long ago, so it doesn't count against today's new cards.
+        expect(library.newRemaining).toBe(3);
+        // "zebra" comes first with its review and takes two of the three; "apple" gets the last; "mango" waits.
+        expect(library.ready.map((g) => [g.name, g.due, g.starting])).toEqual([
+            ["zebra", 3, 2],
+            ["apple", 1, 1],
+        ]);
+        expect(library.ready.reduce((sum, g) => sum + g.due, 0)).toBe(library.todayIn(library.cards).length);
+        // Asked on its own, a group can still start as many as the limit allows.
+        expect(library.groups.find((g) => g.name === "mango")?.due).toBe(1);
+        // A review offered among the others holds its group's share, not all that the limit allows.
+        expect(library.dueIn(library.cardsIn("apple"), library.now, 1)).toHaveLength(1);
+        expect(library.dueIn(library.cardsIn("apple"))).toHaveLength(2);
+
+        // A review size caps what one review shows, not what the group gets today.
+        library.cardsPerReview = 2;
+        expect(library.ready.map((g) => [g.name, g.due, g.starting])).toEqual([
+            ["zebra", 2, 2],
+            ["apple", 1, 1],
+        ]);
+    });
+
+    it("leaves a group its share of today's new cards once its due reviews are done", async () => {
+        library.newPerDay = 2;
+        const long = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        for (const group of ["apple", "zebra"]) {
+            await library.review(await library.save({ frontText: "old", backText: "old", group }), 3, long);
+            for (const front of ["a", "b"]) await library.save({ frontText: front, backText: front, group });
+        }
+        const shares = () => library.ready.map((g) => [g.name, g.starting]);
+        expect(shares()).toEqual([
+            ["apple", 2],
+            ["zebra", 0],
+        ]);
+        // With its review done, "apple" has only new cards left and "zebra" still has a review due.
+        const due = library.cardsIn("apple").find((c) => c.frontText === "old");
+        if (due) await library.review(due, 3);
+        expect(shares()).toEqual([
+            ["zebra", 0],
+            ["apple", 2],
+        ]);
+    });
+
     it("counts the unstudied side of a two-way card as new, in the queue's units", async () => {
         library.newPerDay = 1;
         const yesterday = new Date(2026, 4, 1, 12);

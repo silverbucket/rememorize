@@ -174,7 +174,8 @@
         <h2>Storage</h2>
         <p class="account">
             <span class="dot" class:warn={library.status === "unauthorized"} aria-hidden="true"></span>
-            <span>Connected as <strong>{library.userAddress}</strong>.</span>
+            <!-- No full stop: next to an address it would pass for part of it. -->
+            <span>Connected as <strong>{library.userAddress}</strong></span>
         </p>
         {#if library.offline}
             <p class="muted">You're offline; changes will sync when you're back.</p>
@@ -220,58 +221,63 @@
 </section>
 
 <section class="panel">
-    <label class="title" for="new-per-day">New cards per day</label>
-    <p class="muted">
-        How many unseen cards to introduce each day, across all groups. Reviews of cards you've already started don't
-        count toward this.
-    </p>
-    <div class="row">
-        <input
-            id="new-per-day"
-            class="field number"
-            type="number"
-            inputmode="numeric"
-            min="0"
-            max={MAX_NEW_PER_DAY}
-            value={library.newPerDay}
-            onchange={setNewPerDay}
-        />
-        <span class="muted">Started today: {library.startedToday}</span>
-    </div>
+    <h2>Studying</h2>
+    <div class="settings">
+        <div class="setting">
+            <div class="name">
+                <label for="new-per-day">New cards per day</label>
+                <span class="status">{library.startedToday} started today</span>
+            </div>
+            <input
+                id="new-per-day"
+                class="field number"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                max={MAX_NEW_PER_DAY}
+                value={library.newPerDay}
+                onchange={setNewPerDay}
+            />
+            <p class="muted">
+                How many cards to start each day, across all groups. A card studied both ways counts once for each
+                direction. Reviews of cards you've already started don't count toward this.
+            </p>
+        </div>
 
-    <label class="title next" for="cards-per-review">Most cards per review</label>
-    <p class="muted">
-        Splits what's due into reviews of this many cards, reviews and new cards together, so you never face a huge
-        pile in one sitting. When one ends you can start the next straight away, or come back later: nothing is
-        pushed back. Leave it empty to review everything due at once.
-    </p>
-    <div class="row">
-        <input
-            id="cards-per-review"
-            class="field number"
-            type="number"
-            inputmode="numeric"
-            min="1"
-            max={MAX_NEW_PER_DAY}
-            placeholder="No limit"
-            value={library.cardsPerReview ?? ""}
-            onchange={setCardsPerReview}
-        />
-    </div>
+        <div class="setting">
+            <label for="cards-per-review">Most cards per review</label>
+            <input
+                id="cards-per-review"
+                class="field number"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                max={MAX_NEW_PER_DAY}
+                placeholder="No limit"
+                value={library.cardsPerReview ?? ""}
+                onchange={setCardsPerReview}
+            />
+            <p class="muted">
+                Splits what's due into reviews of this many cards, so you never face a huge pile in one sitting. When
+                one ends you can start the next straight away or come back later: nothing is pushed back. Leave it
+                empty for no limit.
+            </p>
+        </div>
 
-    <label class="title next" for="direction">Study new cards</label>
-    <p class="muted">
-        Which way round new cards are studied, unless their group says otherwise. A group's page can give it a
-        direction of its own, and each card can still be changed by itself.
-    </p>
-    <div class="row">
-        <select id="direction" class="field direction" value={library.direction} onchange={setDirection}>
-            {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
-                <option {value}>{label}</option>
-            {/each}
-        </select>
+        <div class="setting">
+            <label for="direction">Cards you add</label>
+            <select id="direction" class="field direction" value={library.direction} onchange={setDirection}>
+                {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
+                    <option {value}>{label}</option>
+                {/each}
+            </select>
+            <p class="muted">
+                Which way round the cards you add are studied, unless their group says otherwise. A group's settings
+                can give it a direction of its own, and each card can still be changed by itself.
+            </p>
+        </div>
     </div>
-    <p class="muted">These settings are the same on every device you connect.</p>
+    <p class="muted foot">These settings are the same on every device you connect.</p>
     {#if settingsError}<p class="error" role="alert">{settingsError}</p>{/if}
 </section>
 
@@ -281,14 +287,14 @@
         A notification on this device when cards are due. It arrives even while Rememorize is closed.
     </p>
     {#if reminders.state === "install"}
-        <p>
+        <p class="notice">
             On an iPhone or iPad, Rememorize has to be on your Home Screen first. Tap Share, then “Add to Home
             Screen”, open Rememorize from there and come back to this page.
         </p>
     {:else if reminders.state === "unsupported"}
-        <p>This browser can't show notifications.</p>
+        <p class="notice">This browser can't show notifications.</p>
     {:else if reminders.state === "blocked"}
-        <p>
+        <p class="notice">
             Notifications are blocked for Rememorize. Allow them in your browser's or your phone's settings, then
             come back to this page.
         </p>
@@ -347,7 +353,7 @@
         </div>
     {:else}
         {#if reminders.state === "stopped"}
-            <p>Reminders have stopped on this device. Turn them on again to keep getting them.</p>
+            <p class="notice">Reminders have stopped on this device. Turn them on again to keep getting them.</p>
         {/if}
         <div class="buttons">
             <button class="btn primary" type="button" disabled={reminders.busy} onclick={() => reminders.enable()}
@@ -409,12 +415,12 @@
 </section>
 
 <section class="panel">
-    <h2>Your cards</h2>
+    <h2>Import and export</h2>
     <p class="muted">
         Export a full backup (JSON, including review progress), or a spreadsheet of fronts, backs, hints and groups (CSV).
         Import accepts either, and Anki's “Notes in Plain Text” export.
     </p>
-    <div class="buttons">
+    <div class="buttons even">
         <button
             class="btn"
             type="button"
@@ -458,7 +464,9 @@
         <a href="https://silverbucket.net" target="_blank" rel="noreferrer">silverbucket.net</a><br />
         <a href="https://github.com/silverbucket/rememorize" target="_blank" rel="noreferrer">Source code</a>
         · Free software under the
-        <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer">GPL-3.0 or later</a>
+        <a class="whole" href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noreferrer"
+            >GPL-3.0 or later</a
+        >
     </p>
 </section>
 
@@ -494,6 +502,76 @@
 
     section p {
         max-width: 38rem;
+    }
+
+    /* A name that isn't broken across lines. */
+    .whole {
+        white-space: nowrap;
+    }
+
+    /* Why something can't be done here yet: set apart, and no louder than the words around it. */
+    section p.notice {
+        padding: 0.1rem 0 0.1rem 0.8rem;
+        border-left: 2px solid var(--border-strong);
+        color: var(--text-muted);
+        font-size: 0.925rem;
+    }
+
+    /* What a setting does is read once; it sits back from the setting itself. */
+    section p.muted {
+        font-size: 0.925rem;
+    }
+
+    /* Settings one under the other: the name and its control on a line, what it does below. */
+    .settings {
+        display: grid;
+    }
+
+    .setting {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        padding: 1rem 0;
+    }
+
+    .setting:first-child {
+        padding-top: 0.25rem;
+    }
+
+    .setting + .setting {
+        border-top: 1px solid var(--border);
+    }
+
+    .setting label {
+        font-weight: 620;
+    }
+
+    .setting p {
+        grid-column: 1 / -1;
+        font-size: 0.925rem;
+    }
+
+    .name {
+        display: grid;
+        gap: 0.1rem;
+    }
+
+    /* Where the setting stands today, under its name. */
+    .status {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+
+    /* The rule runs the width of the panel, like the ones between the settings above it. */
+    section p.foot {
+        max-width: none;
+        padding-top: 0.9rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .setting:last-child {
+        padding-bottom: 0.25rem;
     }
 
     .account {
@@ -532,8 +610,9 @@
         margin-top: 0.25rem;
     }
 
+    /* Wide enough for "No limit". */
     .number {
-        width: 5.5rem;
+        width: 6.75rem;
         font-variant-numeric: tabular-nums;
     }
 
@@ -638,6 +717,11 @@
     @media (max-width: 560px) {
         section {
             padding: 1.1rem;
+        }
+
+        /* The three fill their lines, so the wrapped row ends flush with the one above. */
+        .buttons.even .btn {
+            flex: 1 1 auto;
         }
 
         .segments {

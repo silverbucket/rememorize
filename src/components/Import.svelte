@@ -9,7 +9,7 @@
     const back = $derived(
         router.route.name === "import" && router.route.from === "settings"
             ? { href: href.account(), label: "Settings" }
-            : { href: href.home(), label: "All groups" },
+            : { href: href.home(), label: "Your cards" },
     );
 
     let fileName = $state("");
@@ -40,8 +40,20 @@
     const groups = $derived(plan ? [...new Set(plan.add.map((c) => c.group ?? "default"))] : []);
     const defaultGroupError = $derived(defaultGroup.includes("/") ? 'Group names can\'t contain "/".' : "");
 
-    async function choose(event: Event) {
-        const file = (event.currentTarget as HTMLInputElement).files?.[0];
+    /** A file is being dragged over the box that takes one. */
+    let over = $state(false);
+
+    function choose(event: Event) {
+        void read((event.currentTarget as HTMLInputElement).files?.[0]);
+    }
+
+    function drop(event: DragEvent) {
+        event.preventDefault();
+        over = false;
+        if (!importing) void read(event.dataTransfer?.files[0]);
+    }
+
+    async function read(file: File | undefined) {
         readError = "";
         importError = "";
         text = "";
@@ -91,9 +103,37 @@
 </div>
 
 <div class="panel form">
-    <label>
-        <span>File</span>
-        <input class="field" type="file" accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json" onchange={choose} />
+    <!-- The whole box picks a file, and takes one dropped on it. -->
+    <label
+        class="drop"
+        class:over
+        class:chosen={!!text}
+        ondragover={(e) => {
+            e.preventDefault();
+            over = true;
+        }}
+        ondragleave={() => (over = false)}
+        ondrop={drop}
+    >
+        <span class="visually-hidden">File</span>
+        <input
+            class="visually-hidden"
+            type="file"
+            accept=".csv,.tsv,.txt,.json,text/csv,text/plain,application/json"
+            disabled={importing}
+            onchange={choose}
+        />
+        <span class="drop-mark"><Icon name={text ? "check" : "import"} size={22} /></span>
+        <span class="drop-text">
+            {#if text}
+                <strong>{fileName}</strong>
+                <span class="muted">Choose another file</span>
+            {:else}
+                <strong>Choose a file</strong>
+                <!-- Nothing can be dropped on a touch screen. -->
+                <span class="muted droppable">or drop one here</span>
+            {/if}
+        </span>
     </label>
     <p class="muted accepts">CSV, tab-separated text, Anki's plain-text export, or a Rememorize backup (JSON).</p>
 
@@ -108,9 +148,8 @@
         </label>
     {/if}
 
-    <!-- Open until a file is chosen; after that the preview matters more. -->
-    <details open={!text}>
-        <summary>How to lay out a file</summary>
+    <details>
+        <summary><Icon name="chevron" size={16} />How to lay out a file</summary>
         <dl class="formats muted">
             <div>
                 <dt>CSV or tab-separated</dt>
@@ -197,12 +236,119 @@
         font-size: 0.9rem;
     }
 
+    .drop {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        min-height: 10rem;
+        padding: 1.5rem 1.1rem;
+        text-align: center;
+        border: 1.5px dashed var(--border-strong);
+        border-radius: var(--radius-lg);
+        background: var(--bg);
+        font-size: 1rem;
+        cursor: pointer;
+        transition:
+            background-color 120ms,
+            border-color 120ms;
+    }
+
+    @media (hover: hover) {
+        .drop:hover {
+            border-color: var(--text-faint);
+        }
+    }
+
+    .drop.over {
+        border-color: var(--accent);
+        background: var(--accent-subtle);
+    }
+
+    /* Once it holds a file it steps back: the preview below is what matters now. */
+    .drop.chosen {
+        flex-direction: row;
+        justify-content: flex-start;
+        min-height: 0;
+        padding: 0.9rem 1.1rem;
+        border-style: solid;
+        text-align: left;
+    }
+
+    .drop:has(input:focus-visible) {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    .drop-mark {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 50%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+    }
+
+    .chosen .drop-mark {
+        background: var(--accent-subtle);
+        border-color: transparent;
+        color: var(--accent-text);
+    }
+
+    .drop-text {
+        display: grid;
+        gap: 0.1rem;
+        min-width: 0;
+    }
+
+    .drop-text strong {
+        font-weight: 620;
+        overflow-wrap: anywhere;
+    }
+
+    .drop-text .muted {
+        font-size: 0.9rem;
+        font-weight: 400;
+    }
+
+    @media (hover: none) {
+        .droppable {
+            display: none;
+        }
+
+        .drop:not(.chosen) {
+            min-height: 7.5rem;
+        }
+    }
+
+    /* The app's own arrow in place of the browser's triangle. It turns down when the help is open. */
     summary {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
         width: fit-content;
+        margin-left: -0.2rem;
         color: var(--text-muted);
         font-size: 0.925rem;
         font-weight: 600;
+        list-style: none;
         cursor: pointer;
+    }
+
+    summary::-webkit-details-marker {
+        display: none;
+    }
+
+    summary :global(.icon) {
+        transition: transform 120ms;
+    }
+
+    details[open] summary :global(.icon) {
+        transform: rotate(90deg);
     }
 
     @media (hover: hover) {

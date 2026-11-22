@@ -149,7 +149,7 @@
                     {@const review = stateOf(initial, item.reverse)}
                     <tr>
                         <th scope="row">{item.reverse ? "Back → front" : "Front → back"}</th>
-                        <td>{review ? fromNow(review.due, library.now) : "not reviewed yet"}</td>
+                        <td>{review ? fromNow(review.due, library.now) : "not started"}</td>
                         <td class="num">{review?.reps ?? 0}</td>
                         <td class="num">{review?.lapses ?? 0}</td>
                     </tr>
@@ -309,6 +309,20 @@
         th,
         td {
             padding-right: 0.5rem;
+        }
+
+        /* Each direction on one line, and the headings over them, with the four columns evenly apart. */
+        th,
+        td {
+            white-space: nowrap;
+        }
+
+        tbody th {
+            padding-right: 0.85rem;
+        }
+
+        .num {
+            padding-left: 0.6rem;
         }
 
         /* One date per line, name on the left and value on the right. */

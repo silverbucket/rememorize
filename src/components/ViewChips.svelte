@@ -7,27 +7,42 @@
         cards,
         active,
         link,
-        oneLine = false,
     }: {
         cards: Flashcard[];
         /** The view being shown, or "all" for every card. Leave out where no list is showing. */
         active?: ViewId | "all";
         link: (show?: ViewId) => string;
-        /** On a phone, keep to one row that scrolls sideways instead of wrapping. */
-        oneLine?: boolean;
     } = $props();
 
     const counts = $derived(viewCounts(cards, library.now));
     /** Views with nothing in them are left out. */
     const offered = $derived(VIEWS.filter((v) => v.id === active || counts[v.id] > 0));
+
+    /** On a phone the row scrolls sideways. `more` is true while chips are waiting off its far edge. */
+    let row: HTMLElement | undefined = $state();
+    let more = $state(false);
+    const measure = () => {
+        more = !!row && row.scrollLeft + row.clientWidth < row.scrollWidth - 1;
+    };
+    $effect(() => {
+        // Measured again when the chips change, and when the row is resized.
+        void [offered.length, cards.length, active];
+        if (!row) return;
+        measure();
+        const resized = new ResizeObserver(measure);
+        resized.observe(row);
+        return () => resized.disconnect();
+    });
 </script>
 
 {#if cards.length > 0}
-    <nav class="views" class:one-line={oneLine} aria-label="Views">
+    <nav class="views" class:more aria-label="Views" bind:this={row} onscroll={measure}>
         <a href={link()} aria-current={active === "all" ? "page" : undefined}>
             All <span class="n">{cards.length}</span>
         </a>
-        {#each offered as view (view.id)}
+        {#each offered as view, i (view.id)}
+            <!-- A rule between the stages, which add up to All, and the slices that cut across them. -->
+            {#if !view.stage && offered[i - 1]?.stage}<span class="rule" aria-hidden="true"></span>{/if}
             <a href={link(view.id)} aria-current={active === view.id ? "page" : undefined}>
                 {view.label} <span class="n">{counts[view.id]}</span>
             </a>
@@ -39,7 +54,7 @@
     .views {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.4rem;
+        gap: 0.3rem;
         margin-bottom: 0.9rem;
     }
 
@@ -48,7 +63,7 @@
         align-items: center;
         gap: 0.4rem;
         min-height: 2.25rem;
-        padding: 0.25rem 0.8rem;
+        padding: 0.25rem 0.65rem;
         border: 1px solid var(--border);
         border-radius: 999px;
         background: var(--surface);
@@ -78,14 +93,40 @@
         font-weight: 650;
     }
 
+    /* Where the row wraps, it breaks here: the stages on one line, the slices on the next. */
+    .rule {
+        flex-basis: 100%;
+        height: 0;
+    }
+
+
     @media (max-width: 560px) {
-        /* Runs to the edges of the screen, so a chip cut off there shows there are more. */
-        .one-line {
+        /* One row that scrolls sideways, out to the edges of the screen: a chip cut off there shows there are more. */
+        .views {
             flex-wrap: nowrap;
             overflow-x: auto;
             margin-inline: -1rem;
             padding-inline: 1rem;
             scrollbar-width: none;
+        }
+
+        .views::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* In the one scrolling row, a line stands between the two sets. */
+        .rule {
+            flex: none;
+            align-self: center;
+            width: 1px;
+            height: 1.25rem;
+            margin-inline: 0.2rem;
+            background: var(--border-strong);
+        }
+
+        /* Fades out at the edge only while there is more to scroll to, so a chip is never cut off cold. */
+        .views.more {
+            mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
         }
     }
 </style>

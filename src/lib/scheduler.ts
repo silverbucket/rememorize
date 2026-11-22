@@ -169,6 +169,14 @@ export function startedOn(cards: Flashcard[], now = new Date()): number {
         .filter((r) => r?.firstReview && new Date(r.firstReview).toDateString() === day).length;
 }
 
+/** Whether any of these cards was first studied before the (local) day of `now`. */
+export function startedBefore(cards: Flashcard[], now = new Date()): boolean {
+    const day = now.toDateString();
+    return cards
+        .flatMap((c) => [c.review, c.reverseReview])
+        .some((r) => r && r.state !== 0 && !(r.firstReview && new Date(r.firstReview).toDateString() === day));
+}
+
 function dueTime(item: ReviewItem): number {
     const review = stateOf(item.card, item.reverse);
     return review ? new Date(review.due).getTime() : 0;

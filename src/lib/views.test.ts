@@ -55,7 +55,7 @@ describe("inView", () => {
     it("a forgotten card is struggling while it is relearned, and once it has been forgotten twice", () => {
         const { card: lapsed } = study(card(), [4, 1]);
         expect(lapsed.review?.state).toBe(3);
-        expect(viewsOf(lapsed)).toEqual(["struggling", "learning"]);
+        expect(viewsOf(lapsed)).toEqual(["learning", "struggling"]);
 
         // Back in review after one lapse: no longer struggling.
         const { card: recovered } = study(card(), [4, 1, 3, 3, 3]);
@@ -68,16 +68,17 @@ describe("inView", () => {
     });
 
     it("a card studied both ways is well known only when both directions are", () => {
+        expect(viewsOf(card({ direction: "both" }))).toEqual(["new"]);
         const { card: forward } = study(card({ direction: "both" }), [4, 3, 3, 3, 3]);
-        // Back → front hasn't been started.
-        expect(viewsOf(forward)).toEqual(["new"]);
+        // Back → front hasn't been started: one direction in, the card is learning.
+        expect(viewsOf(forward)).toEqual(["learning"]);
 
         const { card: both } = study(forward, [4, 3, 3, 3, 3], true);
         expect(viewsOf(both)).toEqual(["known"]);
 
         // And it is struggling if either direction is.
         const { card: lapsed } = study(forward, [4, 1], true);
-        expect(viewsOf(lapsed)).toEqual(["struggling", "learning"]);
+        expect(viewsOf(lapsed)).toEqual(["learning", "struggling"]);
     });
 
     it("only looks at the directions a card is studied in", () => {
@@ -85,6 +86,23 @@ describe("inView", () => {
         // A leftover schedule for a direction that was switched off doesn't count.
         const { card: stale } = study({ ...known, direction: "both" }, [4, 1], true);
         expect(viewsOf({ ...stale, direction: "forward" })).toEqual(["known"]);
+    });
+});
+
+describe("the stages", () => {
+    it("put every card at exactly one of not started, learning and well known", () => {
+        const half = study(card({ "@id": "half", direction: "both" }), [3]).card;
+        const cards = [
+            card({ "@id": "a" }),
+            card({ "@id": "b", direction: "both" }),
+            half,
+            study(card({ "@id": "c" }), [4, 1]).card,
+            study(card({ "@id": "d" }), [4, 3, 3, 3, 3]).card,
+            study(half, [4, 3, 3, 3, 3], true).card,
+        ];
+        const counts = viewCounts(cards, NOW);
+        expect(counts.new + counts.learning + counts.known).toBe(cards.length);
+        expect(counts).toMatchObject({ new: 2, learning: 3, known: 1 });
     });
 });
 

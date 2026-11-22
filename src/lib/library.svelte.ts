@@ -21,7 +21,7 @@ import {
 } from "remotestorage-module-flashcards";
 import { defaultQuietFrom } from "./reminders";
 import type { RSWithModules } from "./rs";
-import { dueItems, type Grade, isNew, type ReviewItem, rate, startedOn, stateOf } from "./scheduler";
+import { dueItems, type Grade, isNew, type ReviewItem, rate, startedBefore, startedOn, stateOf } from "./scheduler";
 import {
     type AppSettings,
     appSettingsSchema,
@@ -51,6 +51,8 @@ export interface GroupSummary {
     reviews: number;
     /** New cards a review could start now if there were no daily limits. */
     fresh: number;
+    /** Of those, the ones today's limit lets it start. Only set on the groups in `ready`. */
+    starting?: number;
 }
 
 type ChangeEvent = { relativePath?: string; newValue?: unknown; origin?: string };
@@ -151,6 +153,36 @@ export class Library {
                 };
             })
             .sort((a, b) => a.name.localeCompare(b.name));
+    });
+
+    /**
+     * Groups with something to review now, in the order they are offered: the ones
+     * with reviews due first, then the ones with only new cards to start.
+     *
+     * `due` is what a review of each would show. Today's new cards are shared by
+     * every group, and the counts add up to what there is to study today. A group
+     * whose new cards all have to wait isn't offered.
+     *
+     * The new cards go first to the groups that were being learned before today,
+     * then by name. Nothing studied today changes that order, so a group keeps its
+     * share from one review to the next.
+     */
+    ready: GroupSummary[] = $derived.by(() => {
+        let slots = this.newRemaining;
+        const size = this.cardsPerReview ?? Number.POSITIVE_INFINITY;
+        const ready: GroupSummary[] = [];
+        const underway = new Set(
+            this.groups.filter((g) => startedBefore(this.cardsIn(g.name), this.now)).map((g) => g.name),
+        );
+        // `groups` is in name order, and the sort keeps it within each half.
+        const inTurn = [...this.groups].sort((a, b) => Number(underway.has(b.name)) - Number(underway.has(a.name)));
+        for (const group of inTurn) {
+            const starting = Math.min(group.fresh, slots);
+            slots -= starting;
+            const today = group.reviews + starting;
+            if (today > 0) ready.push({ ...group, due: Math.min(today, size), starting });
+        }
+        return ready.sort((a, b) => Number(b.reviews > 0) - Number(a.reviews > 0) || a.name.localeCompare(b.name));
     });
 
     /** Cards that a review of everything would show now (new cards capped). */
@@ -256,14 +288,18 @@ export class Library {
         }
     }
 
-    /** The queue for one review of some cards: due reviews, then new cards, within the limits. */
-    dueIn(cards: Flashcard[], now = this.now): ReviewItem[] {
-        return dueItems(cards, now, this.#freshLeft(now), this.cardsPerReview ?? Number.POSITIVE_INFINITY);
+    /**
+     * The queue for one review of some cards: due reviews, then new cards, within the limits.
+     * `share` holds the new cards to fewer than today's limit leaves: a group's share of them (see `ready`).
+     */
+    dueIn(cards: Flashcard[], now = this.now, share = Number.POSITIVE_INFINITY): ReviewItem[] {
+        const fresh = Math.min(share, this.#freshLeft(now));
+        return dueItems(cards, now, fresh, this.cardsPerReview ?? Number.POSITIVE_INFINITY);
     }
 
     /** Everything due in these cards now, however many reviews that takes (the new-card limit still applies). */
-    todayIn(cards: Flashcard[], now = this.now): ReviewItem[] {
-        return dueItems(cards, now, this.#freshLeft(now));
+    todayIn(cards: Flashcard[], now = this.now, share = Number.POSITIVE_INFINITY): ReviewItem[] {
+        return dueItems(cards, now, Math.min(share, this.#freshLeft(now)));
     }
 
     // Today's allowance at `now`, not at the last clock tick (matters just after midnight).

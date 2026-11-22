@@ -317,7 +317,7 @@ test("turning reminders on shows a notification and schedules a month of them", 
     await page.reload();
     await expect(page.getByRole("button", { name: "Turn on reminders" })).toBeVisible();
     await reviewOne(page, "Animals");
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
     await putAway(page);
     expect(posted).toHaveLength(after);
 });
@@ -454,7 +454,7 @@ test("reminders that can't be renewed say so, and can be turned on again", async
     // This device is off the list, so nothing keeps scheduling for a subscription that is gone.
     const before = hub.posted.length;
     await reviewOne(page, "Animals");
-    await expect(page.getByText("Done for now")).toBeVisible();
+    await expect(page.getByText("All caught up for today")).toBeVisible();
     await putAway(page);
     expect(hub.posted).toHaveLength(before);
 
@@ -794,7 +794,7 @@ test("disconnecting storage turns this browser's reminders off", async ({ page }
     // Before going anywhere: what a page fetched can't be read once it has been left.
     await synced;
     await page.goto("/");
-    await expect(page.getByText("Verbs")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("link", { name: /^Verbs/ })).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(QUIET);
     expect(hub.posted.slice(before)).toEqual([]);
 });
@@ -822,7 +822,7 @@ test("a review on one device corrects the reminders of another", async ({ browse
     let fromLaptop = await standIn(laptop, createDevice(), "https://push.example/laptop");
     await connect(laptop, user);
     await laptop.goto("/");
-    await expect(laptop.getByText("Verbs")).toBeVisible({ timeout: 30_000 });
+    await expect(laptop.getByRole("link", { name: /^Verbs/ })).toBeVisible({ timeout: 30_000 });
     await reviewOne(laptop, "Verbs");
 
     // What the laptop schedules is for the phone, encrypted for the phone, and counts the review.
@@ -832,7 +832,7 @@ test("a review on one device corrects the reminders of another", async ({ browse
     // While the laptop is closed, the phone reviews another card.
     await laptop.close();
     await phone.goto("/");
-    await expect(phone.locator(".groups li").filter({ hasText: "Verbs" }).locator(".badge.fresh")).toHaveText("2 new", {
+    await expect(phone.locator(".groups li").filter({ hasText: "Verbs" }).locator(".fresh")).toHaveText("2 to start", {
         timeout: 30_000,
     });
     const reviewed = stored(phone, "/flashcards/Verbs/");
@@ -887,7 +887,7 @@ test("a reminder server chosen on one device is taken up by the others", async (
     const ownFromLaptop = await serve(laptop, OWN);
     await connect(laptop, user);
     await laptop.goto("/");
-    await expect(laptop.getByText("Verbs")).toBeVisible({ timeout: 30_000 });
+    await expect(laptop.getByRole("link", { name: /^Verbs/ })).toBeVisible({ timeout: 30_000 });
     await laptop.goto("/#/account");
     await laptop.getByLabel("Reminder server").fill(OWN);
     await laptop.getByLabel("Reminder server").blur();
@@ -915,12 +915,9 @@ test("a reminder server chosen on one device is taken up by the others", async (
     // The phone's new subscription reaches storage, and the laptop. So has its review.
     await moved;
     await laptop.goto("/");
-    await expect(laptop.locator(".groups li").filter({ hasText: "Verbs" }).locator(".badge.fresh")).toHaveText(
-        "2 new",
-        {
-            timeout: 30_000,
-        },
-    );
+    await expect(laptop.locator(".groups li").filter({ hasText: "Verbs" }).locator(".fresh")).toHaveText("2 to start", {
+        timeout: 30_000,
+    });
 
     // From then on the laptop's reviews reach the phone through the new server.
     await reviewOne(laptop, "Verbs");
