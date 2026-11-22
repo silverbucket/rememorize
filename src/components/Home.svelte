@@ -1,7 +1,7 @@
 <script lang="ts">
     import { fromNow, plural } from "../lib/format";
     import { href } from "../lib/router.svelte";
-    import { isNew, nextDue } from "../lib/scheduler";
+    import { canStudyExtra, isNew, nextDue } from "../lib/scheduler";
     import { library } from "../lib/state";
     import { lastDays, streak } from "../lib/stats";
     import { viewCounts } from "../lib/views";
@@ -218,6 +218,16 @@
                             </span>
                         {/if}
                     </a>
+                    <!-- Nothing due here, but more can be studied anyway: past the daily limit, or ahead of schedule. -->
+                    {#if canStudyExtra(library.cardsIn(group.name), library.now)}
+                        <a
+                            class="btn tonal small review"
+                            href={href.extra(group.name)}
+                            aria-label="Study extra cards in {group.name}"
+                        >
+                            Study extra
+                        </a>
+                    {/if}
                 </li>
             {/each}
         </ul>

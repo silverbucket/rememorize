@@ -22,6 +22,7 @@ describe("parseHash", () => {
         ["#/review/food?from=home", { name: "review", group: "food", from: "home" }],
         ["#/review/food?show=new&from=home", { name: "review", group: "food", show: "new", from: "home" }],
         ["#/review/food?from=elsewhere", { name: "review", group: "food" }],
+        ["#/review/food?extra=1", { name: "review", group: "food", extra: true }],
         ["#/account", { name: "account" }],
         ["#/import", { name: "import" }],
         ["#/import?from=settings", { name: "import", from: "settings" }],
@@ -43,6 +44,7 @@ describe("parseHash", () => {
         expect(parseHash(href.group(group, "learning"))).toEqual({ name: "group", group, show: "learning" });
         expect(parseHash(href.review(group, "learning"))).toEqual({ name: "review", group, show: "learning" });
         expect(parseHash(href.cards("learning"))).toEqual({ name: "cards", show: "learning" });
+        expect(parseHash(href.extra(group))).toEqual({ name: "review", group, extra: true });
         expect(parseHash(href.review(group, undefined, "home"))).toEqual({ name: "review", group, from: "home" });
         expect(parseHash(href.review(group, "learning", "home"))).toEqual({
             name: "review",

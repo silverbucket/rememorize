@@ -146,6 +146,36 @@ export function dueItems(
     return shown.slice(0, Math.max(0, totalLimit));
 }
 
+/**
+ * Extra study, beyond what is due: `count` cards picked at random, for when the
+ * day's reviews are done and you want more. New cards come first, whatever the
+ * daily limit says; once those run out, cards already learned are reviewed
+ * early. Cards still being learned are left alone: they come back on their own
+ * within minutes. A card studied both ways appears once, as with `dueItems`.
+ */
+export function extraItems(cards: Flashcard[], count: number, now = new Date(), random = Math.random): ReviewItem[] {
+    const shuffle = <T>(list: T[]) => {
+        for (let i = list.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [list[i], list[j]] = [list[j], list[i]];
+        }
+        return list;
+    };
+    const open = cards.flatMap(itemsOf).filter((i) => !isBuried(i, now));
+    const fresh = shuffle(open.filter((i) => isNew(i.card, i.reverse)));
+    const learned = shuffle(open.filter((i) => stateOf(i.card, i.reverse)?.state === 2));
+    const seen = new Set<Flashcard>();
+    const once = (item: ReviewItem) => !seen.has(item.card) && !!seen.add(item.card);
+    return [...fresh, ...learned].filter(once).slice(0, Math.max(0, count));
+}
+
+/** Whether `extraItems` would find anything in these cards. */
+export function canStudyExtra(cards: Flashcard[], now = new Date()): boolean {
+    return cards
+        .flatMap(itemsOf)
+        .some((i) => !isBuried(i, now) && (isNew(i.card, i.reverse) || stateOf(i.card, i.reverse)?.state === 2));
+}
+
 /** When each direction that isn't due yet comes due, between `from` and `to`. */
 export function dueBetween(cards: Flashcard[], from: Date, to: Date): Date[] {
     return cards

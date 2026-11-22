@@ -487,6 +487,47 @@ test("daily limit on new cards", async ({ page }) => {
     await expect(start).toHaveAccessibleName("Review Numbers, 1 card");
 });
 
+test("extra study past the daily limit, and ahead of schedule", async ({ page }) => {
+    for (const [front, back] of [
+        ["jedna", "one"],
+        ["dva", "two"],
+        ["tři", "three"],
+    ]) {
+        await addCard(page, { front, back, group: "Numbers" });
+    }
+    await page.goto("/#/account");
+    await page.getByLabel("New cards per day").fill("2");
+    await page.getByLabel("New cards per day").blur();
+    await page.goto("/");
+    await page
+        .locator(".today")
+        .getByRole("link", { name: /^Review Numbers/ })
+        .click();
+    for (let i = 0; i < 2; i++) {
+        await page.getByRole("button", { name: /Show answer/ }).click();
+        await page.getByRole("button", { name: /Easy/ }).click();
+    }
+    // Today's are done; more can be studied on purpose, from the wrap-up, home, or the group.
+    await expect(page.getByRole("button", { name: "Study 3 extra cards" })).toBeVisible();
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Study extra cards in Numbers" })).toBeVisible();
+    await page.goto("/#/group/Numbers");
+    // The limit keeps today's due list short, but more can be studied on purpose.
+    await page.getByRole("link", { name: "Study extra" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Numbers · Extra$/);
+    // The new card held back by the limit comes first, then learned ones, early.
+    await expect(page.getByText("3 cards left")).toBeVisible();
+    await expect(page.locator(".side.front")).toHaveText("tři");
+    for (let i = 0; i < 3; i++) {
+        await page.getByRole("button", { name: /Show answer/ }).click();
+        await page.getByRole("button", { name: /Easy/ }).click();
+    }
+    await expect(page.getByText("Extra study done")).toBeVisible();
+    // With no new cards left, the next round reviews learned ones early.
+    await page.getByRole("button", { name: "Study 3 more cards" }).click();
+    await expect(page.getByText("3 cards left")).toBeVisible();
+});
+
 test("reviews of a few cards at a time, and the home page counts new cards apart", async ({ page }) => {
     for (const [front, back] of [
         ["jedna", "one"],
