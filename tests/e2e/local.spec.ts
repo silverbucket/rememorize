@@ -809,6 +809,38 @@ test("an Anki deck in the newer format explains how to export it", async ({ page
     await expect(page.getByRole("alert")).toContainText("Support older Anki versions");
 });
 
+test("cards can be taken out of an import in the preview", async ({ page }) => {
+    const words = ["jedna", "dvě", "tři", "čtyři", "pět", "šest", "sedm"];
+    const csv = words.map((w, i) => `${w},${i + 1}`).join("\n");
+    await page.goto("/#/import");
+    await page
+        .getByLabel("File")
+        .setInputFiles({ name: "Numbers.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+    await expect(page.getByText("7 new cards in Numbers")).toBeVisible();
+
+    // The first five are listed; the rest are a tap away.
+    const rows = page.locator(".summary tbody tr");
+    await expect(rows).toHaveCount(5);
+    await page.getByRole("button", { name: "Show all 7" }).click();
+    await expect(rows).toHaveCount(7);
+
+    await page.getByRole("button", { name: "Remove dvě" }).click();
+    await page.getByRole("button", { name: "Remove sedm" }).click();
+    await expect(rows).toHaveCount(5);
+    await expect(page.getByText("5 new cards in Numbers")).toBeVisible();
+    await expect(page.getByText("2 cards removed")).toBeVisible();
+
+    // Removing can be taken back.
+    await page.getByRole("button", { name: "Put back" }).click();
+    await expect(page.getByText("7 new cards in Numbers")).toBeVisible();
+    await page.getByRole("button", { name: "Remove dvě" }).click();
+
+    await page.getByRole("button", { name: "Import 6 cards" }).click();
+    await expect(page.getByRole("heading", { name: "Numbers" })).toBeVisible();
+    await expect(page.getByText("jedna")).toBeVisible();
+    await expect(page.getByText("dvě")).toHaveCount(0);
+});
+
 test("a JSON backup restores cards with their review progress", async ({ page, browser }) => {
     await addCard(page, { front: "pivo", back: "beer", group: "Drinks" });
     await page.goto("/#/review");

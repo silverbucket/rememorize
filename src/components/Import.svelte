@@ -1,5 +1,8 @@
 <script lang="ts">
-    import {
+    
+    import type { FlashcardInput } from "remotestorage-module-flashcards";
+    import { SvelteSet } from "svelte/reactivity";
+import {
         type AnkiCollection,
         type AnkiNoteType,
         apkgImport,
@@ -63,8 +66,15 @@
     const plan: ImportPlan | undefined = $derived(
         parsed.result ? planImport(parsed.result.rows, library.cards) : undefined,
     );
-    const total = $derived(plan ? plan.add.length + plan.update.length : 0);
-    const groups = $derived(plan ? [...new Set(plan.add.map((c) => c.group ?? "default"))] : []);
+    /** New cards taken out of the import in the preview, by `rowKey`. */
+    const removed = new SvelteSet<string>();
+    /** The whole list of new cards is shown, rather than the first few. */
+    let showAll = $state(false);
+    const rowKey = (c: FlashcardInput) => c["@id"] ?? `${c.group ?? ""}\u0000${c.frontText}\u0000${c.backText}`;
+    const adding = $derived(plan ? plan.add.filter((c) => !removed.has(rowKey(c))) : []);
+    const removedCount = $derived(plan ? plan.add.length - adding.length : 0);
+    const total = $derived(plan ? adding.length + plan.update.length : 0);
+    const groups = $derived([...new Set(adding.map((c) => c.group ?? "default"))]);
     // Per deck, the groups are named after the decks and this name isn't used.
     const defaultGroupError = $derived(
         !(anki && perDeck) && defaultGroup.includes("/") ? 'Group names can\'t contain "/".' : "",
@@ -111,6 +121,8 @@
         importError = "";
         text = "";
         anki = undefined;
+        removed.clear();
+        showAll = false;
         if (!file) return;
         fileName = file.name;
         if (/\.(apkg|colpkg)$/i.test(file.name)) return readAnki(file);
@@ -128,7 +140,7 @@
 
     async function run() {
         if (!plan || importing || defaultGroupError) return;
-        const job = { plan, total, groups };
+        const job = { plan: { ...plan, add: adding }, total, groups };
         running = job;
         importing = true;
         importError = "";
@@ -323,12 +335,20 @@
         <h2>Preview</h2>
         <ul>
             <li>
-                {plural(plan.add.length, "new card")}{groups.length > 3
+                {plural(adding.length, "new card")}{groups.length > 3
                     ? ` in ${groups.length} groups`
                     : groups.length
                       ? ` in ${groups.join(", ")}`
                       : ""}
             </li>
+            {#if removedCount}
+                <li>
+                    {plural(removedCount, "card")} removed
+                    <button class="btn ghost small restore" type="button" onclick={() => removed.clear()}>
+                        <Icon name="undo" size={16} />Put back
+                    </button>
+                </li>
+            {/if}
             {#if plan.sameFront}
                 <li>{plural(plan.sameFront, "new card")} {plan.sameFront === 1 ? "has" : "have"} the same front as a card already in the group, with a different back</li>
             {/if}
@@ -348,20 +368,38 @@
             {/if}
         </ul>
 
-        {#if plan.add.length}
+        {#if adding.length}
             <table>
                 <!-- With one group, the line above names it: no need to repeat it on every row. -->
-                <thead><tr><th>Front</th><th>Back</th>{#if groups.length > 1}<th class="where">Group</th>{/if}</tr></thead>
+                <thead>
+                    <tr>
+                        <th>Front</th><th>Back</th>{#if groups.length > 1}<th class="where">Group</th>{/if}
+                        <th class="remove"><span class="visually-hidden">Remove</span></th>
+                    </tr>
+                </thead>
                 <tbody>
-                    {#each plan.add.slice(0, 5) as card, i (i)}
+                    {#each showAll ? adding : adding.slice(0, 5) as card (rowKey(card))}
                         <tr>
                             <td class="content">{card.frontText}</td><td class="content">{card.backText}</td>
                             {#if groups.length > 1}<td>{card.group}</td>{/if}
+                            <td class="remove">
+                                <button
+                                    class="btn ghost icon-only"
+                                    type="button"
+                                    aria-label="Remove {card.frontText}"
+                                    title="Don't import this card"
+                                    onclick={() => removed.add(rowKey(card))}><Icon name="close" size={16} /></button
+                                >
+                            </td>
                         </tr>
                     {/each}
                 </tbody>
             </table>
-            {#if plan.add.length > 5}<p class="muted more">…and {plan.add.length - 5} more</p>{/if}
+            {#if adding.length > 5}
+                <button class="btn ghost small more" type="button" onclick={() => (showAll = !showAll)}>
+                    {showAll ? "Show the first 5" : `Show all ${adding.length}`}
+                </button>
+            {/if}
         {/if}
 
         {#if importError}<p class="error" role="alert">{importError}</p>{/if}
@@ -667,7 +705,23 @@
     }
 
     .more {
-        font-size: 0.9rem;
+        justify-self: start;
+    }
+
+    th.remove,
+    td.remove {
+        width: 2.75rem;
+        padding-right: 0;
+        text-align: right;
+    }
+
+    td.remove .btn {
+        color: var(--text-muted);
+    }
+
+    .restore {
+        margin-left: 0.4rem;
+        vertical-align: middle;
     }
 
     .buttons {
