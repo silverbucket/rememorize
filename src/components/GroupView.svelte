@@ -59,7 +59,7 @@
     const needle = $derived(query.trim().toLocaleLowerCase());
     const shown = $derived(
         needle
-            ? cards.filter((c) => `${c.frontText}\n${c.backText}\n${c.hint ?? ""}`.toLocaleLowerCase().includes(needle))
+            ? cards.filter((c) => `${c.frontText}\n${c.backText}\n${c.hint ?? ""}\n${c.backHint ?? ""}`.toLocaleLowerCase().includes(needle))
             : cards,
     );
 

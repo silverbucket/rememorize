@@ -6,7 +6,7 @@
  *   so its cards start as new for whoever imports it. It names the group,
  *   which tells an import to update cards it has by id rather than skip them.
  * - CSV/TSV is for moving cards between apps: front, back, hint, group,
- *   study direction and extra. A row without a direction gets one from `directionFor`.
+ *   study direction, extra and the back's hint. A row without a direction gets one from `directionFor`.
  *   Anki's "Notes in Plain Text" export (tab-separated, `#` header lines)
  *   imports as-is.
  */
@@ -37,8 +37,13 @@ export interface ParsedImport {
 export interface ImportPlan {
     /** Cards to create. */
     add: FlashcardInput[];
-    /** Cards from a backup that are newer than the copy here. */
+    /**
+     * Cards already here that take something from the file: a backup's copy
+     * that is newer, a shared group's text, or (see `refreshed`) a deck's hints and extra.
+     */
     update: { card: FlashcardInput; previousGroup: string }[];
+    /** How many of `update` are cards already here that only get the file's hints and extra. */
+    refreshed: number;
     /** Already here (same id and not newer, or same front/back in the same group). */
     unchanged: number;
     /** Cards that appear more than once in the file, so are only added once. */
@@ -61,8 +66,17 @@ export function exportJson(cards: Flashcard[], now = new Date()): string {
 export function exportCsv(cards: Flashcard[]): string {
     // Always written: a row without one imports as studied both ways.
     const rows = [
-        ["front", "back", "hint", "group", "direction", "extra"],
-        ...cards.map((c) => [c.frontText, c.backText, c.hint ?? "", c.group, c.direction ?? "forward", c.extra ?? ""]),
+        // The back's hint comes last: files written before it existed have the columns before it where they were.
+        ["front", "back", "hint", "group", "direction", "extra", "back hint"],
+        ...cards.map((c) => [
+            c.frontText,
+            c.backText,
+            c.hint ?? "",
+            c.group,
+            c.direction ?? "forward",
+            c.extra ?? "",
+            c.backHint ?? "",
+        ]),
     ];
     return `${rows.map((r) => r.map(csvField).join(",")).join("\r\n")}\r\n`;
 }
@@ -74,6 +88,7 @@ const SHARED_FIELDS = [
     "frontText",
     "backText",
     "hint",
+    "backHint",
     "extra",
     "group",
     "direction",
@@ -160,6 +175,9 @@ const COLUMN_NAMES: Record<string, keyof Columns> = {
     answer: "back",
     definition: "back",
     hint: "hint",
+    "front hint": "hint",
+    "back hint": "backHint",
+    backhint: "backHint",
     group: "group",
     deck: "group",
     direction: "direction",
@@ -171,6 +189,8 @@ interface Columns {
     front: number;
     back: number;
     hint?: number;
+    /** Only read when a header row names it. */
+    backHint?: number;
     group?: number;
     /** Only read when a header row names it. */
     direction?: number;
@@ -211,6 +231,7 @@ function parseDelimitedImport(
     if (header?.includes("front") && header.includes("back")) {
         columns = { front: header.indexOf("front"), back: header.indexOf("back") };
         if (header.includes("hint")) columns.hint = header.indexOf("hint");
+        if (header.includes("backHint")) columns.backHint = header.indexOf("backHint");
         if (header.includes("group")) columns.group = header.indexOf("group");
         if (header.includes("direction")) columns.direction = header.indexOf("direction");
         if (header.includes("extra")) columns.extra = header.indexOf("extra");
@@ -236,6 +257,8 @@ function parseDelimitedImport(
         const card: FlashcardInput = { frontText: front, backText: back, group };
         const hint = columns.hint !== undefined ? record[columns.hint]?.trim() : "";
         if (hint) card.hint = hint;
+        const backHint = columns.backHint !== undefined ? record[columns.backHint]?.trim() : "";
+        if (backHint) card.backHint = backHint;
         const extra = columns.extra !== undefined ? record[columns.extra]?.trim() : "";
         if (extra) card.extra = extra;
         const direction = columns.direction !== undefined ? record[columns.direction]?.trim().toLowerCase() : "";
@@ -329,25 +352,31 @@ function trimmable(char: string): boolean {
  * - From a shared group (`shared`), a card without review progress that is
  *   already here updates the text of the copy here, which keeps its own
  *   progress, group and direction.
+ * - With `refresh` (an Anki deck, whose fields were just mapped), a card
+ *   already here takes the file's hints and extra: importing the deck again
+ *   with another mapping changes what its cards show, and nothing else.
  */
-export function planImport(rows: ImportRow[], existing: Flashcard[], { shared = false } = {}): ImportPlan {
+export function planImport(
+    rows: ImportRow[],
+    existing: Flashcard[],
+    { shared = false, refresh = false } = {},
+): ImportPlan {
     const byId = new Map(existing.map((c) => [c["@id"], c]));
     const frontKey = (c: { frontText: string; group?: string }) => `${c.group ?? ""}\u0000${sameText(c.frontText)}`;
     const contentKey = (c: { frontText: string; backText: string; group?: string }) =>
         `${frontKey(c)}\u0000${sameText(c.backText)}`;
     const seen = new Set(existing.map(contentKey));
-    const here = new Set(seen);
-    const plan: ImportPlan = { add: [], update: [], unchanged: 0, repeated: 0, sameFront: [] };
+    const here = new Map<string, Flashcard[]>();
+    for (const c of existing) here.set(contentKey(c), [...(here.get(contentKey(c)) ?? []), c]);
+    const plan: ImportPlan = { add: [], update: [], refreshed: 0, unchanged: 0, repeated: 0, sameFront: [] };
+    const refreshed = new Set<string>();
 
     for (const { card } of rows) {
         const id = card["@id"];
         const current = id ? byId.get(id) : undefined;
         if (current && shared && !hasProgress(card)) {
             const updated: Flashcard = { ...current, frontText: card.frontText, backText: card.backText };
-            for (const key of ["hint", "extra"] as const) {
-                if (card[key]) updated[key] = card[key];
-                else delete updated[key];
-            }
+            withNotes(updated, card);
             if (TEXT_FIELDS.every((k) => (updated[k] ?? "") === (current[k] ?? ""))) plan.unchanged += 1;
             else plan.update.push({ card: updated, previousGroup: current.group });
             continue;
@@ -361,8 +390,19 @@ export function planImport(rows: ImportRow[], existing: Flashcard[], { shared = 
             continue;
         }
         if (!id && seen.has(contentKey(card))) {
-            if (here.has(contentKey(card))) plan.unchanged += 1;
-            else plan.repeated += 1;
+            const key = contentKey(card);
+            const copies = here.get(key);
+            // Twice in the file, a card refreshes its copy here once: from where it comes first.
+            const stale =
+                refresh && !refreshed.has(key)
+                    ? (copies ?? []).filter((copy) => NOTE_FIELDS.some((k) => (card[k] ?? "") !== (copy[k] ?? "")))
+                    : [];
+            refreshed.add(key);
+            for (const copy of stale)
+                plan.update.push({ card: withNotes({ ...copy }, card), previousGroup: copy.group });
+            plan.refreshed += stale.length;
+            if (!copies) plan.repeated += 1;
+            else if (!stale.length) plan.unchanged += 1;
             continue;
         }
         seen.add(contentKey(card));
@@ -379,7 +419,18 @@ export function planImport(rows: ImportRow[], existing: Flashcard[], { shared = 
     return plan;
 }
 
-const TEXT_FIELDS = ["frontText", "backText", "hint", "extra"] as const;
+/** What a card says besides its two sides. */
+const NOTE_FIELDS = ["hint", "backHint", "extra"] as const;
+const TEXT_FIELDS = ["frontText", "backText", ...NOTE_FIELDS] as const;
+
+/** `card` with the hints and extra `from` has, and without the ones it doesn't. */
+function withNotes(card: Flashcard, from: FlashcardInput): Flashcard {
+    for (const key of NOTE_FIELDS) {
+        if (from[key]) card[key] = from[key];
+        else delete card[key];
+    }
+    return card;
+}
 
 /** The card carries review progress, current or from v1 of the format. */
 function hasProgress(card: FlashcardInput): boolean {

@@ -29,7 +29,7 @@ import {
     let text = $state("");
     /** An Anki package, once read. Not deeply reactive: it can hold thousands of notes. */
     let anki: AnkiCollection | undefined = $state.raw();
-    /** Per note type (by id): which fields make the front, back and hint. */
+    /** Per note type (by id): which fields make the front, the back and the hint for each. */
     let mappings: Record<string, NoteTypeMapping> = $state({});
     /** Anki cards go in a group per deck rather than all in one. */
     let perDeck = $state(false);
@@ -41,7 +41,7 @@ import {
     let progress = $state(0);
     let importError = $state("");
     /** Fixed when the import starts: saving changes library.cards, which would change the plan. */
-    let running: { plan: ImportPlan; total: number; groups: string[] } | undefined = $state();
+    let running: { plan: ImportPlan; total: number; groups: string[]; refresh: boolean } | undefined = $state();
 
     /** New cards from a deck are studied the way new cards in their group are. */
     const directionFor = (group: string) => library.directionFor(group);
@@ -76,7 +76,8 @@ import {
             ? planImport(
                   parsed.result.rows.filter((r) => !removed.has(removalKey(r.card))),
                   library.cards,
-                  { shared: parsed.result.shared },
+                  // A deck's fields were just mapped: cards already here take the hints and extra chosen now.
+                  { shared: parsed.result.shared, refresh: parsed.result.format === "apkg" },
               )
             : undefined,
     );
@@ -131,7 +132,8 @@ import {
     /** A field can be in the extra unless it's already on the card. */
     function canBeExtra(type: AnkiNoteType, mapping: NoteTypeMapping, field: number): boolean {
         const gaps = type.cloze && mapping.gaps;
-        return field !== mapping.front && field !== mapping.hint && (gaps || field !== mapping.back);
+        const onCard = [mapping.front, mapping.hint, mapping.backHint, ...(gaps ? [] : [mapping.back])];
+        return !onCard.includes(field);
     }
 
     /** The extra fields that will be imported. */
@@ -186,7 +188,7 @@ import {
 
     async function run() {
         if (!plan || importing || defaultGroupError) return;
-        const job = { plan, total, groups };
+        const job = { plan, total, groups, refresh: parsed.result?.format === "apkg" };
         running = job;
         importing = true;
         importError = "";
@@ -197,7 +199,14 @@ import {
                 progress += 1;
             }
             for (const { card, previousGroup } of job.plan.update) {
-                await library.save(card, previousGroup);
+                if (job.refresh) {
+                    // Thousands of cards take a while: each is saved as it is by then, so a review made meanwhile is kept.
+                    const current = card["@id"] ? library.find(previousGroup, card["@id"]) : undefined;
+                    const { hint, backHint, extra } = card;
+                    if (current) await library.save({ ...current, hint, backHint, extra }, previousGroup);
+                } else {
+                    await library.save(card, previousGroup);
+                }
                 progress += 1;
             }
             router.go(
@@ -278,7 +287,9 @@ import {
         <fieldset class="types">
             <legend>Note types</legend>
             <p class="muted">
-                Choose what goes on each side of the cards. Cards are plain text, so pictures and sound stay behind.
+                Choose what goes on each side of the cards, and a hint for each: something to show on request while
+                that side is the question, like an example sentence in its language. Cards are plain text, so
+                pictures and sound stay behind.
             </p>
             {#each anki.noteTypes as type (type.id)}
                 {@const mapping = mappings[type.id]}
@@ -315,9 +326,19 @@ import {
                                     </select>
                                 </label>
                             {/if}
+                        </div>
+                        <!-- Under the side each one is for. -->
+                        <div class="sides">
                             <label>
-                                <span>Hint</span>
+                                <span>Front hint</span>
                                 <select class="field" bind:value={mappings[type.id].hint}>
+                                    <option value={-1}>None</option>
+                                    {#each type.fields as field, i (i)}<option value={i}>{field}</option>{/each}
+                                </select>
+                            </label>
+                            <label>
+                                <span>Back hint</span>
+                                <select class="field" bind:value={mappings[type.id].backHint}>
                                     <option value={-1}>None</option>
                                     {#each type.fields as field, i (i)}<option value={i}>{field}</option>{/each}
                                 </select>
@@ -350,8 +371,13 @@ import {
                                 <span class="content">{card.frontText}</span>
                                 <span class="arrow muted" aria-label="then">→</span>
                                 <span class="content">{card.backText}</span>
-                                {#if card.hint}<span class="muted"> · Hint: {card.hint}</span>{/if}
                             </p>
+                            {#if card.hint}
+                                <p class="example muted">Front hint: <span class="content">{card.hint}</span></p>
+                            {/if}
+                            {#if card.backHint}
+                                <p class="example muted">Back hint: <span class="content">{card.backHint}</span></p>
+                            {/if}
                             {#if card.extra}<p class="example extra content muted">{card.extra}</p>{/if}
                         {:else}
                             <p class="error">{gaps ? "That field has no gaps in it." : "These fields are empty."}</p>
@@ -371,7 +397,8 @@ import {
                 <dt>CSV or tab-separated</dt>
                 <dd>
                     One card per line: front, back, then optionally hint and group. A header row (front, back, hint,
-                    group, direction, extra) lets the columns come in any order. Cards without a direction (forward, reverse
+                    group, direction, extra, back hint) lets the columns come in any order. The hint is for the front;
+                    “back hint” is for the back. Cards without a direction (forward, reverse
                     or both) are studied both ways, or the way their group's new cards are. Anki's “Notes in Plain
                     Text” export works as-is.
                 </dd>
@@ -380,8 +407,9 @@ import {
                 <dt>Anki deck</dt>
                 <dd>
                     A .apkg file, from AnkiWeb or Anki's “Export” with “Support older Anki versions” ticked. You choose
-                    which fields make the front, back and hint, and what goes in the extra, shown with the answer.
-                    New cards come up in the deck's order.
+                    which fields make the front, the back and a hint for each, and what goes in the extra, shown with
+                    the answer. New cards come up in the deck's order. Cards you already have from the deck keep their
+                    progress, and take the hints and extra you choose.
                 </dd>
             </div>
             <div>
@@ -431,7 +459,13 @@ import {
                 </li>
             {/if}
             {#if anki?.reviewed}<li>Anki's review progress isn't imported: every card starts as new</li>{/if}
-            {#if plan.update.length}<li>{plural(plan.update.length, "card")} updated from the {parsed.result.shared ? "shared group" : "backup"}</li>{/if}
+            {#if plan.refreshed}
+                <li>
+                    {plural(plan.refreshed, "card")} already here {plan.refreshed === 1 ? "gets" : "get"} the hints and
+                    extra chosen above, and {plan.refreshed === 1 ? "keeps its" : "keep their"} progress
+                </li>
+            {/if}
+            {#if plan.update.length > plan.refreshed}<li>{plural(plan.update.length - plan.refreshed, "card")} updated from the {parsed.result.shared ? "shared group" : "backup"}</li>{/if}
             {#if plan.unchanged}<li>{plural(plan.unchanged, "card")} already here (skipped)</li>{/if}
             {#if plan.repeated}<li>{plural(plan.repeated, "card")} repeated in the file (added once)</li>{/if}
             {#if parsed.result.skipped.length}
@@ -485,7 +519,7 @@ import {
         <div class="buttons">
             <a class="btn" href={back.href}>Cancel</a>
             <button class="btn primary" type="button" onclick={run} disabled={total === 0 || importing || !!defaultGroupError}>
-                {total ? `Import ${plural(total, "card")}` : "Nothing to import"}
+                {total ? `${adding.length ? "Import" : "Update"} ${plural(total, "card")}` : "Nothing to import"}
             </button>
         </div>
     </div>

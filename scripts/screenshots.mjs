@@ -504,7 +504,7 @@ async function capture(page) {
         card: async () => {
             await pages.group();
             await page.locator(".cards li a").first().click();
-            await page.getByLabel("Front").waitFor();
+            await page.getByLabel("Front", { exact: true }).waitFor();
         },
         settings: async () => {
             await page.goto(`${BASE}/?t=${now}#/account`);
@@ -530,9 +530,9 @@ async function capture(page) {
         },
         new: async () => {
             await page.goto(`${BASE}/?t=${now}#/new?group=Spanish`);
-            await page.getByLabel("Front").fill("la madrugada");
-            await page.getByLabel("Back").fill("the small hours");
-            await page.getByLabel("Back").blur();
+            await page.getByLabel("Front", { exact: true }).fill("la madrugada");
+            await page.getByLabel("Back", { exact: true }).fill("the small hours");
+            await page.getByLabel("Back", { exact: true }).blur();
         },
         import: async () => {
             await page.goto(`${BASE}/?t=${now}#/import`);

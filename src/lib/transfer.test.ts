@@ -174,14 +174,24 @@ describe("study direction in CSV", () => {
 
     it("round-trips through export and import", () => {
         const csv = exportCsv([card("a"), card("b", "reverse"), card("c", "both")]);
-        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction,extra");
+        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction,extra,back hint");
         const parsed = parseImport(csv, "cards.csv", "Imported");
         expect(parsed.rows.map((r) => r.card.direction)).toEqual(["forward", "reverse", "both"]);
     });
 
+    it("keeps a hint for each side", () => {
+        const csv = exportCsv([{ ...card("pivo"), hint: "Dám si pivo.", backHint: "I'll have a beer." }]);
+        expect(parseImport(csv, "cards.csv", "Imported").rows[0].card).toMatchObject({
+            hint: "Dám si pivo.",
+            backHint: "I'll have a beer.",
+        });
+        const named = parseImport("Front,Back,Front hint,Back hint\na,x,for a,for x\n", "x.csv", "I");
+        expect(named.rows[0].card).toMatchObject({ hint: "for a", backHint: "for x" });
+    });
+
     it("writes the column even when every card is front → back, so they stay that way", () => {
         const csv = exportCsv([card("a")]);
-        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction,extra");
+        expect(csv.split("\r\n")[0]).toBe("front,back,hint,group,direction,extra,back hint");
         expect(parseImport(csv, "cards.csv", "Imported").rows[0].card.direction).toBe("forward");
     });
 
@@ -224,6 +234,7 @@ describe("planImport", () => {
         expect(planImport([{ source: 1, card: older }], [here])).toEqual({
             add: [],
             update: [],
+            refreshed: 0,
             unchanged: 1,
             repeated: 0,
             sameFront: [],
@@ -239,6 +250,7 @@ describe("planImport", () => {
         ).toEqual({
             add: [missing],
             update: [{ card: newer, previousGroup: "moved" }],
+            refreshed: 0,
             unchanged: 0,
             repeated: 0,
             // Back in "food", the restored card has a different back for the same front.
@@ -367,6 +379,71 @@ describe("exportGroup", () => {
         expect(exportFileName("Czech verbs", "json")).toBe("Czech verbs.json");
         expect(exportFileName('a:b*c?"d', "csv")).toBe("a-b-c--d.csv");
         expect(exportFileName("  ", "json")).toBe("group.json");
+    });
+});
+
+describe("planImport of a deck imported again", () => {
+    const review = {
+        due: "2026-02-01T00:00:00.000Z",
+        stability: 3,
+        difficulty: 5,
+        reps: 2,
+        lapses: 0,
+        state: 2 as const,
+    };
+    const here = card({ group: "czech", hint: "noun", extra: "Dám si pivo.\n\nI'll have a beer.", review });
+    const again = {
+        frontText: "pivo",
+        backText: "beer",
+        group: "czech",
+        hint: "Dám si pivo.",
+        backHint: "I'll have a beer.",
+        extra: "Part-of-Speech: noun",
+    };
+
+    it("gives a card already here the deck's hints and extra, and keeps its progress", () => {
+        const plan = planImport([{ source: 1, card: again }], [here], { refresh: true });
+        expect(plan).toMatchObject({ add: [], refreshed: 1, unchanged: 0 });
+        expect(plan.update).toEqual([
+            {
+                card: { ...here, hint: "Dám si pivo.", backHint: "I'll have a beer.", extra: "Part-of-Speech: noun" },
+                previousGroup: "czech",
+            },
+        ]);
+    });
+
+    it("takes away a hint or an extra the deck no longer gives the card", () => {
+        const plan = planImport(
+            [{ source: 1, card: { frontText: "pivo", backText: "beer", group: "czech" } }],
+            [here],
+            {
+                refresh: true,
+            },
+        );
+        expect(plan.update[0].card).not.toHaveProperty("hint");
+        expect(plan.update[0].card).not.toHaveProperty("extra");
+        expect(plan.update[0].card.review).toEqual(review);
+    });
+
+    it("leaves a card alone that already says the same, and one in a file that maps no fields", () => {
+        const same = planImport([{ source: 1, card: again }], [card({ ...again, review })], { refresh: true });
+        expect(same).toMatchObject({ update: [], refreshed: 0, unchanged: 1 });
+        // A CSV or a backup doesn't refresh: a card with the same two sides is skipped, as ever.
+        expect(planImport([{ source: 1, card: again }], [here])).toMatchObject({
+            update: [],
+            refreshed: 0,
+            unchanged: 1,
+        });
+    });
+
+    it("refreshes a card once when the deck has it twice", () => {
+        const twice = [
+            { source: 1, card: again },
+            { source: 2, card: { ...again, hint: "Another example." } },
+        ];
+        const plan = planImport(twice, [here], { refresh: true });
+        expect(plan.update.map((u) => u.card.hint)).toEqual(["Dám si pivo."]);
+        expect(plan).toMatchObject({ refreshed: 1, unchanged: 1, repeated: 0 });
     });
 });
 
