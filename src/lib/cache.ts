@@ -11,22 +11,27 @@
  * counted up from zero as more came in, and had no total to count towards.
  *
  * So the nodes are read themselves. A folder's node names everything in it,
- * whichever of its listings an item is in, and that takes three reads however
- * many cards there are, where `getAll()` takes one for every card.
+ * arrived or not, and that takes three reads however many cards there are,
+ * where `getAll()` takes one for every card.
  */
 import { type Flashcard, LOG_FOLDER, normalizeFlashcard } from "remotestorage-module-flashcards";
 import type { RSWithModules } from "./rs";
 
 const ROOT = "/flashcards/";
 
-/** One side of a cached node: what the server has, a change made here, or what is on its way. */
+/** One side of a cached node: what the server has (`common`), or a change made here (`local`). */
 type Version = { body?: unknown; contentType?: string; itemsMap?: Record<string, unknown> };
-type Node = { common?: Version; local?: Version; remote?: Version };
+type Node = { common?: Version; local?: Version };
 type NodeStore = { getNodes(paths: string[]): Promise<Record<string, Node | undefined>> };
 
-/** Everything a folder holds: on the server, added here, or listed and still to be fetched. */
+/**
+ * Everything a folder holds: here already, or listed and still to be fetched.
+ * Where changes were made here the folder has a listing of its own, which
+ * leaves out what was deleted here and keeps, marked `false`, what the server
+ * lists that hasn't arrived. Those are the ones rs.js's own listings hide.
+ */
 const itemsIn = (folder: Node | undefined): string[] =>
-    Object.keys({ ...folder?.common?.itemsMap, ...folder?.remote?.itemsMap, ...folder?.local?.itemsMap });
+    Object.keys(folder?.local?.itemsMap ?? folder?.common?.itemsMap ?? {});
 
 /** A document as it stands here: a change made here first, and nothing once it's deleted here. */
 function bodyOf(node: Node | undefined): unknown {

@@ -78,8 +78,27 @@ describe("readCards", () => {
         await rs.flashcards.store({ frontText: "voda", backText: "water", group: "Food & drink" });
         await rs.flashcards.logReview({ at: "2026-01-01T10:00:00.000Z", cardId: card["@id"], rating: 3, state: 0 });
         await rs.flashcards.remove("Food & drink", card["@id"]);
-        const { cards } = await readCards(rs);
+        const { cards, listed } = await readCards(rs);
         expect([...cards.values()].map((c) => c.frontText)).toEqual(["voda"]);
+        // Nor does it count as one still to arrive.
+        expect(listed).toBe(1);
+    });
+
+    it("doesn't count a synced card deleted here as still to arrive", async () => {
+        await setNodes({
+            "/flashcards/": { path: "/flashcards/", common: { itemsMap: { [`${big}/`]: true } } },
+            [`/flashcards/${big}/`]: { path: `/flashcards/${big}/`, common: { itemsMap: { c1: true, c2: true } } },
+            [`/flashcards/${big}/c1`]: fetched(big, "c1"),
+            [`/flashcards/${big}/c2`]: fetched(big, "c2"),
+        });
+        expect(await countListed(rs)).toBe(2);
+        await rs.flashcards.remove(big, "c1");
+        const { cards, listed } = await readCards(rs);
+        expect([...cards.keys()]).toEqual([`${big}/c2`]);
+        expect(listed).toBe(1);
+        // A whole group deleted here goes too.
+        await rs.flashcards.remove(big, "c2");
+        expect(await readCards(rs)).toEqual({ cards: new Map(), listed: 0 });
     });
 
     it("finds the cards of a group that the cache's own listing leaves out", async () => {
