@@ -2,7 +2,7 @@
  * Sync against a real remoteStorage server (armadietto), with two browser
  * contexts standing in for two devices.
  */
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 import { acceptDialogs, addCard, connect, createUser, RS_HOST } from "./helpers";
 
 // The build under test syncs every couple of seconds (see TIMING in playwright.config.ts); this leaves
@@ -152,25 +152,46 @@ test("the connection survives a reload", async ({ page }) => {
     await expect(page.getByRole("link", { name: new RegExp(user.username) })).toBeVisible();
 });
 
-test("a big sync shows how far along it is, and carries on after a reload", async ({ browser }, testInfo) => {
-    test.setTimeout(180_000);
+test("a big group that arrives is all there, with how much is left, each time the app is reopened", async ({
+    browser,
+}, testInfo) => {
+    test.setTimeout(240_000);
     const total = 1500;
     // No spaces: armadietto lists them encoded and remoteStorage.js then can't fetch the group (#41).
     const group = "Frequency";
     const user = await createUser();
-    const a = await (await browser.newContext()).newPage();
-    await connect(a, user);
-    // Stored straight on the server, as another device would have left them.
-    const { href, token } = await a.evaluate(() =>
+
+    // A phone that is used: the app is closed straight after a card is saved, as after a last review.
+    // That leaves a change of its own in the cache, over which rs.js lists a group that arrives next
+    // as not there yet, and keeps listing it so (see cache.ts).
+    const phone = await browser.newContext({ viewport: { width: 390, height: 780 } });
+    let page = await phone.newPage();
+    await connect(page, user);
+    await addCard(page, { front: "pivo", back: "beer", group: "Czech" });
+    const { href, token } = await page.evaluate(() =>
         JSON.parse(localStorage.getItem("remotestorage:wireclient") ?? "{}"),
     );
+    const headers = { Authorization: `Bearer ${token}` };
+    await expect
+        .poll(
+            async () => Object.keys((await (await fetch(`${href}/flashcards/Czech/`, { headers })).json()).items ?? {}),
+            {
+                intervals: [50],
+            },
+        )
+        .toHaveLength(1);
+    // Nothing more reaches it before it's closed.
+    await phone.setOffline(true);
+    await page.close();
+
+    // Meanwhile another device adds a big group.
     const ids = Array.from({ length: total }, (_, i) => `c${i}`);
     for (let i = 0; i < total; i += 50) {
         await Promise.all(
             ids.slice(i, i + 50).map(async (id) => {
                 const resp = await fetch(`${href}/flashcards/${encodeURIComponent(group)}/${id}`, {
                     method: "PUT",
-                    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                    headers: { ...headers, "Content-Type": "application/json" },
                     body: JSON.stringify({
                         "@id": id,
                         "@type": "flashcard",
@@ -184,38 +205,46 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
         );
     }
 
-    // A phone on a slow connection.
-    const context = await browser.newContext({ viewport: { width: 390, height: 780 } });
-    await context.route(`http://${RS_HOST}/storage/**`, async (route) => {
+    // The phone opens the app again, on a slow connection.
+    await phone.route(`http://${RS_HOST}/storage/**`, async (route) => {
         await new Promise((resolve) => setTimeout(resolve, 20));
         await route.continue();
     });
-    const b = await context.newPage();
-    await connect(b, user);
-    const started = Date.now();
-    await b.goto("/");
-    const note = b.getByRole("status").filter({ hasText: /^Syncing/ });
-    const synced = async () => Number((await note.textContent())?.match(/Syncing ([\d,]+) of/)?.[1].replace(/,/g, ""));
-    await expect(note).toContainText(`of ${total.toLocaleString("en-US")} cards`, { timeout: 30_000 });
-    await expect.poll(synced, { timeout: 60_000 }).toBeGreaterThan(200);
-    await expect(b.locator(".pill")).toHaveText(/Syncing \d+%/);
-    await b.screenshot({ path: testInfo.outputPath("syncing.png") });
+    await phone.setOffline(false);
+    const all = (total + 1).toLocaleString("en-US");
+    const reopen = async () => {
+        await page.close();
+        page = await phone.newPage();
+        await page.goto("/");
+        return page.getByRole("status").filter({ hasText: /^Syncing/ });
+    };
+    const synced = async (note: Locator) =>
+        Number((await note.textContent())?.match(/Syncing ([\d,]+) of/)?.[1].replace(/,/g, ""));
+    let note = await reopen();
+    await expect(note).toContainText(`of ${all} cards`, { timeout: 30_000 });
+    await expect.poll(() => synced(note), { timeout: 60_000 }).toBeGreaterThan(200);
+    await expect(page.locator(".pill")).toHaveText(/Syncing \d+%/);
+    await page.screenshot({ path: testInfo.outputPath("syncing.png") });
     // On a group's own page too, not only the home page.
-    await b.goto(`/#/group/${encodeURIComponent(group)}`);
-    await expect(b.getByRole("heading", { name: group })).toBeVisible();
-    await expect(note).toContainText(`of ${total.toLocaleString("en-US")} cards`);
-    await b.screenshot({ path: testInfo.outputPath("group-page.png") });
+    await page.goto(`/#/group/${encodeURIComponent(group)}`);
+    await expect(page.getByRole("heading", { name: group })).toBeVisible();
+    await expect(note).toContainText(`of ${all} cards`);
+    await page.screenshot({ path: testInfo.outputPath("group-page.png") });
 
-    // Closed partway through: what arrived is still there, and the count carries on from it.
-    const before = await synced();
-    await b.reload();
-    await expect(note).toBeVisible({ timeout: 30_000 });
-    expect(await synced()).toBeGreaterThanOrEqual(before);
-    await b.screenshot({ path: testInfo.outputPath("after-reload.png") });
+    // Closed partway through and opened again: what arrived is still there, and the count carries on from it.
+    const before = await synced(note);
+    note = await reopen();
+    await expect(note).toContainText(`of ${all} cards`, { timeout: 30_000 });
+    expect(await synced(note)).toBeGreaterThanOrEqual(before);
+    const row = page.getByRole("link", { name: new RegExp(`^${group}`) });
+    // The group's own count too, less the one card of the other group.
+    expect(Number((await row.textContent())?.match(/of\s*(\d+)\s*cards/)?.[1])).toBeGreaterThanOrEqual(before - 1);
+    await page.screenshot({ path: testInfo.outputPath("reopened.png") });
 
+    // Once it has all arrived it is all still there the next time, too.
     await expect(note).toHaveCount(0, { timeout: 120_000 });
-    console.log(`Synced ${total} cards in ${Math.round((Date.now() - started) / 1000)}s`);
-    await b.goto("/");
-    await expect(b.getByRole("link", { name: new RegExp(`^${group}`) })).toContainText(`of ${total} cards`);
-    await b.screenshot({ path: testInfo.outputPath("done.png") });
+    await expect(row).toContainText(`of ${total} cards`);
+    await reopen();
+    await expect(page.getByRole("link", { name: new RegExp(`^${group}`) })).toContainText(`of ${total} cards`);
+    await page.screenshot({ path: testInfo.outputPath("done.png") });
 });

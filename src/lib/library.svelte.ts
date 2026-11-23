@@ -19,6 +19,7 @@ import {
     SETTINGS_PATH,
     type Settings,
 } from "remotestorage-module-flashcards";
+import { countListed, readCards } from "./cache";
 import { defaultQuietFrom } from "./reminders";
 import type { RSWithModules } from "./rs";
 import { dueItems, type Grade, isNew, type ReviewItem, rate, startedBefore, startedOn, stateOf } from "./scheduler";
@@ -83,8 +84,6 @@ export class Library {
      * removed). The load lays them over what it read, which can be older.
      */
     #changedWhileLoading: Map<string, Flashcard | undefined> | undefined;
-    /** The card folders as a plain client, to count what they list. */
-    #cardFolders: BaseClient;
     #counting = false;
     /**
      * Cards that arrived by sync and aren't shown yet. While a sync runs they
@@ -102,7 +101,7 @@ export class Library {
     syncing = $state(false);
     /**
      * Cards the storage lists, whether or not they have reached this device
-     * yet. Counted from the cached folder listings while a sync runs.
+     * yet. Counted from the cache when it's read and while a sync runs.
      */
     listed = $state(0);
     offline = $state(false);
@@ -226,7 +225,6 @@ export class Library {
     constructor(rs: RSWithModules, options: { newPerDay?: number; cardsPerReview?: number | null } = {}) {
         this.#rs = rs;
         this.#app = rs.scope("/rememorize/");
-        this.#cardFolders = rs.scope("/flashcards/");
         this.#app.declareType("settings", appSettingsSchema);
         if (options.newPerDay !== undefined) this.newPerDay = options.newPerDay;
         if (options.cardsPerReview !== undefined) this.cardsPerReview = options.cardsPerReview;
@@ -284,7 +282,7 @@ export class Library {
         });
         // A folder listing may have just arrived, and with it more cards to come.
         rs.on("sync-req-done", () => {
-            if (Date.now() - this.#countedAt > 2000) void this.#countListed();
+            if (Date.now() - this.#countedAt > 1000) void this.#countListed();
         });
         rs.on("sync-done", () => {
             this.#showArrived();
@@ -311,8 +309,9 @@ export class Library {
         const changed = new Map<string, Flashcard | undefined>();
         this.#changedWhileLoading = changed;
         try {
-            const [cards, settings, log] = await Promise.all([
-                this.#rs.flashcards.getAll(false),
+            // Not `flashcards.getAll()`: it goes by the cache's listings, which can leave a whole group out (see cache.ts).
+            const [{ cards, listed }, settings, log] = await Promise.all([
+                readCards(this.#rs),
                 this.#app.getObject(SETTINGS_FILE, false),
                 this.#rs.flashcards.getReviewLog(false),
             ]);
@@ -322,8 +321,8 @@ export class Library {
             const days: Record<string, ReviewLogEntry[]> = {};
             for (const entry of log) days[logDay(entry)] = [...(days[logDay(entry)] ?? []), entry];
             this.#log = days;
-            const next: Record<string, Flashcard> = {};
-            for (const card of cards) next[keyOf(card.group, card["@id"])] = card;
+            const next: Record<string, Flashcard> = Object.fromEntries(cards);
+            this.listed = listed;
             // Cards that sync or this tab changed while the cache was being read.
             for (const [key, card] of changed) {
                 if (card) next[key] = card;
@@ -763,21 +762,12 @@ export class Library {
         this.#cards = next;
     }
 
-    /** Count the cards the storage lists, from the folder listings in the cache. */
+    /** Count the cards the storage lists, as far as the cache knows. */
     async #countListed(): Promise<void> {
         if (this.#counting) return;
         this.#counting = true;
         try {
-            const groups = await this.#rs.flashcards.listGroups(false);
-            const listings = await Promise.all(groups.map((g) => this.#cardFolders.getListing(`${g}/`, false)));
-            this.listed = listings.reduce<number>(
-                (n, listing) =>
-                    n +
-                    (listing && typeof listing === "object"
-                        ? Object.keys(listing).filter((k) => !k.endsWith("/")).length
-                        : 0),
-                0,
-            );
+            this.listed = await countListed(this.#rs);
         } catch {
             // Only a progress count: the next sync request tries again.
         } finally {
