@@ -202,6 +202,7 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
     await b.screenshot({ path: testInfo.outputPath("syncing.png") });
     // On a group's own page too, not only the home page.
     await b.goto(`/#/group/${encodeURIComponent(group)}`);
+    await expect(b.getByRole("heading", { name: group })).toBeVisible();
     await expect(note).toContainText(`of ${total.toLocaleString("en-US")} cards`);
     await b.screenshot({ path: testInfo.outputPath("group-page.png") });
 

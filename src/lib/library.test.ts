@@ -664,6 +664,22 @@ describe("Library", () => {
         expect(library.cardsIn(czech)).toHaveLength(3);
     });
 
+    it("moves a group's cards that arrived by sync but aren't shown yet", async () => {
+        await library.save({ "@id": "r1", frontText: "voda", backText: "water", group: czech });
+        emit("sync-started");
+        await rs.flashcards.store({ "@id": "r2", frontText: "pivo", backText: "beer", group: czech });
+        arrive(czech, "r2", "pivo");
+        await library.renameGroup(czech, "Czech words");
+        expect(
+            library
+                .cardsIn("Czech words")
+                .map((c) => c["@id"])
+                .sort(),
+        ).toEqual(["r1", "r2"]);
+        expect(library.cardsIn(czech)).toHaveLength(0);
+        emit("sync-done");
+    });
+
     it("keeps a change made here over one that arrived by sync just before it", async () => {
         const card = await library.save({ "@id": "r1", frontText: "voda", backText: "water", group: czech });
         emit("sync-started");
