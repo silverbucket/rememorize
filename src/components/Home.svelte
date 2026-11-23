@@ -77,14 +77,6 @@
     <p class="error" role="alert">{library.error}</p>
 {/if}
 
-{#if library.toSync > 0}
-    <!-- What has arrived stays: a sync that stops while the app is away carries on when it's back. -->
-    <p class="muted" role="status">
-        Syncing {library.cards.length.toLocaleString()} of {library.listed.toLocaleString()} {library.listed === 1 ? "card" : "cards"}. Cards that have arrived are
-        kept, so if you leave the app, syncing picks up where it left off.
-    </p>
-{/if}
-
 {#if !library.loaded}
     <p class="muted">Loading…</p>
 {:else if library.groups.length === 0}

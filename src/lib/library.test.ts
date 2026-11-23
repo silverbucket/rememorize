@@ -620,31 +620,58 @@ describe("Library", () => {
         expect(lib.cards).toEqual([]);
     });
 
-    it("keeps a card that arrives by sync while the cache is being read", async () => {
-        await library.save({ frontText: "pivo", backText: "beer", group: "food" });
-        const loading = library.load();
-        // Sync stores it, and says so, before the load has finished reading.
+    // Group names are whatever people type, spaces and all.
+    const czech = "A Frequency Dictionary of Czech";
+    const arrive = (group: string, id: string, frontText: string) =>
         (rs as unknown as { _dispatchEvent(n: string, e: unknown): void })._dispatchEvent("change", {
             origin: "remote",
-            path: "/flashcards/food/r1",
-            newValue: { "@id": "r1", "@type": "flashcard", frontText: "voda", backText: "water", group: "food" },
+            path: `/flashcards/${group}/${id}`,
+            newValue: { "@id": id, "@type": "flashcard", frontText, backText: frontText, group },
         });
+    const emit = (name: string) => (rs as unknown as { _emit(n: string): void })._emit(name);
+
+    it("keeps a card that arrives by sync while the cache is being read", async () => {
+        await library.save({ frontText: "pivo", backText: "beer", group: czech });
+        const loading = library.load();
+        // Sync stores it, and says so, before the load has finished reading.
+        arrive(czech, "r1", "voda");
         await loading;
-        expect(library.find("food", "r1")?.frontText).toBe("voda");
-        expect(library.cards).toHaveLength(2);
+        expect(library.find(czech, "r1")?.frontText).toBe("voda");
+        expect(library.cardsIn(czech)).toHaveLength(2);
     });
 
     it("counts the cards still to arrive while a sync runs", async () => {
-        await library.save({ frontText: "pivo", backText: "beer", group: "food" });
+        await library.save({ frontText: "pivo", backText: "beer", group: czech });
         // In the cache, as a listing that has synced ahead of its cards; this library hasn't seen them.
-        await rs.flashcards.store({ frontText: "voda", backText: "water", group: "food" });
-        await rs.flashcards.store({ frontText: "pes", backText: "dog", group: "animals" });
-        const emit = (rs as unknown as { _emit(n: string): void })._emit.bind(rs);
+        await rs.flashcards.store({ frontText: "voda", backText: "water", group: czech });
+        await rs.flashcards.store({ frontText: "pes", backText: "dog", group: "Animals & pets" });
         emit("sync-started");
         await expect.poll(() => library.toSync).toBe(2);
         expect(library.listed).toBe(3);
         emit("sync-done");
         expect(library.toSync).toBe(0);
+    });
+
+    it("shows cards that arrive during a sync a few at a time, and all of them when it's done", async () => {
+        emit("sync-started");
+        arrive(czech, "r1", "voda");
+        arrive(czech, "r2", "pivo");
+        // Held for a moment, so thousands of cards don't redo every count one by one.
+        expect(library.cardsIn(czech)).toHaveLength(0);
+        await expect.poll(() => library.cardsIn(czech).length).toBe(2);
+        arrive(czech, "r3", "pes");
+        emit("sync-done");
+        expect(library.cardsIn(czech)).toHaveLength(3);
+    });
+
+    it("keeps a change made here over one that arrived by sync just before it", async () => {
+        const card = await library.save({ "@id": "r1", frontText: "voda", backText: "water", group: czech });
+        emit("sync-started");
+        arrive(czech, "r1", "older");
+        await library.save({ ...card, frontText: "newer" }, czech);
+        expect(library.find(czech, "r1")?.frontText).toBe("newer");
+        emit("sync-done");
+        expect(library.find(czech, "r1")?.frontText).toBe("newer");
     });
 
     it("reports discovery errors and leaves connecting state", () => {
