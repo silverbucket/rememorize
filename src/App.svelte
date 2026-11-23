@@ -80,6 +80,14 @@
     </header>
 
     <main>
+        {#if library.toSync > 0 && !focused}
+            <!-- On every page: what has arrived stays, and a sync that stops while the app is away carries on when it's back. -->
+            <p class="sync muted" role="status">
+                Syncing {library.cards.length.toLocaleString()} of {library.listed.toLocaleString()}
+                {library.listed === 1 ? "card" : "cards"}. Cards that have arrived are kept, so if you leave the app,
+                syncing picks up where it left off.
+            </p>
+        {/if}
         <div class="page">
         {#if route.name === "home"}
             <Home />
@@ -213,6 +221,10 @@
         margin: 0 auto;
         padding: 1.5rem max(1rem, env(safe-area-inset-right))
             calc(var(--tabbar) + 2.5rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    }
+
+    .sync {
+        margin: 0 0 1.25rem;
     }
 
     .toast {

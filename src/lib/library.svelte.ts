@@ -86,6 +86,14 @@ export class Library {
     /** The card folders as a plain client, to count what they list. */
     #cardFolders: BaseClient;
     #counting = false;
+    /**
+     * Cards that arrived by sync and aren't shown yet. While a sync runs they
+     * are shown a few times a second, not one at a time: each change copies
+     * every card and works out everything shown from them again, which with
+     * thousands of cards made a first sync crawl on a phone.
+     */
+    #arriving = new Map<string, Flashcard | undefined>();
+    #arrivingTimer: ReturnType<typeof setTimeout> | undefined;
     #countedAt = 0;
 
     loaded = $state(false);
@@ -246,6 +254,9 @@ export class Library {
             this.userAddress = "";
             this.syncing = false;
             this.listed = 0;
+            clearTimeout(this.#arrivingTimer);
+            this.#arrivingTimer = undefined;
+            this.#arriving.clear();
             // Disconnecting wipes the local cache; caching has to be
             // re-enabled for the next session.
             rs.caching.enable("/flashcards/");
@@ -276,6 +287,7 @@ export class Library {
             if (Date.now() - this.#countedAt > 2000) void this.#countListed();
         });
         rs.on("sync-done", () => {
+            this.#showArrived();
             this.syncing = false;
             // An older version's limit may only just have arrived; both folders have synced by now.
             void this.#migrateSettings().catch(() => {});
@@ -396,6 +408,7 @@ export class Library {
         cards: Flashcard[],
         direction: CardDirection,
     ): Promise<{ id: string; group: string; direction: CardDirection }[]> {
+        this.#showArrived();
         const changed = [];
         for (const { group, "@id": id } of cards) {
             // As it is now: sync may have changed, moved or deleted it since the list was made.
@@ -539,6 +552,7 @@ export class Library {
     /** Rename a group. Onto the name of a group that exists, its cards join the ones there. */
     async renameGroup(from: string, to: string): Promise<void> {
         if (to === from) return;
+        this.#showArrived();
         // Merged into a group that exists, the cards join it: its direction stays.
         const merging = this.groups.some((g) => g.name === to);
         await this.moveCards(this.cardsIn(from), to);
@@ -554,6 +568,7 @@ export class Library {
      * stay as they are. Nothing moves if one would overwrite another.
      */
     async moveCards(cards: Flashcard[], to: string): Promise<void> {
+        this.#showArrived();
         const moving = cards.filter((c) => c.group !== to);
         // A card is stored under its id, so one with the same id in the other group would be overwritten.
         const seen = new Set<string>();
@@ -573,6 +588,7 @@ export class Library {
 
     async removeGroup(group: string): Promise<void> {
         await this.#rs.flashcards.removeGroup(group);
+        this.#showArrived();
         this.#changeCards(this.cardsIn(group).map((card) => [keyOf(group, card["@id"]), undefined]));
         if (this.groupDirections[group] !== undefined) {
             await this.#changeGroupDirections({ [group]: undefined }).catch(() => {});
@@ -717,13 +733,29 @@ export class Library {
         const group = path.slice(0, slash);
         const id = path.slice(slash + 1);
         const card = event.newValue === undefined ? undefined : normalizeFlashcard(event.newValue);
-        this.#changeCards([[keyOf(group, id), card && { ...card, group }]]);
+        const change: [string, Flashcard | undefined] = [keyOf(group, id), card && { ...card, group }];
+        if (!this.syncing) {
+            this.#changeCards([change]);
+            return;
+        }
+        this.#arriving.set(...change);
+        this.#arrivingTimer ??= setTimeout(() => this.#showArrived(), 250);
     }
 
-    /** Add, replace or (with `undefined`) remove cards by key. */
+    /** Show the cards held back from a sync now: before anything that reads the cards to change them. */
+    #showArrived(): void {
+        this.#changeCards([]);
+    }
+
+    /** Add, replace or (with `undefined`) remove cards by key, after any that arrived by sync before them. */
     #changeCards(changes: [string, Flashcard | undefined][]): void {
+        clearTimeout(this.#arrivingTimer);
+        this.#arrivingTimer = undefined;
+        const all = [...this.#arriving, ...changes];
+        this.#arriving.clear();
+        if (all.length === 0) return;
         const next = { ...this.#cards };
-        for (const [key, card] of changes) {
+        for (const [key, card] of all) {
             if (card) next[key] = card;
             else delete next[key];
             this.#changedWhileLoading?.set(key, card);

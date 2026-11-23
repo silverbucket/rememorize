@@ -155,6 +155,8 @@ test("the connection survives a reload", async ({ page }) => {
 test("a big sync shows how far along it is, and carries on after a reload", async ({ browser }, testInfo) => {
     test.setTimeout(180_000);
     const total = 1500;
+    // No spaces: armadietto lists them encoded and remoteStorage.js then can't fetch the group (#41).
+    const group = "Frequency";
     const user = await createUser();
     const a = await (await browser.newContext()).newPage();
     await connect(a, user);
@@ -166,7 +168,7 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
     for (let i = 0; i < total; i += 50) {
         await Promise.all(
             ids.slice(i, i + 50).map(async (id) => {
-                const resp = await fetch(`${href}/flashcards/Big/${id}`, {
+                const resp = await fetch(`${href}/flashcards/${encodeURIComponent(group)}/${id}`, {
                     method: "PUT",
                     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -174,7 +176,7 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
                         "@type": "flashcard",
                         frontText: id,
                         backText: id,
-                        group: "Big",
+                        group,
                     }),
                 });
                 expect(resp.ok).toBe(true);
@@ -190,6 +192,7 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
     });
     const b = await context.newPage();
     await connect(b, user);
+    const started = Date.now();
     await b.goto("/");
     const note = b.getByRole("status").filter({ hasText: /^Syncing/ });
     const synced = async () => Number((await note.textContent())?.match(/Syncing ([\d,]+) of/)?.[1].replace(/,/g, ""));
@@ -197,6 +200,11 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
     await expect.poll(synced, { timeout: 60_000 }).toBeGreaterThan(200);
     await expect(b.locator(".pill")).toHaveText(/Syncing \d+%/);
     await b.screenshot({ path: testInfo.outputPath("syncing.png") });
+    // On a group's own page too, not only the home page.
+    await b.goto(`/#/group/${encodeURIComponent(group)}`);
+    await expect(b.getByRole("heading", { name: group })).toBeVisible();
+    await expect(note).toContainText(`of ${total.toLocaleString("en-US")} cards`);
+    await b.screenshot({ path: testInfo.outputPath("group-page.png") });
 
     // Closed partway through: what arrived is still there, and the count carries on from it.
     const before = await synced();
@@ -206,6 +214,8 @@ test("a big sync shows how far along it is, and carries on after a reload", asyn
     await b.screenshot({ path: testInfo.outputPath("after-reload.png") });
 
     await expect(note).toHaveCount(0, { timeout: 120_000 });
-    await expect(b.getByRole("link", { name: /^Big/ })).toContainText(`of ${total} cards`);
+    console.log(`Synced ${total} cards in ${Math.round((Date.now() - started) / 1000)}s`);
+    await b.goto("/");
+    await expect(b.getByRole("link", { name: new RegExp(`^${group}`) })).toContainText(`of ${total} cards`);
     await b.screenshot({ path: testInfo.outputPath("done.png") });
 });
