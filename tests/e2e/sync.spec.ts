@@ -157,8 +157,8 @@ test("a big group that arrives is all there, with how much is left, each time th
 }, testInfo) => {
     test.setTimeout(240_000);
     const total = 1500;
-    // No spaces: armadietto lists them encoded and remoteStorage.js then can't fetch the group (#41).
-    const group = "Frequency";
+    // Spaces, as real names have. The test server is patched to list them the way other servers do (#41).
+    const group = "A Frequency Dictionary of Czech";
     const user = await createUser();
 
     // A phone that is used: the app is closed straight after a card is saved, as after a last review.
