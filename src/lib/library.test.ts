@@ -652,6 +652,45 @@ describe("Library", () => {
         expect(library.toSync).toBe(0);
     });
 
+    it("shows a partly synced group after a reload, and how much is left, when the cache's listing leaves it out", async () => {
+        await library.save({ frontText: "pivo", backText: "beer", group: "Food & drink" });
+        // As rs.js leaves the cache when a new group arrives over a change made here (see cache.test.ts).
+        const body = (id: string) =>
+            JSON.stringify({ "@id": id, "@type": "flashcard", frontText: id, backText: id, group: czech });
+        await (rs.local as unknown as { setNodes(n: Record<string, unknown>): Promise<void> }).setNodes({
+            "/flashcards/": {
+                path: "/flashcards/",
+                common: { itemsMap: { "Food & drink/": true, [`${czech}/`]: true } },
+                local: { itemsMap: { "Food & drink/": true, [`${czech}/`]: false } },
+            },
+            [`/flashcards/${czech}/`]: {
+                path: `/flashcards/${czech}/`,
+                common: { itemsMap: { c1: true, c2: true, c3: true } },
+            },
+            [`/flashcards/${czech}/c1`]: {
+                path: `/flashcards/${czech}/c1`,
+                common: { body: body("c1"), contentType: "application/json" },
+            },
+            [`/flashcards/${czech}/c2`]: {
+                path: `/flashcards/${czech}/c2`,
+                common: { body: body("c2"), contentType: "application/json" },
+            },
+            [`/flashcards/${czech}/c3`]: { path: `/flashcards/${czech}/c3`, common: {}, remote: { revision: "r" } },
+        });
+        // The app is opened again.
+        const reopened = new Library(rs);
+        await reopened.load();
+        expect(reopened.cardsIn(czech)).toHaveLength(2);
+        expect(reopened.listed).toBe(4);
+        emit("sync-started");
+        expect(reopened.toSync).toBe(1);
+        // The last one arrives.
+        arrive(czech, "c3", "c3");
+        emit("sync-done");
+        expect(reopened.cardsIn(czech)).toHaveLength(3);
+        expect(reopened.toSync).toBe(0);
+    });
+
     it("shows cards that arrive during a sync a few at a time, and all of them when it's done", async () => {
         emit("sync-started");
         arrive(czech, "r1", "voda");
