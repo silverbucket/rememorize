@@ -2,6 +2,11 @@
 # backend the tests run against doesn't change underneath them.
 FROM node:22-alpine
 RUN npm install -g armadietto@0.6.6
+# 0.6.6 lists a folder's name still percent-encoded, though it lists a document's decoded, so
+# remoteStorage.js can't fetch a folder with a space in its name (#41). Decode it, as other servers do.
+RUN f=/usr/local/lib/node_modules/armadietto/lib/stores/file_tree.js \
+    && sed -i "s#items\[path.basename(currentPath) + '/'\]#items[decodeURI(path.basename(currentPath)) + '/']#g" "$f" \
+    && test "$(grep -c "items\[decodeURI(path.basename(currentPath)) + '/'\]" "$f")" = 2
 COPY armadietto.conf.json /etc/armadietto/config.json
 EXPOSE 8000
 CMD ["armadietto", "-c", "/etc/armadietto/config.json"]
