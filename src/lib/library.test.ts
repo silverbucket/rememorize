@@ -261,16 +261,101 @@ describe("Library", () => {
         expect(library.groupNames()).toEqual(["two"]);
     });
 
-    it("renames a group, keeping each card's schedule", async () => {
+    it("stores new groups under UUIDs with metadata beside their cards", async () => {
         const card = await library.save({ frontText: "pivo", backText: "beer", group: "nouns" });
+        const [folder] = await rs.flashcards.listGroups(false);
+        expect(folder).toMatch(/^[0-9a-f-]{36}$/);
+        const stored = await rs.flashcards.get(folder, card["@id"], false);
+        const metadata = rs.scope("/flashcards/");
+        expect(await metadata.getObject(`${folder}/.group/metadata`, false)).toMatchObject({ name: "nouns" });
+        await library.renameGroup("nouns", "Czech");
+        expect(await rs.flashcards.get(folder, card["@id"], false)).toEqual(stored);
+        expect(await metadata.getObject(`${folder}/.group/metadata`, false)).toMatchObject({ name: "Czech" });
+        await library.load();
+        expect(library.find("Czech", card["@id"])?.frontText).toBe("pivo");
+    });
+
+    it("renames a group, keeping each card's schedule", async () => {
+        const card = await rs.flashcards.store({ frontText: "pivo", backText: "beer", group: "nouns" });
+        await library.load();
         const reviewed = await library.review(card, 3);
         await library.save({ frontText: "chléb", backText: "bread", group: "nouns" });
         await library.renameGroup("nouns", "Czech");
         expect(library.groups.map((g) => [g.name, g.total])).toEqual([["Czech", 2]]);
         expect(library.find("Czech", card["@id"])?.review).toEqual(reviewed.review);
+        // The rename leaves the stored card and its sync revision alone.
+        expect(await rs.flashcards.get("nouns", card["@id"], false)).toMatchObject({
+            group: "nouns",
+            updatedAt: reviewed.updatedAt,
+        });
+        expect(await rs.flashcards.get("Czech", card["@id"], false)).toBeUndefined();
         // And in storage, after a fresh load.
         await library.load();
         expect(library.groups.map((g) => [g.name, g.total])).toEqual([["Czech", 2]]);
+    });
+
+    it("resolves an existing review card after its group is renamed and the old name is reused", async () => {
+        const original = await library.save({ "@id": "same", frontText: "beer", backText: "pivo", group: "nouns" });
+        await library.renameGroup("nouns", "Czech");
+        await library.save({ ...original, frontText: "bread" });
+        expect(library.currentCard(original)).toMatchObject({ group: "Czech", frontText: "beer" });
+    });
+
+    it("cannot undo a deleted card's review onto a different card with the same id", async () => {
+        const original = await library.save({
+            "@id": "same",
+            frontText: "beer",
+            backText: "pivo",
+            group: "nouns",
+            createdAt: "2026-01-01T00:00:00.000Z",
+        });
+        await library.review(original, 3);
+        await library.renameGroup("nouns", "Czech");
+        const replacement = await library.save({
+            "@id": "same",
+            frontText: "bread",
+            backText: "chléb",
+            group: "nouns",
+            createdAt: "2026-01-02T00:00:00.000Z",
+        });
+        await library.review(replacement, 4);
+        await library.removeGroup("Czech");
+        await expect(library.undoReview(original)).rejects.toThrow(/deleted/);
+        expect(library.find("nouns", replacement["@id"])?.review?.reps).toBe(1);
+    });
+
+    it("can rename a group to the name of a deleted group", async () => {
+        await library.save({ frontText: "a", backText: "a", group: "A" });
+        await library.save({ frontText: "b", backText: "b", group: "B" });
+        await library.removeGroup("B");
+        await library.renameGroup("A", "B");
+        await library.load();
+        expect(library.groupNames()).toEqual(["B"]);
+        expect(library.cardsIn("B").map((card) => card.frontText)).toEqual(["a"]);
+    });
+
+    it("can reuse the old name and edit or delete cards in the renamed group", async () => {
+        const original = await rs.flashcards.store({
+            "@id": "same",
+            frontText: "pivo",
+            backText: "beer",
+            group: "nouns",
+        });
+        await library.load();
+        await library.renameGroup("nouns", "Czech");
+        await library.save({ ...original, frontText: "chléb" });
+        await library.load();
+
+        const card = library.find("Czech", original["@id"]);
+        expect(card?.frontText).toBe("pivo");
+        expect(library.find("nouns", original["@id"])?.frontText).toBe("chléb");
+        if (!card) throw new Error("Expected the renamed group's card");
+        await library.save({ ...card, frontText: "voda" }, "Czech");
+        expect(await rs.flashcards.get("nouns", original["@id"], false)).toMatchObject({ frontText: "voda" });
+        await library.removeGroup("Czech");
+        await library.load();
+        expect(library.groupNames()).toEqual(["nouns"]);
+        expect(library.find("nouns", original["@id"])?.frontText).toBe("chléb");
     });
 
     it("renaming onto a group that exists merges the two", async () => {
@@ -631,7 +716,7 @@ describe("Library", () => {
     const emit = (name: string) => (rs as unknown as { _emit(n: string): void })._emit(name);
 
     it("keeps a card that arrives by sync while the cache is being read", async () => {
-        await library.save({ frontText: "pivo", backText: "beer", group: czech });
+        await rs.flashcards.store({ frontText: "pivo", backText: "beer", group: czech });
         const loading = library.load();
         // Sync stores it, and says so, before the load has finished reading.
         arrive(czech, "r1", "voda");
@@ -653,7 +738,7 @@ describe("Library", () => {
     });
 
     it("shows a partly synced group after a reload, and how much is left, when the cache's listing leaves it out", async () => {
-        await library.save({ frontText: "pivo", backText: "beer", group: "Food & drink" });
+        await rs.flashcards.store({ frontText: "pivo", backText: "beer", group: "Food & drink" });
         // As rs.js leaves the cache when a new group arrives over a change made here (see cache.test.ts).
         const body = (id: string) =>
             JSON.stringify({ "@id": id, "@type": "flashcard", frontText: id, backText: id, group: czech });
@@ -704,7 +789,8 @@ describe("Library", () => {
     });
 
     it("moves a group's cards that arrived by sync but aren't shown yet", async () => {
-        await library.save({ "@id": "r1", frontText: "voda", backText: "water", group: czech });
+        await rs.flashcards.store({ "@id": "r1", frontText: "voda", backText: "water", group: czech });
+        await library.load();
         emit("sync-started");
         await rs.flashcards.store({ "@id": "r2", frontText: "pivo", backText: "beer", group: czech });
         arrive(czech, "r2", "pivo");
@@ -720,7 +806,8 @@ describe("Library", () => {
     });
 
     it("keeps a change made here over one that arrived by sync just before it", async () => {
-        const card = await library.save({ "@id": "r1", frontText: "voda", backText: "water", group: czech });
+        const card = await rs.flashcards.store({ "@id": "r1", frontText: "voda", backText: "water", group: czech });
+        await library.load();
         emit("sync-started");
         arrive(czech, "r1", "older");
         await library.save({ ...card, frontText: "newer" }, czech);

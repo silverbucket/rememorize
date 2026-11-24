@@ -9,7 +9,6 @@
         GRADES,
         type Grade,
         heldUntilTomorrow,
-        itemKey,
         itemsOf,
         nextDue,
         previewIntervals,
@@ -52,9 +51,10 @@
     );
     const extraSize = $derived(Math.min(EXTRA_CARDS, library.cardsPerReview ?? EXTRA_CARDS));
 
-    let queue: ReviewItem[] = $state([]);
+    const itemKey = (item: ReviewItem) => `${item.reverse ? "reverse" : "forward"}:${library.cardKey(item.card)}`;
+    let queue: ReviewItem[] = $state.raw([]);
     /** Cards rated Again, which come back in this review once they are due again, soonest first. */
-    let later: ReviewItem[] = $state([]);
+    let later: ReviewItem[] = $state.raw([]);
     let started = $state(false);
     // Reveal and hint state belong to one card, so they reset if sync swaps it.
     let revealedFor = $state("");
@@ -62,7 +62,7 @@
     let revealedAt = $state(new Date());
     let busy = $state(false);
     /** The card whose text is being fixed, in a dialog over the review. */
-    let editing: Flashcard | undefined = $state();
+    let editing: Flashcard | undefined = $state.raw();
     let error = $state("");
     let reviewed = $state(0);
     let tally = $state<Record<Grade, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
@@ -75,13 +75,13 @@
     /** The most recent rating, so it can be undone. */
     let last:
         | { before: Flashcard; reverse: boolean; grade: Grade; queue: ReviewItem[]; later: ReviewItem[] }
-        | undefined = $state();
+        | undefined = $state.raw();
 
     // Read queued cards from the library so sync edits apply and deleted or
     // moved cards drop out instead of being written back.
     const live: ReviewItem[] = $derived(
         queue.flatMap((item) => {
-            const card = library.find(item.card.group, item.card["@id"]);
+            const card = library.currentCard(item.card);
             return card ? [{ card, reverse: item.reverse }] : [];
         }),
     );
@@ -169,7 +169,7 @@
     const waitingLive: ReviewItem[] = $derived(
         later
             .flatMap((item) => {
-                const card = library.find(item.card.group, item.card["@id"]);
+                const card = library.currentCard(item.card);
                 // Gone if the card was deleted, or no longer studied in this direction.
                 return card && itemsOf(card).some((i) => i.reverse === item.reverse)
                     ? [{ card, reverse: item.reverse }]

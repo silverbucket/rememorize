@@ -18,6 +18,13 @@ import { type Flashcard, LOG_FOLDER, normalizeFlashcard } from "remotestorage-mo
 import type { RSWithModules } from "./rs";
 
 const ROOT = "/flashcards/";
+export const GROUP_METADATA = ".group/metadata";
+
+export function groupNameOf(value: unknown): string | undefined {
+    if (typeof value !== "object" || value === null || !("name" in value)) return undefined;
+    const { name } = value;
+    if (typeof name === "string" && name && !name.includes("/")) return name;
+}
 
 /** One side of a cached node: what the server has (`common`), or a change made here (`local`). */
 type Version = { body?: unknown; contentType?: string; itemsMap?: Record<string, unknown> };
@@ -47,11 +54,14 @@ function bodyOf(node: Node | undefined): unknown {
 }
 
 /** The path of every card the cache knows of, whether it has arrived or is still to be fetched. */
-async function cardPaths(store: NodeStore): Promise<string[]> {
+async function groupPaths(store: NodeStore): Promise<string[]> {
     const root = (await store.getNodes([ROOT]))[ROOT];
-    const folders = itemsIn(root)
+    return itemsIn(root)
         .filter((name) => name.endsWith("/") && name !== `${LOG_FOLDER}/`)
         .map((name) => ROOT + name);
+}
+
+async function cardPaths(store: NodeStore, folders: string[]): Promise<string[]> {
     if (folders.length === 0) return [];
     const nodes = await store.getNodes(folders);
     return folders.flatMap((folder) =>
@@ -65,17 +75,28 @@ const storeOf = (rs: RSWithModules) => rs.local as unknown as NodeStore;
 
 /** How many cards the storage has, as far as this device knows: here already or still to arrive. */
 export async function countListed(rs: RSWithModules): Promise<number> {
-    return (await cardPaths(storeOf(rs))).length;
+    const store = storeOf(rs);
+    return (await cardPaths(store, await groupPaths(store))).length;
 }
 
 /**
  * Every card in the cache, by group and id as in its path, and how many
  * cards the storage lists in all (see `countListed`).
  */
-export async function readCards(rs: RSWithModules): Promise<{ cards: Map<string, Flashcard>; listed: number }> {
+export async function readCards(
+    rs: RSWithModules,
+): Promise<{ cards: Map<string, Flashcard>; listed: number; names: Record<string, string> }> {
     const store = storeOf(rs);
-    const paths = await cardPaths(store);
-    const nodes = paths.length > 0 ? await store.getNodes(paths) : {};
+    const folders = await groupPaths(store);
+    const paths = await cardPaths(store, folders);
+    const metadata = folders.map((folder) => folder + GROUP_METADATA);
+    const nodes = folders.length > 0 ? await store.getNodes([...paths, ...metadata]) : {};
+    const names = Object.fromEntries(
+        folders.flatMap((folder) => {
+            const name = groupNameOf(bodyOf(nodes[folder + GROUP_METADATA]));
+            return name === undefined ? [] : [[folder.slice(ROOT.length, -1), name]];
+        }),
+    );
     const cards = new Map<string, Flashcard>();
     for (const path of paths) {
         const card = normalizeFlashcard(bodyOf(nodes[path]));
@@ -83,5 +104,5 @@ export async function readCards(rs: RSWithModules): Promise<{ cards: Map<string,
         const key = path.slice(ROOT.length);
         cards.set(key, { ...card, group: key.slice(0, key.indexOf("/")) });
     }
-    return { cards, listed: paths.length };
+    return { cards, listed: paths.length, names };
 }

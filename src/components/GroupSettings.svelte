@@ -32,13 +32,16 @@
     let error = $state("");
 
     let name = $state("");
-    let moving = $state(false);
+    let operation = $state<"rename" | "merge">();
+    const moving = $derived(operation !== undefined);
     let deleting = $state(false);
+    let applying = $state(false);
+    const busy = $derived(moving || deleting || applying);
     const newName = $derived(name.trim());
     const nameError = $derived(newName.includes("/") ? 'Group names can\'t contain "/".' : "");
     /** The group that already has the new name, if there is one: renaming onto it merges the two. */
     const target = $derived(library.groups.find((g) => g.name === newName && g.name !== group));
-    const canRename = $derived(newName !== "" && newName !== group && !nameError && !moving && !deleting);
+    const canRename = $derived(newName !== "" && newName !== group && !nameError && !busy);
 
     onMount(() => {
         name = group;
@@ -49,17 +52,17 @@
         event.preventDefault();
         if (!canRename) return;
         const to = newName;
-        moving = true;
+        operation = target ? "merge" : "rename";
         error = "";
         try {
-            await library.renameGroup(group, to);
+            await library.renameGroup(group, to, operation === "merge");
             dialog?.close();
-            // A long move may have been left for another page; only follow the group from its own.
+            // Follow the group only from its own page.
             const route = router.route;
             if (route.name === "group" && route.group === group) router.go(href.group(to));
         } catch (e) {
             error = e instanceof Error ? e.message : String(e);
-            moving = false;
+            operation = undefined;
         }
     }
 
@@ -71,8 +74,6 @@
     const groupDirection = $derived(library.directionFor(group));
     let offered = $state(false);
     const others = $derived(cards.filter((c) => (c.direction ?? "forward") !== groupDirection));
-    let applying = $state(false);
-    const busy = $derived(moving || deleting || applying);
 
     async function setDirection(event: Event) {
         const value = (event.currentTarget as HTMLSelectElement).value;
@@ -146,7 +147,7 @@
                     list="other-groups"
                     autocomplete="off"
                     enterkeyhint="done"
-                    disabled={moving}
+                    disabled={busy}
                 />
                 <datalist id="other-groups">
                     {#each library.groupNames().filter((n) => n !== group) as other (other)}
@@ -154,12 +155,12 @@
                     {/each}
                 </datalist>
                 <button class="btn" class:primary={canRename} type="submit" disabled={!canRename}>
-                    {moving ? "Moving…" : target ? "Merge" : "Rename"}
+                    {operation === "merge" ? "Merging…" : operation === "rename" ? "Renaming…" : target ? "Merge" : "Rename"}
                 </button>
             </div>
             {#if nameError}
                 <small class="error">{nameError}</small>
-            {:else if target}
+            {:else if target && !moving}
                 <small class="muted">
                     “{newName}” already has {plural(target.total, "card")}. The {plural(cards.length, "card")} here will join
                     {target.total === 1 ? "it" : "them"}.
@@ -204,14 +205,14 @@
                 <button
                     class="btn"
                     type="button"
-                    disabled={cards.length === 0}
+                    disabled={busy || cards.length === 0}
                     onclick={() => download(exportGroup(group, cards), "application/json", exportFileName(group, "json"))}
                     ><Icon name="export" size={18} />Export group</button
                 >
                 <button
                     class="btn"
                     type="button"
-                    disabled={cards.length === 0}
+                    disabled={busy || cards.length === 0}
                     onclick={() => download(exportCsv(cards), "text/csv", exportFileName(group, "csv"))}
                     ><Icon name="export" size={18} />CSV</button
                 >

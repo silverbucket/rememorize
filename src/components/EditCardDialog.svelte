@@ -46,7 +46,7 @@
         error = "";
         try {
             // As it is now, so a rating or an edit synced since it was opened is kept.
-            const current = library.find(initial.group, initial["@id"]);
+            const current = library.currentCard(initial);
             if (!current) throw new Error("This card was deleted or moved, so it can't be changed here.");
             await library.save({ ...current, ...changes }, current.group);
             dialog?.close();

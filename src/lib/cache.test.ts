@@ -98,7 +98,7 @@ describe("readCards", () => {
         expect(listed).toBe(1);
         // A whole group deleted here goes too.
         await rs.flashcards.remove(big, "c2");
-        expect(await readCards(rs)).toEqual({ cards: new Map(), listed: 0 });
+        expect(await readCards(rs)).toEqual({ cards: new Map(), listed: 0, names: {} });
     });
 
     it("finds the cards of a group that the cache's own listing leaves out", async () => {
@@ -117,7 +117,7 @@ describe("readCards", () => {
     });
 
     it("is empty before there is anything", async () => {
-        expect(await readCards(rs)).toEqual({ cards: new Map(), listed: 0 });
+        expect(await readCards(rs)).toEqual({ cards: new Map(), listed: 0, names: {} });
         expect(await countListed(rs)).toBe(0);
     });
 });
