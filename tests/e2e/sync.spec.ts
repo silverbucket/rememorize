@@ -2,7 +2,7 @@
  * Sync against a real remoteStorage server (armadietto), with two browser
  * contexts standing in for two devices.
  */
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, type Locator, type Request, test } from "@playwright/test";
 import { acceptDialogs, addCard, connect, createUser, RS_HOST } from "./helpers";
 
 // The build under test syncs every couple of seconds (see TIMING in playwright.config.ts); this leaves
@@ -41,18 +41,41 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     });
     await a.goto("/#/group/Verbs");
 
+    const cardWrites: string[] = [];
+    const trackCardWrites = (request: Request) => {
+        if (
+            ["PUT", "DELETE"].includes(request.method()) &&
+            new URL(request.url()).pathname.includes("/flashcards/") &&
+            !request.url().endsWith("/.group/metadata")
+        ) {
+            cardWrites.push(request.url());
+        }
+    };
+    a.on("request", trackCardWrites);
+    await b.goto("/");
+    await a.getByRole("button", { name: "Group settings" }).click();
+    const settings = a.getByRole("dialog", { name: "Group settings" });
+    await settings.getByLabel("Name").fill("Czech verbs");
+    await settings.getByRole("button", { name: "Rename", exact: true }).click();
+    await expect(settings).toBeHidden();
+    await expect(a.getByRole("heading", { name: "Czech verbs" })).toBeVisible();
+    await expect(b.getByRole("link", { name: /^Czech verbs/ })).toBeVisible({ timeout: SYNC_TIMEOUT });
+    await expect(b.getByRole("link", { name: /^Verbs/ })).toHaveCount(0);
+    expect(cardWrites).toEqual([]);
+    a.off("request", trackCardWrites);
+
     // A deletes the group; B (sitting on the home page) sees it disappear.
     await b.goto("/");
-    await expect(b.getByRole("link", { name: /^Verbs/ })).toBeVisible();
+    await expect(b.getByRole("link", { name: /^Czech verbs/ })).toBeVisible();
     await a.getByRole("button", { name: "Group settings" }).click();
     await a.getByRole("button", { name: "Delete group" }).click();
     await expect(a.getByText("No cards yet")).toBeVisible();
     await expect(b.getByText("No cards yet")).toBeVisible({ timeout: SYNC_TIMEOUT });
 
     // Disconnecting clears the local copy; reconnecting brings data back.
-    await addCard(a, { front: "být", back: "to be", group: "Verbs" });
+    await addCard(a, { front: "být", back: "to be", group: "Czech verbs" });
     await b.goto("/");
-    await expect(b.getByRole("link", { name: /^Verbs/ })).toBeVisible({ timeout: SYNC_TIMEOUT });
+    await expect(b.getByRole("link", { name: /^Czech verbs/ })).toBeVisible({ timeout: SYNC_TIMEOUT });
     await b.goto("/#/account");
     await b.getByRole("button", { name: "Disconnect" }).click();
     await expect(b.getByRole("button", { name: "Connect" })).toBeVisible();
@@ -60,7 +83,7 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     await expect(b.getByText("No cards yet")).toBeVisible();
     await connect(b, user);
     await b.goto("/");
-    await expect(b.getByRole("link", { name: /^Verbs/ })).toBeVisible({ timeout: SYNC_TIMEOUT });
+    await expect(b.getByRole("link", { name: /^Czech verbs/ })).toBeVisible({ timeout: SYNC_TIMEOUT });
 });
 
 test("settings are shared between devices", async ({ browser }) => {
@@ -174,7 +197,10 @@ test("a big group that arrives is all there, with how much is left, each time th
     const headers = { Authorization: `Bearer ${token}` };
     await expect
         .poll(
-            async () => Object.keys((await (await fetch(`${href}/flashcards/Czech/`, { headers })).json()).items ?? {}),
+            async () => {
+                const { items } = await (await fetch(`${href}/flashcards/`, { headers })).json();
+                return Object.keys(items ?? {}).filter((name) => /^[0-9a-f-]{36}\/$/.test(name));
+            },
             {
                 intervals: [50],
             },

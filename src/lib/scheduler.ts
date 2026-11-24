@@ -50,10 +50,6 @@ export function itemsOf(card: Flashcard): ReviewItem[] {
     return [{ card, reverse: false }];
 }
 
-export function itemKey(item: ReviewItem): string {
-    return `${item.reverse ? "reverse" : "forward"}:${item.card.group}/${item.card["@id"]}`;
-}
-
 function toSchedulerCard(card: Flashcard, now: Date, reverse: boolean): SchedulerCard {
     // cardId seeds the fuzz, so the previewed interval is the one rate() gives.
     const fresh = scheduler.newCard({ now, cardId: reverse ? `${card["@id"]}:reverse` : card["@id"] });

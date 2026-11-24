@@ -13,13 +13,14 @@ import {
     type FlashcardInput,
     LOG_FOLDER,
     normalizeFlashcard,
+    normalizeGroup,
     normalizeReviewLog,
     normalizeSettings,
     type ReviewLogEntry,
     SETTINGS_PATH,
     type Settings,
 } from "remotestorage-module-flashcards";
-import { countListed, readCards } from "./cache";
+import { countListed, GROUP_METADATA, groupNameOf, readCards } from "./cache";
 import { defaultQuietFrom } from "./reminders";
 import type { RSWithModules } from "./rs";
 import { dueItems, type Grade, isNew, type ReviewItem, rate, startedBefore, startedOn, stateOf } from "./scheduler";
@@ -66,6 +67,9 @@ export class Library {
     #rs: RSWithModules;
     /** Rememorize's own folder, for its settings. */
     #app: BaseClient;
+    #flashcards: BaseClient;
+    #creatingGroups = new Map<string, Promise<string>>();
+    #changedNamesWhileLoading: Map<string, string | undefined> | undefined;
     /**
      * Whether the app's settings hold a new-card limit yet. Until they do,
      * the one older versions kept in `/flashcards/.settings` applies.
@@ -140,7 +144,50 @@ export class Library {
      */
     groupDirections: Record<string, CardDirection> = $state({});
 
-    cards = $derived(Object.values(this.#cards));
+    #groupNames: Record<string, string> = $state({});
+    #groupPaths = $derived.by(() => {
+        const active = new Set(Object.values(this.#cards).map((card) => card.group));
+        const stored = Object.entries(this.#groupNames).sort(([a], [b]) => a.localeCompare(b));
+        const names = new Map(stored.filter(([folder]) => active.has(folder)));
+        for (const folder of active) if (!names.has(folder)) names.set(folder, folder);
+        for (const [folder, name] of stored) if (!active.has(folder)) names.set(folder, name);
+        const requested = new Set(names.values());
+        const folders = new Map<string, string>();
+        for (const [folder, name] of names) {
+            // A group created elsewhere can arrive with the same name as a rename.
+            // Keep both groups addressable, including when they contain the same card id.
+            let display = name;
+            if (folders.has(display)) {
+                let suffix = 2;
+                do {
+                    display = `${name} (${suffix++})`;
+                } while (folders.has(display) || requested.has(display));
+            }
+            names.set(folder, display);
+            folders.set(display, folder);
+        }
+        return { names, folders };
+    });
+
+    #cardKeys = new WeakMap<Flashcard, string>();
+
+    cardKey(card: Flashcard): string {
+        return this.#cardKeys.get(card) ?? keyOf(this.#groupPaths.folders.get(card.group) ?? card.group, card["@id"]);
+    }
+
+    currentCard(card: Flashcard): Flashcard | undefined {
+        const stored = this.#cards[this.cardKey(card)];
+        return stored && this.#displayCard(stored);
+    }
+
+    #displayCard(card: Flashcard): Flashcard {
+        const group = this.#groupPaths.names.get(card.group) ?? card.group;
+        const displayed = group === card.group ? card : { ...card, group };
+        this.#cardKeys.set(displayed, keyOf(card.group, card["@id"]));
+        return displayed;
+    }
+
+    cards = $derived(Object.values(this.#cards).map((card) => this.#displayCard(card)));
 
     /**
      * Cards still on their way from storage, while a sync runs. Already
@@ -225,6 +272,12 @@ export class Library {
     constructor(rs: RSWithModules, options: { newPerDay?: number; cardsPerReview?: number | null } = {}) {
         this.#rs = rs;
         this.#app = rs.scope("/rememorize/");
+        this.#flashcards = rs.scope("/flashcards/");
+        this.#flashcards.declareType("group", {
+            type: "object",
+            properties: { name: { type: "string" } },
+            required: ["name"],
+        });
         this.#app.declareType("settings", appSettingsSchema);
         if (options.newPerDay !== undefined) this.newPerDay = options.newPerDay;
         if (options.cardsPerReview !== undefined) this.cardsPerReview = options.cardsPerReview;
@@ -267,6 +320,7 @@ export class Library {
             this.reminderServer = DEFAULT_REMINDER_SERVER;
             this.direction = DEFAULT_DIRECTION;
             this.groupDirections = {};
+            this.#groupNames = {};
             void this.load();
         });
         rs.on("network-offline", () => {
@@ -308,9 +362,11 @@ export class Library {
         const generation = ++this.#loadGeneration;
         const changed = new Map<string, Flashcard | undefined>();
         this.#changedWhileLoading = changed;
+        const changedNames = new Map<string, string | undefined>();
+        this.#changedNamesWhileLoading = changedNames;
         try {
             // Not `flashcards.getAll()`: it goes by the cache's listings, which can leave a whole group out (see cache.ts).
-            const [{ cards, listed }, settings, log] = await Promise.all([
+            const [{ cards, listed, names }, settings, log] = await Promise.all([
                 readCards(this.#rs),
                 this.#app.getObject(SETTINGS_FILE, false),
                 this.#rs.flashcards.getReviewLog(false),
@@ -328,6 +384,8 @@ export class Library {
                 if (card) next[key] = card;
                 else delete next[key];
             }
+            this.#groupNames = names;
+            for (const [folder, name] of changedNames) this.#applyGroupName(folder, name);
             this.#cards = next;
         } catch (e) {
             this.error = `Could not load cards: ${messageOf(e)}`;
@@ -335,6 +393,7 @@ export class Library {
             if (generation === this.#loadGeneration) {
                 this.loaded = true;
                 this.#changedWhileLoading = undefined;
+                this.#changedNamesWhileLoading = undefined;
             }
         }
     }
@@ -373,7 +432,9 @@ export class Library {
     }
 
     find(group: string, id: string): Flashcard | undefined {
-        return this.#cards[keyOf(group, id)];
+        const folder = this.#groupPaths.folders.get(group);
+        const card = folder === undefined ? undefined : this.#cards[keyOf(folder, id)];
+        return card && this.#displayCard(card);
     }
 
     cardsIn(group: string): Flashcard[] {
@@ -386,12 +447,47 @@ export class Library {
 
     /** Create or update a card. Pass `previousGroup` when editing an existing card. */
     async save(input: FlashcardInput, previousGroup?: string): Promise<Flashcard> {
-        const card = await this.#rs.flashcards.store(input, { previousGroup });
+        this.#showArrived();
+        const group = normalizeGroup(input.group);
+        const previousFolder = previousGroup === undefined ? undefined : this.#groupPaths.folders.get(previousGroup);
+        const folder = this.#groupPaths.folders.get(group) ?? (await this.#createGroup(group));
+        const card = await this.#rs.flashcards.store({ ...input, group: folder }, { previousGroup: previousFolder });
         const changes: [string, Flashcard | undefined][] = [];
-        if (previousGroup !== undefined) changes.push([keyOf(previousGroup, card["@id"]), undefined]);
+        if (previousFolder !== undefined) changes.push([keyOf(previousFolder, card["@id"]), undefined]);
         changes.push([keyOf(card.group, card["@id"]), card]);
         this.#changeCards(changes);
-        return card;
+        return this.#displayCard(card);
+    }
+
+    #createGroup(name: string): Promise<string> {
+        if (name === SETTINGS_PATH || name === LOG_FOLDER) {
+            throw new Error(`"${name}" can't be used as a group name.`);
+        }
+        const pending = this.#creatingGroups.get(name);
+        if (pending) return pending;
+        const folder = crypto.randomUUID();
+        const creating = this.#saveGroupName(folder, name)
+            .then(() => folder)
+            .finally(() => this.#creatingGroups.delete(name));
+        this.#creatingGroups.set(name, creating);
+        return creating;
+    }
+
+    async #saveGroupName(folder: string, name: string): Promise<void> {
+        await this.#flashcards.storeObject("group", `${folder}/${GROUP_METADATA}`, { name });
+        this.#applyGroupName(folder, name);
+    }
+
+    async #removeGroupName(folder: string): Promise<void> {
+        if (!Object.hasOwn(this.#groupNames, folder)) return;
+        await this.#flashcards.remove(`${folder}/${GROUP_METADATA}`);
+        this.#applyGroupName(folder, undefined);
+    }
+
+    #applyGroupName(folder: string, name: string | undefined): void {
+        this.#changedNamesWhileLoading?.set(folder, name);
+        if (name === undefined) delete this.#groupNames[folder];
+        else this.#groupNames = { ...this.#groupNames, [folder]: name };
     }
 
     /** The direction a new card in this group is studied in: the group's own, else the one in the settings. */
@@ -549,17 +645,27 @@ export class Library {
     }
 
     /** Rename a group. Onto the name of a group that exists, its cards join the ones there. */
-    async renameGroup(from: string, to: string): Promise<void> {
+    async renameGroup(from: string, to: string, allowMerge = true): Promise<void> {
         if (to === from) return;
         this.#showArrived();
-        // Merged into a group that exists, the cards join it: its direction stays.
-        const merging = this.groups.some((g) => g.name === to);
-        await this.moveCards(this.cardsIn(from), to);
-        if (this.groupDirections[from] === undefined) return;
-        await this.#changeGroupDirections({
-            [from]: undefined,
-            ...(merging ? {} : { [to]: this.groupDirections[from] }),
-        }).catch(() => {});
+        if (!to || normalizeGroup(to) !== to || to === SETTINGS_PATH || to === LOG_FOLDER) {
+            throw new Error(`"${to}" can't be used as a group name.`);
+        }
+        const folder = this.#groupPaths.folders.get(from);
+        if (folder === undefined) return;
+        if (this.cardsIn(to).length > 0) {
+            if (!allowMerge) throw new Error(`"${to}" now exists. Choose whether to merge the groups.`);
+            await this.moveCards(this.cardsIn(from), to);
+            await this.#removeGroupName(folder);
+            if (Object.hasOwn(this.groupDirections, from)) {
+                await this.#changeGroupDirections({ [from]: undefined }).catch(() => {});
+            }
+            return;
+        }
+        await this.#saveGroupName(folder, to);
+        if (Object.hasOwn(this.groupDirections, from)) {
+            await this.#changeGroupDirections({ [from]: undefined, [to]: this.groupDirections[from] }).catch(() => {});
+        }
     }
 
     /**
@@ -581,14 +687,20 @@ export class Library {
     }
 
     async remove(card: Flashcard): Promise<void> {
-        await this.#rs.flashcards.remove(card.group, card["@id"]);
-        this.#changeCards([[keyOf(card.group, card["@id"]), undefined]]);
+        const folder = this.#groupPaths.folders.get(card.group);
+        if (folder === undefined) return;
+        await this.#rs.flashcards.remove(folder, card["@id"]);
+        this.#changeCards([[keyOf(folder, card["@id"]), undefined]]);
     }
 
     async removeGroup(group: string): Promise<void> {
-        await this.#rs.flashcards.removeGroup(group);
         this.#showArrived();
-        this.#changeCards(this.cardsIn(group).map((card) => [keyOf(group, card["@id"]), undefined]));
+        const folder = this.#groupPaths.folders.get(group);
+        if (folder === undefined) return;
+        await this.#rs.flashcards.removeGroup(folder);
+        this.#showArrived();
+        this.#changeCards(this.cardsIn(group).map((card) => [keyOf(folder, card["@id"]), undefined]));
+        await this.#removeGroupName(folder);
         if (this.groupDirections[group] !== undefined) {
             await this.#changeGroupDirections({ [group]: undefined }).catch(() => {});
         }
@@ -620,10 +732,16 @@ export class Library {
     /**
      * Undo a review: put the card's scheduling back to how it was in
      * `before`, keeping any other edits made since (e.g. synced from another
-     * device). Looks the card up by id, so it still works if it was moved.
+     * device). A move keeps the card's id and creation time.
      */
     async undoReview(before: Flashcard, reverse = false): Promise<Flashcard> {
-        const current = this.cards.find((c) => c["@id"] === before["@id"]);
+        let current = this.currentCard(before);
+        if (!current || current.createdAt !== before.createdAt) {
+            const matches = this.cards.filter(
+                (card) => card["@id"] === before["@id"] && card.createdAt === before.createdAt,
+            );
+            current = matches.length === 1 ? matches[0] : undefined;
+        }
         if (!current) throw new Error("This card was deleted, so its rating can't be undone.");
         const field = reverse ? "reverseReview" : "review";
         const { [field]: _review, reviewedCount: _count, reviewedAt: _at, ...rest } = current;
@@ -731,6 +849,11 @@ export class Library {
         if (slash <= 0 || path.endsWith("/")) return;
         const group = path.slice(0, slash);
         const id = path.slice(slash + 1);
+        if (id === GROUP_METADATA) {
+            this.#applyGroupName(group, groupNameOf(event.newValue));
+            return;
+        }
+        if (id.includes("/")) return;
         const card = event.newValue === undefined ? undefined : normalizeFlashcard(event.newValue);
         const change: [string, Flashcard | undefined] = [keyOf(group, id), card && { ...card, group }];
         if (!this.syncing) {

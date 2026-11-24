@@ -835,7 +835,7 @@ test("a review on one device corrects the reminders of another", async ({ browse
     await expect(phone.locator(".groups li").filter({ hasText: "Verbs" }).locator(".fresh")).toHaveText("2 to start", {
         timeout: 30_000,
     });
-    const reviewed = stored(phone, "/flashcards/Verbs/");
+    const reviewed = stored(phone, "/flashcards/");
     await reviewOne(phone, "Verbs");
     await expect.poll(() => nextTitle(fromPhone, phoneDevice, address(1)), RESEND).toBe("1 card due");
     // The review reaches storage.
