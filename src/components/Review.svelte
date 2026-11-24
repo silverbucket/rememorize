@@ -29,6 +29,7 @@
         streak,
     } from "../lib/stats";
     import { inView, labelOf, type ViewId } from "../lib/views";
+    import EditCardDialog from "./EditCardDialog.svelte";
     import Icon from "./Icon.svelte";
 
     /**
@@ -60,6 +61,8 @@
     let hintFor = $state("");
     let revealedAt = $state(new Date());
     let busy = $state(false);
+    /** The card whose text is being fixed, in a dialog over the review. */
+    let editing: Flashcard | undefined = $state();
     let error = $state("");
     let reviewed = $state(0);
     let tally = $state<Record<Grade, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 });
@@ -89,6 +92,9 @@
     // Back → front shows the back and asks for the front.
     const question = $derived(reverse ? current?.backText : current?.frontText);
     const answer = $derived(reverse ? current?.frontText : current?.backText);
+    // Each side has its own hint, such as an example in its language: the question's is offered, the answer's comes with it.
+    const questionHint = $derived(reverse ? current?.backHint : current?.hint);
+    const answerHint = $derived(reverse ? current?.hint : current?.backHint);
     const revealed = $derived(currentKey !== "" && revealedFor === currentKey);
     const showHint = $derived(currentKey !== "" && hintFor === currentKey);
     const intervals = $derived(current && revealed ? previewIntervals(current, revealedAt, reverse) : undefined);
@@ -327,6 +333,8 @@
 
     onMount(() => {
         const onKey = (e: KeyboardEvent) => {
+            // The editor is open over the review: its keys are its own.
+            if (editing) return;
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
             const undoKey = (e.key === "z" && (e.metaKey || e.ctrlKey) && !e.shiftKey) || (e.key === "u" && !e.metaKey && !e.ctrlKey && !e.altKey);
             if (undoKey && last) {
@@ -341,6 +349,9 @@
             if (!revealed && !onControl && (e.key === " " || e.key === "Enter")) {
                 e.preventDefault();
                 reveal();
+            } else if (!revealed && questionHint && e.key === "h") {
+                e.preventDefault();
+                hintFor = currentKey;
             } else if (revealed) {
                 const match = GRADES.find((g) => g.key === e.key);
                 if (match) {
@@ -392,6 +403,20 @@
             <!-- The whole card reveals on a tap; Space and the button below do the same from a keyboard. -->
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
             <div class="panel card" class:revealed onclick={() => !revealed && reveal()}>
+                <!--
+                    A wrong card can be fixed here. Only once its answer is shown, when a mistake is seen, and in
+                    the far corner from the rating buttons: not somewhere a tap meant for something else lands.
+                -->
+                {#if revealed}
+                    <button
+                        class="btn ghost icon-only edit"
+                        type="button"
+                        aria-label="Edit this card"
+                        title="Edit this card"
+                        disabled={busy}
+                        onclick={() => (editing = current)}><Icon name="edit" size={18} /></button
+                    >
+                {/if}
                 {#key currentKey}
                     <!-- The question ends at a fixed line and the answer starts below it, so showing the answer moves nothing. -->
                     <div class="faces">
@@ -404,25 +429,30 @@
                                 </span>
                             {/if}
                             <div class="side front content {sizeOf(question)}">{question}</div>
+                            <!-- The question's hint, under it: there on request, and with the answer in any case. -->
+                            {#if questionHint}
+                                <div class="hint-slot">
+                                    {#if showHint || revealed}
+                                        <p class="hint content muted">{questionHint}</p>
+                                    {:else}
+                                        <button
+                                            class="btn ghost hint-btn"
+                                            type="button"
+                                            onclick={(e) => {
+                                                e.stopPropagation();
+                                                hintFor = currentKey;
+                                            }}>Show hint <kbd>H</kbd></button
+                                        >
+                                    {/if}
+                                </div>
+                            {/if}
                         </div>
                         <hr class:shown={revealed} />
                         <div class="told">
                             {#if revealed}
                                 <div class="side back content {sizeOf(answer)}">{answer}</div>
+                                {#if answerHint}<p class="hint content muted">{answerHint}</p>{/if}
                                 {#if current.extra}<p class="extra content muted">{current.extra}</p>{/if}
-                            {:else if current.hint && !reverse}
-                                {#if showHint}
-                                    <p class="hint content muted">{current.hint}</p>
-                                {:else}
-                                    <button
-                                        class="btn ghost hint-btn"
-                                        type="button"
-                                        onclick={(e) => {
-                                            e.stopPropagation();
-                                            hintFor = currentKey;
-                                        }}>Show hint</button
-                                    >
-                                {/if}
                             {/if}
                         </div>
                     </div>
@@ -572,6 +602,10 @@
         </div>
     {/if}
 </div>
+
+{#if editing}
+    <EditCardDialog card={editing} onclose={() => (editing = undefined)} />
+{/if}
 
 <style>
     .review {
@@ -818,9 +852,35 @@
         border-top-color: var(--border-strong);
     }
 
+    /* A side's hint, under it: an example sentence, say. */
     .hint {
         font-size: 1.125rem;
         font-style: italic;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        text-wrap: balance;
+    }
+
+    /* As tall as the button that stands in for the hint, so showing one line of it moves nothing. */
+    .hint-slot {
+        display: grid;
+        place-items: center;
+        min-height: 2.25rem;
+        max-width: 100%;
+    }
+
+    .told .hint {
+        margin-top: 0.75rem;
+    }
+
+    /* In the card's corner, out of the way of what it says. */
+    .edit {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        z-index: 1;
+        color: var(--text-muted);
     }
 
     /* What goes with the answer, under it and quieter. */

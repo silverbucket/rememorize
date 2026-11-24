@@ -45,9 +45,9 @@ export async function addCard(
     card: { front: string; back: string; group: string; hint?: string; extra?: string },
 ) {
     await page.goto(`/#/new?group=${encodeURIComponent(card.group)}`);
-    await page.getByLabel("Front").fill(card.front);
-    await page.getByLabel("Back").fill(card.back);
-    if (card.hint) await page.getByLabel("Hint").fill(card.hint);
+    await page.getByLabel("Front", { exact: true }).fill(card.front);
+    await page.getByLabel("Back", { exact: true }).fill(card.back);
+    if (card.hint) await page.getByLabel("Front hint").fill(card.hint);
     if (card.extra) await page.getByLabel("Extra").fill(card.extra);
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: card.group })).toBeVisible();

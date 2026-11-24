@@ -4,8 +4,8 @@
  * A package is a zip holding a SQLite collection. Anki stores notes as
  * fields and draws cards from them with HTML templates; Rememorize cards are
  * a plain-text front and back. So instead of rendering templates, each note
- * type gets a mapping (which field is the front, the back, the hint), guessed
- * from its templates and adjustable before importing.
+ * type gets a mapping (which field is the front, the back, the hint for each),
+ * guessed from its templates and its notes, and adjustable before importing.
  *
  * Only the collection is read: pictures and sound stay behind, and so does
  * Anki's review progress (every card starts as new).
@@ -49,8 +49,10 @@ export interface NoteTypeMapping {
     front: number;
     /** Unused when `gaps` is on. */
     back: number;
-    /** -1 for none. */
+    /** The hint for the front, such as an example in its language. -1 for none. */
     hint: number;
+    /** The hint for the back. -1 for none. */
+    backHint: number;
     /** Fields shown with the answer, as the card's extra. */
     extra: number[];
     /**
@@ -233,6 +235,8 @@ export function clozeCards(html: string): { front: string; back: string }[] {
 
 /** Longer than this on average, a field reads like notes rather than an answer. */
 const LONG = 150;
+/** How many of a note type's notes the guess reads. */
+const SAMPLE = 200;
 
 /**
  * A starting mapping for a note type, from what its first card template
@@ -241,7 +245,7 @@ const LONG = 150;
 export function guessMapping(type: AnkiNoteType): NoteTypeMapping {
     const sides = guessSides(type);
     const shown = new Set([...type.front, ...type.back]);
-    const used = [sides.front, sides.back, sides.hint];
+    const used = [sides.front, sides.back, sides.hint, sides.backHint];
     const extra = type.fields
         .map((_, i) => i)
         .filter((i) => shown.has(type.fields[i]) && !used.includes(i))
@@ -251,7 +255,7 @@ export function guessMapping(type: AnkiNoteType): NoteTypeMapping {
 }
 
 function guessSides(type: AnkiNoteType): Omit<NoteTypeMapping, "extra"> {
-    const sample = type.notes.slice(0, 200);
+    const sample = type.notes.slice(0, SAMPLE);
     const length = (i: number) =>
         sample.reduce((sum, note) => sum + htmlToText(note.fields[i] ?? "").length, 0) / Math.max(1, sample.length);
     // Fields that hold text in at least one note: not only a sound or a picture, not always empty.
@@ -262,11 +266,12 @@ function guessSides(type: AnkiNoteType): Omit<NoteTypeMapping, "extra"> {
 
     if (type.cloze) {
         const clozeField = type.fields.findIndex((_, i) => sample.some((n) => HAS_CLOZE.test(n.fields[i] ?? "")));
-        if (clozeField < 0) return { include: false, front: 0, back: -1, hint: -1, skipReason: "no cloze deletions" };
+        const none = { hint: -1, backHint: -1 };
+        if (clozeField < 0) return { include: false, front: 0, back: -1, ...none, skipReason: "no cloze deletions" };
         // Another field the cards show, like a translation, makes a better other side than a gap.
         const other = [...front, ...back].find((i) => i !== clozeField);
-        if (other === undefined) return { include: true, front: clozeField, back: -1, hint: -1, gaps: true };
-        return { include: true, front: clozeField, back: other, hint: -1, gaps: false };
+        if (other === undefined) return { include: true, front: clozeField, back: -1, ...none, gaps: true };
+        return { include: true, front: clozeField, back: other, ...none, gaps: false };
     }
 
     const values = (i: number) => sample.map((n) => htmlToText(n.fields[i] ?? "")).filter(Boolean);
@@ -277,15 +282,96 @@ function guessSides(type: AnkiNoteType): Omit<NoteTypeMapping, "extra"> {
     };
     const f = front.find(varied) ?? front[0] ?? textual[0] ?? 0;
     const b = back[0] ?? textual.find((i) => i !== f) ?? -1;
-    const hint = front.find((i) => i !== f && i !== b) ?? -1;
-    if (b < 0) return { include: false, front: f, back: -1, hint, skipReason: "it has only one field with text" };
+    if (b < 0) {
+        return {
+            include: false,
+            front: f,
+            back: -1,
+            hint: -1,
+            backHint: -1,
+            skipReason: "it has only one field with text",
+        };
+    }
+    const hints = guessHints(sample, f, b, [...front, ...back]);
     if (values(b).length < sample.length * 0.8) {
-        return { include: false, front: f, back: b, hint, skipReason: "most of its notes have nothing for the back" };
+        return {
+            include: false,
+            front: f,
+            back: b,
+            ...hints,
+            skipReason: "most of its notes have nothing for the back",
+        };
     }
     if (length(b) > LONG) {
-        return { include: false, front: f, back: b, hint, skipReason: "its backs are long text, like notes to read" };
+        return {
+            include: false,
+            front: f,
+            back: b,
+            ...hints,
+            skipReason: "its backs are long text, like notes to read",
+        };
     }
-    return { include: true, front: f, back: b, hint };
+    return { include: true, front: f, back: b, ...hints };
+}
+
+/** Scripts written without spaces between words: a word is looked for anywhere in the text. */
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}]/u;
+const wordsOf = (text: string) => text.toLocaleLowerCase().match(/\p{L}+/gu) ?? [];
+
+/**
+ * How often `text` uses a word of `side`, of the notes that have both: an
+ * example for a word nearly always holds it, in some form, and its
+ * translation nearly never does. Words are compared by how they start, so
+ * "kávu" is found for "káva".
+ */
+function sharesWords(sample: AnkiNote[], text: number, side: number): number {
+    let both = 0;
+    let sharing = 0;
+    for (const note of sample) {
+        const value = htmlToText(note.fields[text] ?? "").toLocaleLowerCase();
+        const stems = wordsOf(htmlToText(note.fields[side] ?? ""))
+            .filter((w) => w.length >= 3 || UNSPACED.test(w))
+            .map((w) => w.slice(0, Math.max(3, Math.ceil(w.length * 0.6))));
+        if (!value || !stems.length) continue;
+        both += 1;
+        const words = wordsOf(value);
+        if (stems.some((s) => (UNSPACED.test(s) ? value.includes(s) : words.some((w) => w.startsWith(s)))))
+            sharing += 1;
+    }
+    return both ? sharing / both : 0;
+}
+
+/**
+ * A hint for each side, from the fields the cards show: an example of the
+ * front (a sentence that uses it) hints at the front, and one of the back,
+ * like that sentence's translation, at the back. A short label like a part of
+ * speech is no hint: it stays in the extra.
+ */
+function guessHints(
+    sample: AnkiNote[],
+    front: number,
+    back: number,
+    shown: number[],
+): Pick<NoteTypeMapping, "hint" | "backHint"> {
+    const examples = shown.filter((i) => {
+        if (i === front || i === back) return false;
+        const filled = sample.map((n) => htmlToText(n.fields[i] ?? "")).filter(Boolean);
+        // A line of a few words each, or a short sentence. One or two bare words are a form of the word, like its plural.
+        if (!filled.length || filled.filter((v) => v.includes("\n")).length > filled.length / 2) return false;
+        const words = filled.reduce((sum, v) => sum + wordsOf(v).length, 0) / filled.length;
+        const length = filled.reduce((sum, v) => sum + v.length, 0) / filled.length;
+        const sentences = filled.filter((v) => /[.!?…。！？]$/.test(v)).length > filled.length / 2;
+        return length <= LONG && (words >= 3 || (words >= 2 && sentences) || (UNSPACED.test(filled[0]) && length >= 6));
+    });
+    /** The example that goes with `side` and clearly not with `other`, the surest first. */
+    const exampleOf = (side: number, other: number, taken = -1) =>
+        examples
+            .filter((i) => i !== taken)
+            .map((i) => ({ i, with: sharesWords(sample, i, side), against: sharesWords(sample, i, other) }))
+            .filter((e) => e.with >= 0.5 && e.against <= e.with / 2)
+            .sort((a, b) => b.with - a.with)[0]?.i ?? -1;
+    const hint = exampleOf(front, back);
+    return { hint, backHint: exampleOf(back, front, hint) };
 }
 
 /** Longer than this, or on more than one line, a field in the extra is a paragraph of its own rather than a labelled line. */
@@ -336,9 +422,10 @@ export function apkgImport(collection: AnkiCollection, options: ApkgOptions): Pa
         if (!mapping?.include) continue;
         const group = options.groupFor(note.deck);
         const hint = mapping.hint >= 0 ? htmlToText(note.fields[mapping.hint] ?? "") : "";
+        const backHint = mapping.backHint >= 0 ? htmlToText(note.fields[mapping.backHint] ?? "") : "";
         const gaps = type.cloze && mapping.gaps;
         // Not a field that's already on the card.
-        const onCard = [mapping.front, mapping.hint, ...(gaps ? [] : [mapping.back])];
+        const onCard = [mapping.front, mapping.hint, mapping.backHint, ...(gaps ? [] : [mapping.back])];
         const extra = extraText(
             type,
             note,
@@ -365,6 +452,7 @@ export function apkgImport(collection: AnkiCollection, options: ApkgOptions): Pa
         for (const side of usable) {
             const card: FlashcardInput = { frontText: side.front, backText: side.back, group, direction };
             if (hint && hint !== side.front && hint !== side.back) card.hint = hint;
+            if (backHint && backHint !== side.front && backHint !== side.back) card.backHint = backHint;
             if (extra) card.extra = extra;
             result.rows.push({ source, card });
         }

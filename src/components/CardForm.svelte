@@ -6,6 +6,7 @@
     import { itemsOf, stateOf } from "../lib/scheduler";
     import { DIRECTION_LABELS, isDirection } from "../lib/settings";
     import { library } from "../lib/state";
+    import CardFields from "./CardFields.svelte";
     import Icon from "./Icon.svelte";
 
     let { card, initialGroup }: { card?: Flashcard; initialGroup?: string } = $props();
@@ -16,6 +17,7 @@
     let frontText = $state(initial?.frontText ?? "");
     let backText = $state(initial?.backText ?? "");
     let hint = $state(initial?.hint ?? "");
+    let backHint = $state(initial?.backHint ?? "");
     let extra = $state(initial?.extra ?? "");
     let group = $state(initial?.group ?? untrack(() => initialGroup) ?? "");
     /** A direction picked here; until one is, a new card is studied the way its group's new cards are. */
@@ -39,6 +41,7 @@
                 frontText: frontText.trim(),
                 backText: backText.trim(),
                 hint: hint.trim() || undefined,
+                backHint: backHint.trim() || undefined,
                 extra: extra.trim() || undefined,
                 group: group.trim(),
                 direction,
@@ -49,6 +52,7 @@
                 frontText = "";
                 backText = "";
                 hint = "";
+                backHint = "";
                 extra = "";
                 saving = false;
                 document.getElementById("front")?.focus();
@@ -75,21 +79,9 @@
 </script>
 
 <form class="panel form" onsubmit={save}>
-    <div class="faces">
-        <label>
-            <span>Front</span>
-            <textarea id="front" class="field content" bind:value={frontText} required rows="2"></textarea>
-        </label>
-        <label>
-            <span>Back</span>
-            <textarea class="field content" bind:value={backText} required rows="2"></textarea>
-        </label>
-    </div>
+    <CardFields bind:frontText bind:backText bind:hint bind:backHint bind:extra />
+
     <div class="pair">
-        <label>
-            <span>Hint <span class="optional">(optional)</span></span>
-            <input class="field content" bind:value={hint} />
-        </label>
         <label>
             <span>Group</span>
             <input class="field content" bind:value={group} list="group-names" placeholder="default" />
@@ -100,29 +92,24 @@
             </datalist>
             {#if groupError}<small class="error">{groupError}</small>{/if}
         </label>
-    </div>
 
-    <label>
-        <span>Extra <span class="optional">(optional, shown with the answer: an example, notes)</span></span>
-        <textarea class="field content" bind:value={extra} rows="2"></textarea>
-    </label>
-
-    <!-- Not wrapped in the label: the options would become part of its name. -->
-    <div class="labelled">
-        <label for="direction">Study direction</label>
-        <select
-            id="direction"
-            class="field"
-            value={direction}
-            onchange={(e) => isDirection(e.currentTarget.value) && (chosen = e.currentTarget.value)}
-        >
-            {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
-                <option {value}>{label}</option>
-            {/each}
-        </select>
-        {#if direction === "both"}
-            <small class="note">Each direction has its own schedule. You won't see both on the same day.</small>
-        {/if}
+        <!-- Not wrapped in the label: the options would become part of its name. -->
+        <div class="labelled">
+            <label for="direction">Study direction</label>
+            <select
+                id="direction"
+                class="field"
+                value={direction}
+                onchange={(e) => isDirection(e.currentTarget.value) && (chosen = e.currentTarget.value)}
+            >
+                {#each Object.entries(DIRECTION_LABELS) as [value, label] (value)}
+                    <option {value}>{label}</option>
+                {/each}
+            </select>
+            {#if direction === "both"}
+                <small class="note">Each direction has its own schedule. You won't see both on the same day.</small>
+            {/if}
+        </div>
     </div>
 
     {#if error}
@@ -185,7 +172,6 @@
         padding: 1.5rem;
     }
 
-    .faces,
     .pair {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -201,33 +187,15 @@
         font-size: 0.925rem;
     }
 
-    .optional,
     .note {
         color: var(--text-muted);
-        font-weight: 400;
-    }
-
-    .note {
         font-size: 0.875rem;
+        font-weight: 400;
     }
 
     .field.content {
         font-size: 1.125rem;
         font-weight: 400;
-    }
-
-    /* Two lines to start with, growing with what is typed where the browser can do that. */
-    textarea.content {
-        min-height: 4.4rem;
-        font-size: 1.2rem;
-        field-sizing: content;
-    }
-
-    /* A box that grows by itself needs no handle to drag. */
-    @supports (field-sizing: content) {
-        textarea.content {
-            resize: none;
-        }
     }
 
     .buttons {
@@ -305,7 +273,6 @@
             padding: 1.1rem;
         }
 
-        .faces,
         .pair {
             grid-template-columns: 1fr;
         }

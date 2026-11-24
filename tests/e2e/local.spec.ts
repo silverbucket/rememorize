@@ -15,14 +15,14 @@ test("empty state", async ({ page }) => {
 test("add cards, edit, move between groups, delete", async ({ page }) => {
     acceptDialogs(page);
     await page.goto("/#/new?group=Czech food");
-    await page.getByLabel("Front").fill("pivo");
-    await page.getByLabel("Back").fill("beer");
+    await page.getByLabel("Front", { exact: true }).fill("pivo");
+    await page.getByLabel("Back", { exact: true }).fill("beer");
     await page.getByRole("button", { name: "Save & add another" }).click();
-    await expect(page.getByLabel("Front")).toBeFocused();
-    await expect(page.getByLabel("Front")).toHaveValue("");
+    await expect(page.getByLabel("Front", { exact: true })).toBeFocused();
+    await expect(page.getByLabel("Front", { exact: true })).toHaveValue("");
     await expect(page.getByLabel("Group")).toHaveValue("Czech food");
-    await page.getByLabel("Front").fill("chléb");
-    await page.getByLabel("Back").fill("bread");
+    await page.getByLabel("Front", { exact: true }).fill("chléb");
+    await page.getByLabel("Back", { exact: true }).fill("bread");
     await page.getByRole("button", { name: "Save", exact: true }).click();
 
     await expect(page.getByRole("heading", { name: "Czech food" })).toBeVisible();
@@ -579,9 +579,10 @@ test("reviews of a few cards at a time, and the home page counts new cards apart
 test("cards can be studied back → front, or both ways", async ({ page }) => {
     // Back → front only.
     await page.goto("/#/new?group=Drinks");
-    await page.getByLabel("Front").fill("pivo");
-    await page.getByLabel("Back").fill("beer");
-    await page.getByLabel("Hint").fill("starts with p");
+    await page.getByLabel("Front", { exact: true }).fill("pivo");
+    await page.getByLabel("Back", { exact: true }).fill("beer");
+    await page.getByLabel("Front hint").fill("Dám si pivo.");
+    await page.getByLabel("Back hint").fill("I'll have a beer.");
     await page.getByLabel("Study direction").selectOption("Back → front");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByTitle("Studied back → front")).toBeVisible();
@@ -589,10 +590,15 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
     await page.getByRole("link", { name: "Review 1 card" }).click();
     await expect(page.getByText("Back → front")).toBeVisible();
     await expect(page.locator(".side.front")).toHaveText("beer");
-    // The hint is for the front, so it isn't offered here.
-    await expect(page.getByRole("button", { name: "Show hint" })).toHaveCount(0);
+    // Each side has its own hint: the one offered is the question's, here the back's.
+    await page.getByRole("button", { name: "Show hint" }).click();
+    await expect(page.locator(".asked .hint")).toHaveText("I'll have a beer.");
+    await expect(page.getByText("Dám si pivo.")).toHaveCount(0);
     await page.getByRole("button", { name: /Show answer/ }).click();
     await expect(page.locator(".side.back")).toHaveText("pivo");
+    // The answer comes with its own hint, and the question keeps the one it had.
+    await expect(page.locator(".told .hint")).toHaveText("Dám si pivo.");
+    await expect(page.locator(".asked .hint")).toHaveText("I'll have a beer.");
     await page.getByRole("button", { name: /Easy/ }).click();
     await expect(page.getByText("All caught up for today")).toBeVisible();
 
@@ -617,8 +623,8 @@ test("cards can be studied back → front, or both ways", async ({ page }) => {
 
     // A new card studied both ways shows one direction today: front → back.
     await page.goto("/#/new?group=Drinks");
-    await page.getByLabel("Front").fill("voda");
-    await page.getByLabel("Back").fill("water");
+    await page.getByLabel("Front", { exact: true }).fill("voda");
+    await page.getByLabel("Back", { exact: true }).fill("water");
     await page.getByLabel("Study direction").selectOption("both");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await page.getByRole("link", { name: "Review 1 card" }).click();
@@ -646,14 +652,14 @@ test("new cards take a direction from the settings or their group, and many card
     await page.getByLabel("Default study direction", { exact: true }).selectOption("Both ways");
     await page.goto("/#/new?group=Czech");
     await expect(page.getByLabel("Study direction")).toHaveValue("both");
-    await page.getByLabel("Front").fill("pivo");
-    await page.getByLabel("Back").fill("beer");
+    await page.getByLabel("Front", { exact: true }).fill("pivo");
+    await page.getByLabel("Back", { exact: true }).fill("beer");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
     // One card can still be studied another way.
     await page.goto("/#/new?group=Czech");
-    await page.getByLabel("Front").fill("voda");
-    await page.getByLabel("Back").fill("water");
+    await page.getByLabel("Front", { exact: true }).fill("voda");
+    await page.getByLabel("Back", { exact: true }).fill("water");
     await page.getByLabel("Study direction").selectOption("Front → back");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByTitle("Studied both ways")).toHaveCount(1);
@@ -684,8 +690,8 @@ test("new cards take a direction from the settings or their group, and many card
     await expect(page.getByLabel("Study direction")).toHaveValue("both");
     // Left blank, the card goes in "default", so it's that group's direction.
     await page.getByLabel("Group", { exact: true }).fill("");
-    await page.getByLabel("Front").fill("ahoj");
-    await page.getByLabel("Back").fill("hi");
+    await page.getByLabel("Front", { exact: true }).fill("ahoj");
+    await page.getByLabel("Back", { exact: true }).fill("hi");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: "default" })).toBeVisible();
     await page.getByRole("button", { name: "Group settings" }).click();
@@ -802,11 +808,15 @@ test("import an Anki deck, choosing what goes on each side", async ({ page }) =>
     // Each note type gets a guessed mapping and an example card; lesson notes are left out.
     const vocabulary = page.locator(".type").filter({ hasText: "Vocabulary" });
     await expect(vocabulary.getByRole("checkbox")).toBeChecked();
-    await expect(vocabulary.getByLabel("Front")).toHaveValue("1");
-    await expect(vocabulary.locator(".example").first()).toHaveText("káva → coffee · Hint: f.");
-    // What else the card template shows goes with the answer.
-    await expect(vocabulary.locator(".extra-pick summary")).toContainText("Extra, shown with the answer: Example");
-    await expect(vocabulary.locator(".example.extra")).toHaveText("Example: Jednu kávu, prosím.");
+    await expect(vocabulary.getByLabel(/^Front(?! hint)/)).toHaveValue("1");
+    await expect(vocabulary.locator(".example").first()).toHaveText("káva → coffee");
+    // The example sentence, in the word's language, is the front's hint.
+    await expect(vocabulary.getByLabel("Front hint")).toHaveValue("6");
+    await expect(vocabulary.getByLabel("Back hint")).toHaveValue("-1");
+    await expect(vocabulary.locator(".example").nth(1)).toHaveText("Front hint: Jednu kávu, prosím.");
+    // What else the card template shows goes with the answer: a label like the gender is no hint.
+    await expect(vocabulary.locator(".extra-pick summary")).toContainText("Extra, shown with the answer: Gender");
+    await expect(vocabulary.locator(".example.extra")).toHaveText("Gender: f.");
     const announcement = page.locator(".type").filter({ hasText: "Announcement" });
     await expect(announcement.getByRole("checkbox")).not.toBeChecked();
     await expect(announcement).toContainText("Left out: its backs are long text, like notes to read.");
@@ -829,11 +839,11 @@ test("import an Anki deck, choosing what goes on each side", async ({ page }) =>
     await page.getByLabel("Put the cards in").selectOption({ label: "One group" });
 
     // Swapping the sides changes the cards.
-    await vocabulary.getByLabel("Front").selectOption({ label: "English" });
-    await vocabulary.getByLabel("Back").selectOption({ label: "Word" });
-    await expect(vocabulary.locator(".example").first()).toHaveText("coffee → káva · Hint: f.");
-    await vocabulary.getByLabel("Front").selectOption({ label: "Word" });
-    await vocabulary.getByLabel("Back").selectOption({ label: "English" });
+    await vocabulary.getByLabel(/^Front(?! hint)/).selectOption({ label: "English" });
+    await vocabulary.getByLabel(/^Back(?! hint)/).selectOption({ label: "Word" });
+    await expect(vocabulary.locator(".example").first()).toHaveText("coffee → káva");
+    await vocabulary.getByLabel(/^Front(?! hint)/).selectOption({ label: "Word" });
+    await vocabulary.getByLabel(/^Back(?! hint)/).selectOption({ label: "English" });
 
     await page.getByRole("button", { name: "Import 4 cards" }).click();
     await expect(page.getByRole("heading", { name: "Czech" })).toBeVisible();
@@ -843,16 +853,33 @@ test("import an Anki deck, choosing what goes on each side", async ({ page }) =>
     // New cards come up in the deck's order, with the hint the mapping chose.
     await page.goto("/#/review/Czech");
     await expect(page.locator(".side.front")).toHaveText("káva");
+    await expect(page.getByText("Gender: f.")).toHaveCount(0);
     await page.getByRole("button", { name: "Show hint" }).click();
-    await expect(page.getByText("f.", { exact: true })).toBeVisible();
-    await expect(page.getByText("Example: Jednu kávu, prosím.")).toHaveCount(0);
+    await expect(page.locator(".asked .hint")).toHaveText("Jednu kávu, prosím.");
     await page.getByRole("button", { name: /Show answer/ }).click();
-    await expect(page.locator(".extra")).toHaveText("Example: Jednu kávu, prosím.");
+    await expect(page.locator(".extra")).toHaveText("Gender: f.");
+    await page.getByRole("button", { name: /Good/ }).click();
 
-    // Importing it again adds nothing.
+    // Importing it again adds nothing. Mapped another way, the cards already here take what is chosen now.
     await page.goto("/#/import");
     await page.getByLabel("File").setInputFiles(file);
     await expect(page.getByText("4 cards already here (skipped)")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Nothing to import" })).toBeDisabled();
+    await page
+        .locator(".type")
+        .filter({ hasText: "Vocabulary" })
+        .getByLabel("Front hint")
+        .selectOption({ label: "None" });
+    await expect(page.getByText("1 card already here gets the hints and extra chosen above")).toBeVisible();
+    await expect(page.getByText("3 cards already here (skipped)")).toBeVisible();
+    await page.getByRole("button", { name: "Update 1 card" }).click();
+    await expect(page.getByRole("heading", { name: "Your cards" })).toBeVisible();
+
+    // The card keeps the progress it had: it isn't new again, and the others still are.
+    await page.goto("/#/review/Czech");
+    await expect(page.locator(".side.front")).toHaveText("voda");
+    await page.goto("/#/group/Czech");
+    await expect(page.getByText("Jednu kávu, prosím.")).toHaveCount(0);
 });
 
 test("an Anki deck in the newer format explains how to export it", async ({ page }) => {
@@ -1002,7 +1029,7 @@ test("a group can be shared without progress, and a newer copy updates the cards
     // The sharer fixes a card and shares again.
     await page.goto("/#/group/Drinks");
     await page.getByText("pivo").click();
-    await page.getByLabel("Back").fill("a beer");
+    await page.getByLabel("Back", { exact: true }).fill("a beer");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("a beer")).toBeVisible();
 
@@ -1010,7 +1037,7 @@ test("a group can be shared without progress, and a newer copy updates the cards
     await fresh.getByLabel("File").setInputFiles(await share());
     await expect(fresh.getByText("1 card updated from the shared group")).toBeVisible();
     await expect(fresh.getByText("1 card already here (skipped)")).toBeVisible();
-    await fresh.getByRole("button", { name: "Import 1 card" }).click();
+    await fresh.getByRole("button", { name: "Update 1 card" }).click();
     await expect(fresh.getByRole("heading", { name: "Your cards" })).toBeVisible();
     await fresh.goto("/#/group/Drinks");
     await expect(fresh.locator(".cards li")).toHaveCount(2);
@@ -1161,6 +1188,44 @@ test("tapping the card shows the answer, but its hint button only shows the hint
     await expect(page.getByRole("button", { name: /Good/ })).toBeVisible();
 });
 
+test("a wrong card can be fixed while reviewing it, once its answer is shown", async ({ page }) => {
+    await addCard(page, { front: "pes", back: "dgo", group: "Animals", hint: "Pes štěká." });
+    await addCard(page, { front: "kočka", back: "cat", group: "Animals" });
+    await page.goto("/#/review/Animals");
+    // Not while the card is still a question: a tap there shows the answer, and nothing else.
+    await expect(page.getByRole("button", { name: "Edit this card" })).toHaveCount(0);
+    await page.getByRole("button", { name: /Show answer/ }).click();
+    await expect(page.locator(".side.back")).toHaveText("dgo");
+
+    // Leaving the editor changes nothing, and keys typed in it rate nothing.
+    await page.getByRole("button", { name: "Edit this card" }).click();
+    const editor = page.getByRole("dialog", { name: "Edit card" });
+    await expect(editor.getByRole("button", { name: "Save" })).toBeDisabled();
+    await editor.getByLabel("Back", { exact: true }).fill("3");
+    await editor.getByRole("button", { name: "Cancel" }).press("3");
+    await editor.getByRole("button", { name: "Cancel" }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(page.locator(".side.back")).toHaveText("dgo");
+    await expect(page.getByText("2 cards left")).toBeVisible();
+
+    // Saved, the card says the new text, and is still there to rate.
+    await page.getByRole("button", { name: "Edit this card" }).click();
+    await editor.getByLabel("Back", { exact: true }).fill("dog");
+    await editor.getByLabel("Back hint").fill("The dog barks.");
+    await editor.getByRole("button", { name: "Save" }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(page.locator(".side.back")).toHaveText("dog");
+    await expect(page.locator(".told .hint")).toHaveText("The dog barks.");
+    await expect(page.locator(".asked .hint")).toHaveText("Pes štěká.");
+    await page.getByRole("button", { name: /Good/ }).click();
+    await expect(page.locator(".side.front")).toHaveText("kočka");
+
+    // The card keeps the rating it was given after the edit.
+    await page.goto("/#/group/Animals");
+    await expect(page.getByText("dog", { exact: true })).toBeVisible();
+    await expect(page.getByText("dgo")).toHaveCount(0);
+});
+
 test("a long group can be searched by front, back or hint", async ({ page }) => {
     const rows = [
         "front,back,hint",
@@ -1213,8 +1278,8 @@ test("appearance follows the system until one is chosen, and the choice is remem
 test("saving a card is in reach without scrolling, and deleting is kept apart from it", async ({ page }) => {
     acceptDialogs(page);
     await page.goto("/#/new?group=Animals");
-    await page.getByLabel("Front").fill("pes");
-    await page.getByLabel("Back").fill("dog");
+    await page.getByLabel("Front", { exact: true }).fill("pes");
+    await page.getByLabel("Back", { exact: true }).fill("dog");
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
     await page.getByRole("button", { name: "Save", exact: true }).click();
 
@@ -1250,10 +1315,10 @@ test("a long answer leaves the question where it was and stays clear of the rati
 test("on a small phone, a field that takes focus scrolls clear of the Save bar", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 430 });
     await page.goto("/#/new");
-    await page.getByLabel("Front").focus();
-    for (const label of ["Back", "Hint", "Group", "Extra", "Study direction"]) {
+    await page.getByLabel("Front", { exact: true }).focus();
+    for (const label of ["Back", "Front hint", "Back hint", "Extra", "Group", "Study direction"]) {
         await page.keyboard.press("Tab");
-        const field = page.getByLabel(label);
+        const field = page.getByLabel(label, { exact: label === "Back" });
         await expect(field).toBeFocused();
         // The line being typed on: a tall text box may run on under the bar below it.
         const box = await field.boundingBox();
@@ -1264,9 +1329,9 @@ test("on a small phone, a field that takes focus scrolls clear of the Save bar",
 
     // And back up the form: clear of the header at the top.
     const header = await page.locator("header").boundingBox();
-    for (const label of ["Extra", "Group", "Hint", "Back", "Front"]) {
+    for (const label of ["Group", "Extra", "Back hint", "Front hint", "Back", "Front"]) {
         await page.keyboard.press("Shift+Tab");
-        const field = page.getByLabel(label);
+        const field = page.getByLabel(label, { exact: label === "Back" || label === "Front" });
         await expect(field).toBeFocused();
         const box = await field.boundingBox();
         expect(box?.y ?? 0, `${label} is below the header`).toBeGreaterThanOrEqual(
