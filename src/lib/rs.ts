@@ -26,6 +26,39 @@ export const rs = new RemoteStorage({
     logging: typeof window !== "undefined" && window.localStorage?.getItem("rememorize:debug") === "1",
 }) as RSWithModules;
 
+// remoteStorage.js 2.0.0-beta.10 scans the cache with a cursor that WebKit can
+// lose mid-scan. Read bounded batches in one transaction to keep the same snapshot.
+rs.on("ready", () => {
+    const cache = rs.local;
+    if (!cache || !("db" in cache)) return;
+    const db: IDBDatabase = cache.db;
+    cache.forAllNodes = (visit) =>
+        new Promise<void>((resolve, reject) => {
+            const transaction = db.transaction("nodes", "readonly");
+            const store = transaction.objectStore("nodes");
+            const batchSize = 256;
+            transaction.oncomplete = () => resolve();
+            transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB cache scan aborted"));
+
+            const readBatch = (range?: IDBKeyRange) => {
+                const request = store.getAll(range, batchSize);
+                request.onsuccess = () => {
+                    const nodes: Parameters<typeof visit>[0][] = request.result;
+                    try {
+                        for (const node of nodes) visit(node);
+                        if (nodes.length === batchSize) {
+                            readBatch(IDBKeyRange.lowerBound(nodes[batchSize - 1].path, true));
+                        }
+                    } catch (error) {
+                        reject(error);
+                        transaction.abort();
+                    }
+                };
+            };
+            readBatch();
+        });
+});
+
 // A build can ask for more frequent syncs than every ten seconds, as the one the end-to-end tests run against does.
 const syncMs = Number(import.meta.env.VITE_SYNC_MS);
 if (syncMs) rs.setSyncInterval(syncMs);
