@@ -14,6 +14,14 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     const user = await createUser();
 
     const a = await (await browser.newContext()).newPage();
+    // Sync must keep working when the browser cannot provide an IndexedDB cursor.
+    await a.addInitScript(() => {
+        const openCursor = IDBObjectStore.prototype.openCursor;
+        IDBObjectStore.prototype.openCursor = function (...args) {
+            if (this.name === "nodes") throw new Error("Attempt to iterate a cursor that doesn't exist");
+            return openCursor.apply(this, args);
+        };
+    });
     acceptDialogs(a);
     await addCard(a, { front: "mít", back: "to have", group: "Verbs" });
     await connect(a, user);
@@ -39,6 +47,9 @@ test("cards made before connecting are uploaded, and changes flow both ways", as
     await expect(a.locator(".tile").filter({ hasText: "Reviews today" }).locator("dd")).toHaveText("1", {
         timeout: SYNC_TIMEOUT,
     });
+    await a.getByRole("link", { name: "Cards", exact: true }).click();
+    await expect(a.getByText("1 reviewed today")).toBeVisible();
+    await expect(a.getByRole("alert")).toHaveCount(0);
     await a.goto("/#/group/Verbs");
 
     const cardWrites: string[] = [];
